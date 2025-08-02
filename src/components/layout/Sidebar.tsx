@@ -1,0 +1,72 @@
+import { cn } from "@/lib/utils";
+import { 
+  ShoppingCart, 
+  Package, 
+  FolderOpen, 
+  Users, 
+  Archive,
+  Menu
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+
+const sidebarItems = [
+  { name: "Sales", icon: ShoppingCart, href: "/sales" },
+  { name: "Purchases", icon: Package, href: "/purchases" },
+  { name: "Projects", icon: FolderOpen, href: "/projects" },
+  { name: "Customers", icon: Users, href: "/customers" },
+  { name: "Inventory", icon: Archive, href: "/inventory" },
+];
+
+export function Sidebar() {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  return (
+    <div className={cn(
+      "bg-primary text-primary-foreground transition-all duration-300 flex flex-col h-screen",
+      isCollapsed ? "w-16" : "w-64"
+    )}>
+      {/* Header */}
+      <div className="p-4 border-b border-primary-foreground/20">
+        <div className="flex items-center justify-between">
+          {!isCollapsed && (
+            <div className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-primary-foreground/20 rounded-lg flex items-center justify-center">
+                <Package className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-lg">MARKET Pro</span>
+            </div>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="text-primary-foreground hover:bg-primary-foreground/20"
+          >
+            <Menu className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 p-4 space-y-2">
+        {sidebarItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Button
+              key={item.name}
+              variant="ghost"
+              className={cn(
+                "w-full justify-start text-primary-foreground hover:bg-primary-foreground/20",
+                isCollapsed ? "px-2" : "px-4"
+              )}
+            >
+              <Icon className={cn("w-5 h-5", !isCollapsed && "mr-3")} />
+              {!isCollapsed && <span>{item.name}</span>}
+            </Button>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}
