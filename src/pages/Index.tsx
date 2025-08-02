@@ -4,6 +4,7 @@ import { MetricCard } from "@/components/dashboard/MetricCard";
 import { ChartCard } from "@/components/dashboard/ChartCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { RecentSales } from "@/components/dashboard/RecentSales";
+import { useState } from "react";
 
 // Sample data for charts
 const salesData = [
@@ -27,11 +28,13 @@ const inventoryData = [
 ];
 
 const Index = () => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
   return (
-    <div className="min-h-screen bg-background flex">
-      <Sidebar />
+    <div className="min-h-screen bg-background">
+      <Sidebar onCollapseChange={setSidebarCollapsed} />
       
-      <div className="flex-1 flex flex-col">
+      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 flex flex-col`}>
         <Header />
         
         <main className="flex-1 p-6 space-y-6">

@@ -18,12 +18,22 @@ const sidebarItems = [
   { name: "Inventory", icon: Archive, href: "/inventory" },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  onCollapseChange?: (collapsed: boolean) => void;
+}
+
+export function Sidebar({ onCollapseChange }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  const handleToggle = () => {
+    const newCollapsed = !isCollapsed;
+    setIsCollapsed(newCollapsed);
+    onCollapseChange?.(newCollapsed);
+  };
 
   return (
     <div className={cn(
-      "bg-primary text-primary-foreground transition-all duration-300 flex flex-col h-screen",
+      "bg-primary text-primary-foreground transition-all duration-300 flex flex-col h-screen fixed left-0 top-0 z-50",
       isCollapsed ? "w-16" : "w-64"
     )}>
       {/* Header */}
@@ -40,7 +50,7 @@ export function Sidebar() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setIsCollapsed(!isCollapsed)}
+            onClick={handleToggle}
             className="text-primary-foreground hover:bg-primary-foreground/20"
           >
             <Menu className="w-4 h-4" />
