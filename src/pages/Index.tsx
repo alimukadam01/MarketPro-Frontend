@@ -46,26 +46,29 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Charts Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <ChartCard 
-              title="Total Sales in July" 
-              data={salesData}
-              color="#8b5cf6"
-            />
-            <ChartCard 
-              title="Inventory Value in July" 
-              data={inventoryData}
-              color="#ef4444"
-            />
-          </div>
-
-          {/* Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <MetricCard title="Net Inventory Value" value="PKR 789,245" />
-            <MetricCard title="Total Sales Today" value="PKR 120,250" />
-            <MetricCard title="Average Order Value" value="PKR 5,600" />
-            <MetricCard title="Total Purchases" value="PKR 250,000" />
+          {/* Charts and Metrics Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-6 gap-6">
+            {/* Charts */}
+            <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <ChartCard 
+                title="Total Sales in July" 
+                data={salesData}
+                color="#8b5cf6"
+              />
+              <ChartCard 
+                title="Inventory Value in July" 
+                data={inventoryData}
+                color="#ef4444"
+              />
+            </div>
+            
+            {/* Metrics Cards */}
+            <div className="lg:col-span-2 grid grid-cols-1 gap-4">
+              <MetricCard title="Net Inventory Value" value="PKR 789,245" />
+              <MetricCard title="Total Sales Today" value="PKR 120,250" />
+              <MetricCard title="Average Order Value" value="PKR 5,600" />
+              <MetricCard title="Total Purchases" value="PKR 250,000" />
+            </div>
           </div>
 
           {/* Bottom Section */}
