@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const sidebarItems = [
   { name: "Sales", icon: ShoppingCart, href: "/sales" },
@@ -24,6 +25,8 @@ interface SidebarProps {
 
 export function Sidebar({ onCollapseChange }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const handleToggle = () => {
     const newCollapsed = !isCollapsed;
@@ -62,13 +65,16 @@ export function Sidebar({ onCollapseChange }: SidebarProps) {
       <nav className="flex-1 p-4 space-y-2">
         {sidebarItems.map((item) => {
           const Icon = item.icon;
+          const isActive = location.pathname === item.href;
           return (
             <Button
               key={item.name}
               variant="ghost"
+              onClick={() => navigate(item.href)}
               className={cn(
                 "w-full justify-start text-primary-foreground hover:bg-primary-foreground/20",
-                isCollapsed ? "px-2" : "px-4"
+                isCollapsed ? "px-2" : "px-4",
+                isActive && "bg-primary-foreground/20"
               )}
             >
               <Icon className={cn("w-5 h-5", !isCollapsed && "mr-3")} />
