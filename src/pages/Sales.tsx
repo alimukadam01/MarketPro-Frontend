@@ -128,12 +128,12 @@ const Sales = () => {
               {/* Table Header */}
               <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
                 <div className="grid grid-cols-6 gap-4 w-full text-sm font-medium text-muted-foreground">
-                  <div>Product Name</div>
-                  <div>Category</div>
-                  <div>Price</div>
-                  <div>Quantity</div>
-                  <div>Total</div>
-                  <div>Status</div>
+                  <div className="min-w-0">Product Name</div>
+                  <div className="min-w-0">Category</div>
+                  <div className="min-w-0">Price</div>
+                  <div className="min-w-0">Quantity</div>
+                  <div className="min-w-0">Total</div>
+                  <div className="min-w-0">Status</div>
                 </div>
               </div>
 
@@ -149,13 +149,13 @@ const Sales = () => {
                   }`}
                 >
                   <div className="grid grid-cols-6 gap-4 w-full text-sm">
-                    <div className="font-medium">{sale.productName}</div>
-                    <div className="text-muted-foreground">{sale.category}</div>
-                    <div className="font-semibold">{sale.price}</div>
-                    <div className="text-muted-foreground">{sale.quantity}</div>
-                    <div className="font-semibold">{sale.total}</div>
-                    <div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(sale.status)}`}>
+                    <div className="font-medium min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.productName}</div>
+                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.category}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.price}</div>
+                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.quantity}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.total}</div>
+                    <div className="min-w-0">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(sale.status)}`}>
                         {sale.status}
                       </span>
                     </div>
