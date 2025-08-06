@@ -8,15 +8,18 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const salesData = [
-  { id: "S001", customer: "John Doe", date: "2024-01-15", amount: "PKR 15,500", status: "Completed" },
-  { id: "S002", customer: "Jane Smith", date: "2024-01-14", amount: "PKR 8,200", status: "Pending" },
-  { id: "S003", customer: "Mike Johnson", date: "2024-01-13", amount: "PKR 22,750", status: "Completed" },
-  { id: "S004", customer: "Sarah Wilson", date: "2024-01-12", amount: "PKR 12,300", status: "Cancelled" },
-  { id: "S005", customer: "David Brown", date: "2024-01-11", amount: "PKR 18,900", status: "Completed" },
+  { id: "1", productName: "Wireless Headphones", category: "Electronics", price: "PKR 12,500", quantity: 2, total: "PKR 25,000", status: "Completed" },
+  { id: "2", productName: "Gaming Mouse", category: "Electronics", price: "PKR 3,500", quantity: 1, total: "PKR 3,500", status: "Pending" },
+  { id: "3", productName: "Office Chair", category: "Furniture", price: "PKR 18,000", quantity: 1, total: "PKR 18,000", status: "Completed" },
+  { id: "4", productName: "Laptop Stand", category: "Accessories", price: "PKR 4,200", quantity: 3, total: "PKR 12,600", status: "Shipped" },
+  { id: "5", productName: "Bluetooth Speaker", category: "Electronics", price: "PKR 8,900", quantity: 1, total: "PKR 8,900", status: "Cancelled" },
+  { id: "6", productName: "Desk Lamp", category: "Accessories", price: "PKR 2,800", quantity: 2, total: "PKR 5,600", status: "Completed" },
+  { id: "7", productName: "Keyboard", category: "Electronics", price: "PKR 5,500", quantity: 1, total: "PKR 5,500", status: "Pending" },
 ];
 
 const Sales = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const navigate = useNavigate();
 
   const getStatusColor = (status: string) => {
@@ -24,8 +27,17 @@ const Sales = () => {
       case "Completed": return "text-green-600 bg-green-50";
       case "Pending": return "text-yellow-600 bg-yellow-50";
       case "Cancelled": return "text-red-600 bg-red-50";
+      case "Shipped": return "text-blue-600 bg-blue-50";
       default: return "text-gray-600 bg-gray-50";
     }
+  };
+
+  const toggleRowSelection = (id: string) => {
+    setSelectedRows(prev => 
+      prev.includes(id) 
+        ? prev.filter(rowId => rowId !== id)
+        : [...prev, id]
+    );
   };
 
   return (
@@ -112,35 +124,44 @@ const Sales = () => {
             </div>
 
             {/* Sales Table */}
-            <div className="bg-card rounded-lg border overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-muted/50">
-                    <tr>
-                      <th className="text-left py-4 px-6 font-medium text-sm">Sale ID</th>
-                      <th className="text-left py-4 px-6 font-medium text-sm">Customer</th>
-                      <th className="text-left py-4 px-6 font-medium text-sm">Date</th>
-                      <th className="text-left py-4 px-6 font-medium text-sm">Amount</th>
-                      <th className="text-left py-4 px-6 font-medium text-sm">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {salesData.map((sale) => (
-                      <tr key={sale.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="py-4 px-6 font-mono text-sm font-medium">{sale.id}</td>
-                        <td className="py-4 px-6">{sale.customer}</td>
-                        <td className="py-4 px-6 text-muted-foreground">{sale.date}</td>
-                        <td className="py-4 px-6 font-semibold">{sale.amount}</td>
-                        <td className="py-4 px-6">
-                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(sale.status)}`}>
-                            {sale.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="space-y-[10px]">
+              {/* Table Header */}
+              <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
+                <div className="grid grid-cols-6 gap-4 w-full text-sm font-medium text-muted-foreground">
+                  <div>Product Name</div>
+                  <div>Category</div>
+                  <div>Price</div>
+                  <div>Quantity</div>
+                  <div>Total</div>
+                  <div>Status</div>
+                </div>
               </div>
+
+              {/* Table Rows */}
+              {salesData.map((sale) => (
+                <div
+                  key={sale.id}
+                  onClick={() => toggleRowSelection(sale.id)}
+                  className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer transition-colors hover:bg-muted/20 ${
+                    selectedRows.includes(sale.id) 
+                      ? 'border-2 border-[#4285F4]' 
+                      : 'border border-border'
+                  }`}
+                >
+                  <div className="grid grid-cols-6 gap-4 w-full text-sm">
+                    <div className="font-medium">{sale.productName}</div>
+                    <div className="text-muted-foreground">{sale.category}</div>
+                    <div className="font-semibold">{sale.price}</div>
+                    <div className="text-muted-foreground">{sale.quantity}</div>
+                    <div className="font-semibold">{sale.total}</div>
+                    <div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(sale.status)}`}>
+                        {sale.status}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
