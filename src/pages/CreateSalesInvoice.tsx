@@ -30,12 +30,12 @@ const CreateSalesInvoice = () => {
     { id: 5, product: "Nylon Rope", quantity: 15, unitPrice: 150, total: 2250 },
     { id: 6, product: "Scissors", quantity: 12, unitPrice: 234, total: 2808 },
   ]);
+  const [selectedRows, setSelectedRows] = useState<number[]>([]);
 
   const [newItem, setNewItem] = useState({
     product: "",
     quantity: 0
   });
-
   const [formData, setFormData] = useState({
     invoiceNo: "",
     customer: "",
@@ -72,6 +72,12 @@ const CreateSalesInvoice = () => {
     setInvoiceItems(invoiceItems.filter(item => item.id !== id));
   };
 
+  const toggleRowSelection = (id: number) => {
+    setSelectedRows((prev) =>
+      prev.includes(id) ? prev.filter((rowId) => rowId !== id) : [...prev, id]
+    );
+  };
+
   const handleSaveDraft = () => {
     console.log("Saving draft...", { formData, invoiceItems });
     // Handle save draft logic
@@ -105,10 +111,10 @@ const CreateSalesInvoice = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Column - Form Fields */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Invoice Details Card */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Column 01 */}
+            <div className="space-y-6">
+              {/* Invoice Basic Info */}
               <Card>
                 <CardContent className="p-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -130,14 +136,85 @@ const CreateSalesInvoice = () => {
                         <SelectTrigger>
                           <SelectValue placeholder="Select customer" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="z-50">
                           <SelectItem value="mohsin">Mohsin Ali & Sons</SelectItem>
                           <SelectItem value="ahmed">Ahmed Trading Co.</SelectItem>
                           <SelectItem value="karachi">Karachi Steel Works</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
 
+                  {/* Notes */}
+                  <div className="mt-4 space-y-2">
+                    <Label htmlFor="notes">Notes</Label>
+                    <Textarea
+                      id="notes"
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder="Add any additional notes here..."
+                      rows={4}
+                      className="resize-none"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Invoice Summary */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <CardTitle>Invoice Summary</CardTitle>
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm">
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm">
+                      <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-[10px]">
+                    {/* Header Row */}
+                    <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
+                      <div className="grid grid-cols-5 gap-4 w-full text-sm font-medium text-muted-foreground">
+                        <div className="min-w-0">id</div>
+                        <div className="min-w-0">product</div>
+                        <div className="min-w-0">quantity</div>
+                        <div className="min-w-0">unit price</div>
+                        <div className="min-w-0">total</div>
+                      </div>
+                    </div>
+
+                    {/* Rows */}
+                    {invoiceItems.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => toggleRowSelection(item.id)}
+                        className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer transition-colors hover:bg-muted/20 ${
+                          selectedRows.includes(item.id) ? 'border-2 border-[#4285F4]' : 'border border-border'
+                        }`}
+                      >
+                        <div className="grid grid-cols-5 gap-4 w-full text-sm">
+                          <div className="min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent">{item.id}</div>
+                          <div className="font-medium min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent">{item.product}</div>
+                          <div className="min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent">{item.quantity}</div>
+                          <div className="min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent">{item.unitPrice}</div>
+                          <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-muted-foreground/30 scrollbar-track-transparent">{item.total}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Column 02 */}
+            <div className="space-y-6">
+              {/* Details */}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Date Issued */}
                     <div className="space-y-2">
                       <Label htmlFor="dateIssued">Date Issued</Label>
@@ -188,21 +265,6 @@ const CreateSalesInvoice = () => {
                       </div>
                     </div>
 
-                    {/* Payment Status */}
-                    <div className="space-y-2">
-                      <Label htmlFor="paymentStatus">Payment Status</Label>
-                      <Select value={formData.paymentStatus} onValueChange={(value) => setFormData({ ...formData, paymentStatus: value })}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Pending">Pending</SelectItem>
-                          <SelectItem value="Paid">Paid</SelectItem>
-                          <SelectItem value="Overdue">Overdue</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
                     {/* Status */}
                     <div className="space-y-2">
                       <Label htmlFor="status">Status</Label>
@@ -210,7 +272,7 @@ const CreateSalesInvoice = () => {
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="z-50">
                           <SelectItem value="Pending">Pending</SelectItem>
                           <SelectItem value="Sent">Sent</SelectItem>
                           <SelectItem value="Approved">Approved</SelectItem>
@@ -218,142 +280,86 @@ const CreateSalesInvoice = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                  </div>
 
-                  {/* Notes */}
-                  <div className="mt-4 space-y-2">
-                    <Label htmlFor="notes">Notes</Label>
-                    <Textarea
-                      id="notes"
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder="Add any additional notes here..."
-                      rows={4}
-                      className="resize-none"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Invoice Summary */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Invoice Summary</CardTitle>
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="sm">
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="border rounded-lg overflow-hidden">
-                    {/* Table Header */}
-                    <div className="bg-muted px-4 py-3 border-b">
-                      <div className="grid grid-cols-5 gap-4 text-sm font-medium">
-                        <div>id</div>
-                        <div>product</div>
-                        <div>quantity</div>
-                        <div>unit price</div>
-                        <div>total</div>
-                      </div>
-                    </div>
-
-                    {/* Table Body */}
-                    <div className="divide-y">
-                      {invoiceItems.map((item) => (
-                        <div
-                          key={item.id}
-                          className="px-4 py-3 grid grid-cols-5 gap-4 text-sm hover:bg-accent/50 transition-colors"
-                        >
-                          <div>{item.id}</div>
-                          <div className="font-medium">{item.product}</div>
-                          <div>{item.quantity}</div>
-                          <div>{item.unitPrice}</div>
-                          <div className="font-semibold">{item.total}</div>
-                        </div>
-                      ))}
+                    {/* Payment Status */}
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentStatus">Payment Status</Label>
+                      <Select value={formData.paymentStatus} onValueChange={(value) => setFormData({ ...formData, paymentStatus: value })}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="z-50">
+                          <SelectItem value="Pending">Pending</SelectItem>
+                          <SelectItem value="Paid">Paid</SelectItem>
+                          <SelectItem value="Overdue">Overdue</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-            </div>
 
-            {/* Right Column */}
-            <div className="space-y-6">
               {/* Add Invoice Item */}
               <Card>
                 <CardHeader>
                   <CardTitle>Add Invoice Item</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="product">Product</Label>
-                    <Select value={newItem.product} onValueChange={(value) => setNewItem({ ...newItem, product: value })}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select product" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1/2 Inch Nut Bolts">1/2 Inch Nut Bolts</SelectItem>
-                        <SelectItem value="Scissors">Scissors</SelectItem>
-                        <SelectItem value="Nylon Rope">Nylon Rope</SelectItem>
-                        <SelectItem value="Steel Wire">Steel Wire</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="product">Product</Label>
+                      <Select value={newItem.product} onValueChange={(value) => setNewItem({ ...newItem, product: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select product" />
+                        </SelectTrigger>
+                        <SelectContent className="z-50">
+                          <SelectItem value="1/2 Inch Nut Bolts">1/2 Inch Nut Bolts</SelectItem>
+                          <SelectItem value="Scissors">Scissors</SelectItem>
+                          <SelectItem value="Nylon Rope">Nylon Rope</SelectItem>
+                          <SelectItem value="Steel Wire">Steel Wire</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="quantity">Quantity</Label>
-                    <Input
-                      id="quantity"
-                      type="number"
-                      value={newItem.quantity}
-                      onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })}
-                      placeholder="0"
-                    />
-                  </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="quantity">Quantity</Label>
+                      <Input
+                        id="quantity"
+                        type="number"
+                        value={newItem.quantity}
+                        onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })}
+                        placeholder="0"
+                      />
+                    </div>
 
-                  <Button onClick={addItem} className="w-full">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Item
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Totals */}
-              <Card>
-                <CardContent className="p-6 space-y-4">
-                  <div className="flex justify-between text-sm">
-                    <span>Invoice Subtotal</span>
-                    <span className="font-semibold">{subtotal.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Discount ({formData.discount}%)</span>
-                    <span className="font-semibold">-{discountAmount.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Tax ({formData.tax}%)</span>
-                    <span className="font-semibold">+{taxAmount.toLocaleString()}</span>
-                  </div>
-                  <div className="border-t pt-4">
-                    <div className="flex justify-between">
-                      <span className="font-medium">Total Amount</span>
-                      <span className="font-bold text-lg">{totalAmount.toLocaleString()}</span>
+                    <div className="flex items-end">
+                      <Button onClick={addItem} className="w-full">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Item
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
+              {/* Totals (Simple) */}
+              <Card>
+                <CardContent className="p-6 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="subtotal">Invoice Subtotal</Label>
+                    <Input id="subtotal" value={subtotal.toLocaleString()} readOnly />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="totalAmount">Total Amount</Label>
+                    <Input id="totalAmount" value={totalAmount.toLocaleString()} readOnly className="font-semibold" />
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Action Buttons */}
-              <div className="space-y-3">
-                <Button variant="secondary" onClick={handleSaveDraft} className="w-full">
-                  Save Draft
-                </Button>
-                <Button onClick={handleCreateInvoice} className="w-full">
-                  Create Sales Invoice
-                </Button>
+              <div className="flex justify-end gap-3">
+                <Button variant="secondary" onClick={handleSaveDraft}>Save as Draft</Button>
+                <Button onClick={handleCreateInvoice}>Create Sales Invoice</Button>
               </div>
             </div>
           </div>
