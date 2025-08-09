@@ -108,9 +108,13 @@ const Sales = () => {
               
               {/* Action Icons */}
               <div className="flex items-center space-x-3">
+                <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={() => navigate("/sales/create-invoice")}>
+                  <Plus className="w-4 h-4" />
+                  <span>Create Invoice</span>
+                </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2">
                   <Plus className="w-4 h-4" />
-                  <span>New</span>
+                  <span>New Sale</span>
                 </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2">
                   <Edit className="w-4 h-4" />
