@@ -8,13 +8,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const salesData = [
-  { id: "1", productName: "Wireless Headphones", category: "Electronics", price: "PKR 12,500", quantity: 2, total: "PKR 25,000", status: "Completed" },
-  { id: "2", productName: "Gaming Mouse", category: "Electronics", price: "PKR 3,500", quantity: 1, total: "PKR 3,500", status: "Pending" },
-  { id: "3", productName: "Office Chair", category: "Furniture", price: "PKR 18,000", quantity: 1, total: "PKR 18,000", status: "Completed" },
-  { id: "4", productName: "Laptop Stand", category: "Accessories", price: "PKR 4,200", quantity: 3, total: "PKR 12,600", status: "Shipped" },
-  { id: "5", productName: "Bluetooth Speaker", category: "Electronics", price: "PKR 8,900", quantity: 1, total: "PKR 8,900", status: "Cancelled" },
-  { id: "6", productName: "Desk Lamp", category: "Accessories", price: "PKR 2,800", quantity: 2, total: "PKR 5,600", status: "Completed" },
-  { id: "7", productName: "Keyboard", category: "Electronics", price: "PKR 5,500", quantity: 1, total: "PKR 5,500", status: "Pending" },
+  { id: "1", invoice_no: "inv-00123", status: "Completed", date_issued: "06/08/2025", date_due: "15/08/2025", payment_status: "Paid", tax: "10%", discount: "none", total_items: "3", subtotal: "PKR 23,750", total: "PKR 25,000" },
+  { id: "2", invoice_no: "inv-00124", status: "Pending", date_issued: "07/08/2025", date_due: "16/08/2025", payment_status: "Unpaid", tax: "5%", discount: "none", total_items: "1", subtotal: "PKR 3,500", total: "PKR 3,500" },
+  { id: "3", invoice_no: "inv-00125", status: "Completed", date_issued: "08/08/2025", date_due: "17/08/2025", payment_status: "Paid", tax: "10%", discount: "5%", total_items: "1", subtotal: "PKR 18,000", total: "PKR 18,000" },
+  { id: "4", invoice_no: "inv-00126", status: "Shipped", date_issued: "09/08/2025", date_due: "18/08/2025", payment_status: "Paid", tax: "10%", discount: "none", total_items: "3", subtotal: "PKR 12,600", total: "PKR 12,600" },
+  { id: "5", invoice_no: "inv-00127", status: "Cancelled", date_issued: "10/08/2025", date_due: "19/08/2025", payment_status: "Refunded", tax: "10%", discount: "none", total_items: "1", subtotal: "PKR 8,900", total: "PKR 8,900" },
+  { id: "6", invoice_no: "inv-00128", status: "Completed", date_issued: "11/08/2025", date_due: "20/08/2025", payment_status: "Paid", tax: "5%", discount: "none", total_items: "2", subtotal: "PKR 5,600", total: "PKR 5,600" },
 ];
 
 const Sales = () => {
@@ -53,13 +52,19 @@ const Sales = () => {
             <p className="text-sm text-muted-foreground">
               <span className="text-primary cursor-pointer" onClick={() => navigate("/")}>home</span> / sales
             </p>
-            <div className="flex items-center space-x-3">
-              <ArrowLeft 
-                className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary" 
-                onClick={() => navigate("/")}
-              />
-              <h1 className="text-2xl font-bold">Sales Management</h1>
-            </div>
+
+            <div className="flex-1  justify-between">
+              <div className="flex items-center space-x-3">
+                <ArrowLeft 
+                  className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary" 
+                  onClick={() => navigate("/")}
+                />
+                <div className="flex-1 items-center justify-between">
+                  <h1 className="text-2xl font-semibold">Sales Overview</h1>
+                  <p className="text-sm text-muted-foreground">View and manage all sales transactions</p>
+                </div>
+              </div>
+            </div>          
           </div>
 
           {/* Key Metrics Cards */}
@@ -127,13 +132,18 @@ const Sales = () => {
             <div className="space-y-[10px]">
               {/* Table Header */}
               <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
-                <div className="grid grid-cols-6 gap-4 w-full text-sm font-medium text-muted-foreground">
-                  <div className="min-w-0">Product Name</div>
-                  <div className="min-w-0">Category</div>
-                  <div className="min-w-0">Price</div>
-                  <div className="min-w-0">Quantity</div>
-                  <div className="min-w-0">Total</div>
+                <div className="grid grid-cols-11 gap-4 w-full text-sm font-medium text-muted-foreground">
+                  <div className="min-w-0">ID</div>
+                  <div className="min-w-0">Invoice No.</div>
                   <div className="min-w-0">Status</div>
+                  <div className="min-w-0">Date Issued</div>
+                  <div className="min-w-0">Date Due</div>
+                  <div className="min-w-0">Payment Status</div>
+                  <div className="min-w-0">Tax</div>
+                  <div className="min-w-0">Discount</div>
+                  <div className="min-w-0">Total Items</div>
+                  <div className="min-w-0">Subtotal</div>
+                  <div className="min-w-0">Total</div>
                 </div>
               </div>
 
@@ -148,17 +158,22 @@ const Sales = () => {
                       : 'border border-border'
                   }`}
                 >
-                  <div className="grid grid-cols-6 gap-4 w-full text-sm">
-                    <div className="font-medium min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.productName}</div>
-                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.category}</div>
-                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.price}</div>
-                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.quantity}</div>
-                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.total}</div>
-                    <div className="min-w-0">
+                  <div className="grid grid-cols-11 gap-4 w-full text-sm">
+                    <div className="font-medium min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.id}</div>
+                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.invoice_no}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
                       <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(sale.status)}`}>
                         {sale.status}
                       </span>
                     </div>
+                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.date_issued}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.date_due}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.payment_status}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.tax}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.discount}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.total_items}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.subtotal}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.total}</div>
                   </div>
                 </div>
               ))}
