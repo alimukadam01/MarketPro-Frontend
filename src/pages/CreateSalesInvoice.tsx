@@ -284,6 +284,23 @@ const CreateSalesInvoice = () => {
                 </div>
               </div>
 
+              {/* Invoice Items Header */}
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Invoice Items</h3>
+                <Button 
+                  variant="destructive" 
+                  size="sm"
+                  onClick={() => {
+                    setInvoiceItems(invoiceItems.filter(item => !selectedRows.includes(item.id)));
+                    setSelectedRows([]);
+                  }}
+                  disabled={selectedRows.length === 0}
+                >
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Selected
+                </Button>
+              </div>
+
               {/* Invoice Summary Table */}
               <div className="mb-6">
                 <div className="space-y-[10px]">
