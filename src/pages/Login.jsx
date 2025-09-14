@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
+import { login, getActiveBusinessId } from "../../services/api"
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
@@ -11,13 +12,14 @@ import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
   remember: z.boolean().optional(),
 });
 
 const Login = () => {
-  const [showPassword, setShowPassword] = useState(false);
-  
+  const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const navigate = useNavigate()
   const form = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -27,9 +29,23 @@ const Login = () => {
     },
   });
 
-  const onSubmit = (data) => {
-    console.log("Login form submitted:", data);
-    // Handle login logic here
+  const onSubmit = async (data) => {
+    try{
+      const accessToken =  await login(data)
+      if (accessToken){
+        setIsLoading(false)
+        await getActiveBusinessId(accessToken)
+        navigate('/')
+
+      }else{
+        setIsLoading(false)
+        showErrorToast("Please provide correct credentials.")
+      }
+    }catch(error){
+      setIsLoading(false)
+      console.log(error)
+      showErrorToast("There was an error logging in. Please try again.")
+    }
   };
 
   return (

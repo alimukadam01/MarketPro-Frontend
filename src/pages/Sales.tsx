@@ -1,12 +1,18 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner"
 import DataTable from "@/components/ui/DataTable";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
-import { getStatusColor } from "../../services/utils"
-import { ArrowLeft, Plus, Filter, Search, Edit, Trash2 } from "lucide-react";
+import { getStatusColor, getPaymentStatusColor, SalesInvoiceStatusMap, PaymentStatusMap } from "../../services/utils"
+import { 
+  getSalesInvoiceList, 
+  bulkDeleteSalesInvoice, 
+  deleteSalesInvoice 
+} from "../../services/api"
+import { Eye, ArrowLeft, Plus, Filter, Search, Edit, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const cols = [
@@ -21,33 +27,39 @@ const cols = [
           value
         )}`}
       >
-        {value}
+        {SalesInvoiceStatusMap[value]}
+      </span>
+    ),
+  },
+  {
+    key: "payment_status",
+    label: "Payment Status",
+    render: (value) => (
+      <span
+        className={`px-2 py-0.25 rounded-full text-xs font-medium whitespace-nowrap ${getPaymentStatusColor(
+          value
+        )}`}
+      >
+        {PaymentStatusMap[value]}
       </span>
     ),
   },
   { key: "date_issued", label: "Date Issued" },
   { key: "date_due", label: "Date Due" },
-  { key: "payment_status", label: "Payment Status" },
   { key: "tax", label: "Tax" },
   { key: "discount", label: "Discount" },
   { key: "total_items", label: "Total Items" },
-  { key: "subtotal", label: "Subtotal" },
+  { key: "sub_total", label: "Subtotal" },
   { key: "total", label: "Total" },
 ]
 
-const salesData = [
-  { id: "1", invoice_no: "inv-00123", status: "Completed", date_issued: "06/08/2025", date_due: "15/08/2025", payment_status: "Paid", tax: "10%", discount: "none", total_items: "3", subtotal: "PKR 23,750", total: "PKR 25,000" },
-  { id: "2", invoice_no: "inv-00124", status: "Pending", date_issued: "07/08/2025", date_due: "16/08/2025", payment_status: "Unpaid", tax: "5%", discount: "none", total_items: "1", subtotal: "PKR 3,500", total: "PKR 3,500" },
-  { id: "3", invoice_no: "inv-00125", status: "Completed", date_issued: "08/08/2025", date_due: "17/08/2025", payment_status: "Paid", tax: "10%", discount: "5%", total_items: "1", subtotal: "PKR 18,000", total: "PKR 18,000" },
-  { id: "4", invoice_no: "inv-00126", status: "Shipped", date_issued: "09/08/2025", date_due: "18/08/2025", payment_status: "Paid", tax: "10%", discount: "none", total_items: "3", subtotal: "PKR 12,600", total: "PKR 12,600" },
-  { id: "5", invoice_no: "inv-00127", status: "Cancelled", date_issued: "10/08/2025", date_due: "19/08/2025", payment_status: "Refunded", tax: "10%", discount: "none", total_items: "1", subtotal: "PKR 8,900", total: "PKR 8,900" },
-  { id: "6", invoice_no: "inv-00128", status: "Completed", date_issued: "11/08/2025", date_due: "20/08/2025", payment_status: "Paid", tax: "5%", discount: "none", total_items: "2", subtotal: "PKR 5,600", total: "PKR 5,600" },
-];
-
 const Sales = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedRows, setSelectedRows] = useState([]);
-  const navigate = useNavigate();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [selectedRows, setSelectedRows] = useState([])
+  const [salesData, setSalesData] = useState(null)
+  const token = localStorage.getItem("market-pro-access-token") || null
+  const [isDeleted, setIsDeleted] = useState(false)
+  const navigate = useNavigate()
 
   const toggleRowSelection = (id: string) => {
     setSelectedRows(prev =>
@@ -55,7 +67,60 @@ const Sales = () => {
         ? prev.filter(rowId => rowId !== id)
         : [...prev, id]
     );
-  };
+  }
+
+  const handleDeletion = async () => {
+    if (selectedRows.length <= 0) return
+    
+    let is_deleted = false
+    try{
+      if (selectedRows.length > 1) {
+        is_deleted = await bulkDeleteSalesInvoice(token, selectedRows)
+
+      } else {
+        console.log("Deleting single invoice with ID:", selectedRows[0])
+        is_deleted = await deleteSalesInvoice(token, selectedRows[0])
+      }
+
+      if (is_deleted) {
+        toast.success("Sales invoices deleted successfully.")
+        setIsDeleted(!isDeleted)
+        setSelectedRows([])
+      }else{
+        toast.error("Failed to delete sales invoices.")
+      }
+    }catch(error){
+      toast.error("Failed to delete sales invoices.")
+      console.error(error)
+    }
+  }
+
+  const handleUpdateClick = ()  => {
+    if (selectedRows.length !== 1) return
+    navigate("/sales/update-invoice", { state: { invoice_id: selectedRows[0] } })
+  }
+
+  useEffect(()=>{
+    const fetchSalesInvoices = async ()=>{
+      if (!token) return
+      
+      try {
+        const res = await getSalesInvoiceList(token)
+        if (res){
+          setSalesData(res)
+        }else{
+          toast.error("Failed to fetch sales invoices.")
+        }
+      }catch(error){
+        toast.error("Failed to fetch sales invoices.")
+        console.error("Error fetching sales invoices:", error)
+      }
+    }
+
+    fetchSalesInvoices()
+  }, [token, isDeleted])
+
+  { console.log(selectedRows) }
 
   return (
     <div className="min-h-screen bg-background">
@@ -130,28 +195,82 @@ const Sales = () => {
 
               {/* Action Icons */}
               <div className="flex items-center space-x-3">
+                <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={() => navigate("/sales/view-invoice")}>
+                  <Eye className="h-4 w-4"/>
+                  <span>View Invoice</span>
+                </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={() => navigate("/sales/create-invoice")}>
                   <Plus className="w-4 h-4" />
                   <span>Create Invoice</span>
                 </Button>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2">
-                  <Plus className="w-4 h-4" />
-                  <span>New Sale</span>
-                </Button>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2">
+                <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={handleUpdateClick}>
                   <Edit className="w-4 h-4" />
                   <span>Update</span>
                 </Button>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2">
+                <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={handleDeletion} disabled={selectedRows.length === 0}>
                   <Trash2 className="w-4 h-4" />
                   <span>Delete</span>
                 </Button>
               </div>
             </div>
 
-            <DataTable columns = {cols} data = {salesData} selectedRows = {selectedRows} onRowClick = {toggleRowSelection}/>
-          </div>
+            {/* Sales Table */}
+            {/* <div className="space-y-[10px]"> */}
+              {/* Table Header */}
+              {/* <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
+                <div className="grid grid-cols-11 gap-4 w-full text-sm font-medium text-muted-foreground">
+                  <div className="min-w-0">ID</div>
+                  <div className="min-w-0">Invoice No</div>
+                  <div className="min-w-0">Status</div>
+                  <div className="min-w-0">Date Issued</div>
+                  <div className="min-w-0">Date Due</div>
+                  <div className="min-w-0">Payment Status</div>
+                  <div className="min-w-0">Tax</div>
+                  <div className="min-w-0">Discount</div>
+                  <div className="min-w-0">Total Items</div>
+                  <div className="min-w-0">Subtotal</div>
+                  <div className="min-w-0">Total</div>
+                </div>
+              </div> */}
 
+              {/* Table Rows */}
+              {/* {salesData.map((sale) => (
+                <div
+                  key={sale.id}
+                  onClick={() => toggleRowSelection(sale.id)}
+                  className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer transition-colors hover:bg-muted/20 ${selectedRows.includes(sale.id)
+                    ? 'border-2 border-[#4285F4]'
+                    : 'border border-border'
+                    }`}
+                >
+                  <div className="grid grid-cols-11 gap-4 w-full text-sm">
+                    <div className="font-medium min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.id}</div>
+                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.invoice_no}</div>
+                    <div className="min-w-0">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(sale.status)}`}>
+                        {sale.status}
+                      </span>
+                    </div>
+                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.date_issued}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.date_due}</div>
+                    <div className="min-w-0">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(sale.payment_status)}`}>
+                        {sale.payment_status}
+                      </span>
+                    </div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.tax}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.discount}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.total_items}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.subtotal}</div>
+                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.total}</div>
+
+                  </div>
+                </div>
+              ))}
+            </div>*/}
+          </div> 
+
+          {salesData && salesData.length > 0 ? <DataTable columns={cols} data={salesData} selectedRows={selectedRows} onRowClick={toggleRowSelection} /> : null}
         </main>
       </div>
     </div>

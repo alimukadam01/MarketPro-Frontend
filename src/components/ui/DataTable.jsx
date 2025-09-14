@@ -1,13 +1,16 @@
 import { React, useState } from "react";
 
-function DataTable({ columns, data, selectedRows = [], onRowClick }){
+function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = null }){
+
+  console.log("colsConfig:", colsConfig);
+  console.log("columns:", columns);
 
   return (
     <div className="space-y-[10px]">
       {/* Table Header */}
       <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
         <div
-          className={`grid grid-cols-${columns.length} gap-4 w-full text-sm font-medium text-muted-foreground`}
+          className={`grid grid-cols-${colsConfig? colsConfig : columns.length} gap-4 w-full text-sm font-medium text-muted-foreground`}
         >
           {columns.map((col) => (
             <div key={col.key} className="min-w-0">
@@ -28,7 +31,7 @@ function DataTable({ columns, data, selectedRows = [], onRowClick }){
               : "border border-border"
           }`}
         >
-          <div className={`grid grid-cols-${columns.length} gap-4 w-full text-sm`}>
+          <div className={`grid grid-cols-${colsConfig? colsConfig : columns.length} gap-4 w-full text-sm`}>
             {columns.map((col) => (
               <div
                 key={col.key}

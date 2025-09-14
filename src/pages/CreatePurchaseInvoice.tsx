@@ -7,29 +7,28 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { ChartNoAxesColumnDecreasing, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
   PaymentStatusMap,
-  SalesInvoiceStatusMap,
-  createIdMap,
-  createNestedIdMap
+  PurchaseInvoiceStatusMap,
+  createIdMap
 } from "../../services/utils"
 import {
-  getAvailableProductsList,
-  getCustomersList,
-  postSalesInvoiceAndItems
+  getProductsList,
+  getSuppliersList,
+  postPurchaseInvoiceAndItems
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
-const CreateSalesInvoice = () => {
-  
+const CreatePurchaseInvoice = () => {
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [invoiceItems, setInvoiceItems] = useState([])
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
-  const [customers, setCustomers] = useState([])
+  const [suppliers, setSuppliers] = useState([])
   const token = localStorage.getItem("market-pro-access-token")
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
@@ -38,70 +37,65 @@ const CreateSalesInvoice = () => {
   const { register, handleSubmit, control, watch, reset, setValue } = useForm({
     defaultValues: {
       invoice_number: "",
-      customer: "",
+      amount_paid: "0.0",
+      supplier: "",
       notes: "",
-      date_issued: "2025-08-09",
+      delivery: "2025-08-09",
       date_due: "2025-08-09",
-      discount: "0.0",
       tax: "0.0",
       payment_status: "Pending",
       status: "Pending",
       newItemProduct: "",
       newItemQuantity: 0,
-      newItemPrice: 0
+      newItemCost: 0
     },
   })
 
-  const discount = parseFloat(watch("discount") || 0)
   const tax = parseFloat(watch("tax") || 0)
 
   const subtotal = invoiceItems.reduce((sum, item) => sum + item.total, 0)
-  const [discountType, setDiscountType] = useState("percentage")
   const [taxType, setTaxType] = useState("percentage")
-  const discountAmount = discountType === "percentage" ? (subtotal * discount) / 100 : discount
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
-  const totalAmount = subtotal - discountAmount + taxAmount
+  const totalAmount = subtotal + taxAmount
   const selectedProduct = products[watch("newItemProduct")]
 
   const onSubmit = async (data) => {
 
-    const {newItemPrice, newItemProduct, newItemQuantity, ...rest} = data
+    const { newItemCost, newItemProduct, newItemQuantity, ...rest } = data
 
     const tax = {
       "value": parseFloat(data.tax),
       "type": taxType
     }
 
-    const discount = {
-      "value": parseFloat(data.discount),
-      "type": discountType
-    }
-
     const items = invoiceItems.map(item => ({
-      product_id: item.product.product.id,
+      product_id: item.product.id,
       quantity: item.quantity,
-      unit_cost: item.unit_cost,
+      unit_cost: item.unit_cost
     }))
 
+    console.log("Form Data without item fields:", {
+      ...rest,
+      tax: tax,
+      items: items
+    })
+
     try {
-        const success = await postSalesInvoiceAndItems(token, {
-            ...rest,
-            tax: tax,
-            discount: discount,
-            items: items
-        })
+      const success = await postPurchaseInvoiceAndItems(token, {
+        ...rest,
+        tax: tax,
+        items: items
+      })
 
-        if (success) {
-            toast.success("Sales invoice created successfully!")
-            navigate("/sales");
-        } else {
-            toast.error("Failed to create sales invoice.")
-        }
+      if (success) {
+        toast.success("Purchase invoice created successfully!")
+        navigate("/purchases");
+      } else {
+        toast.error("Failed to create purchase invoice.")
+      }
     } catch (error) {
-        console.log("Error creating sales invoice:", error)
+      console.log("Error creating purchase invoice:", error)
     }
-
-    console.log("Form Submitted:", { ...rest, tax: tax, discount: discount, "items": items });
   }
 
   const addItem = (product, quantity, unit_cost) => {
@@ -113,9 +107,9 @@ const CreateSalesInvoice = () => {
         quantity,
         unit_cost,
         total: quantity * unit_cost,
-      };
-      setInvoiceItems([...invoiceItems, newInvoiceItem]);
-      reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true });
+      }
+      setInvoiceItems([...invoiceItems, newInvoiceItem])
+      reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true })
     }
   }
 
@@ -130,11 +124,11 @@ const CreateSalesInvoice = () => {
       if (!token) return;
 
       try {
-        const products = await getAvailableProductsList(token, businessId)
-        if (products){
-          const productMap = createNestedIdMap(products, "product.id")
+        const products = await getProductsList(token)
+        if (products) {
+          const productMap = createIdMap(products)
           setProducts(productMap)
-        }else{
+        } else {
           toast.error("Failed to fetch products")
         }
       } catch (error) {
@@ -143,32 +137,24 @@ const CreateSalesInvoice = () => {
       }
     }
 
-    const fetchCustomers = async () => {
-      try{
-        const customers = await getCustomersList(token)
-        if (customers){
-          const customerMap = createIdMap(customers)
-          console.log("Fetched customers:", customerMap)
-          setCustomers(customerMap)
-          console.log(customerMap)
-        }else{
-          toast.error("Failed to fetch customers")
+    const fetchSuppliers = async () => {
+      try {
+        const suppliers = await getSuppliersList(token)
+        if (suppliers) {
+          const supplierMap = createIdMap(suppliers)
+          setSuppliers(supplierMap)
+        } else {
+          toast.error("Failed to fetch suppliers")
         }
-      }catch(error){
-        console.log("Error fetching customers:", error)
-        toast.error("Failed to fetch customers")
+      } catch (error) {
+        console.log("Error fetching suppliers:", error)
+        toast.error("Failed to fetch suppliers")
       }
     }
 
     fetchProducts()
-    fetchCustomers()
+    fetchSuppliers()
   }, [token])
-
-  useEffect(() => {
-    if (selectedProduct){
-      setValue("newItemPrice", selectedProduct.unit_cost, { shouldDirty: false });
-    }
-  }, [selectedProduct])
 
   return (
     <div className="min-h-screen bg-background">
@@ -191,19 +177,19 @@ const CreateSalesInvoice = () => {
                   <Input id="invoice_number" {...register("invoice_number")} placeholder="Enter invoice number" />
                 </div>
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="customer">Customer</Label>
+                  <Label htmlFor="supplier">Supplier</Label>
                   <Controller
-                    name="customer"
+                    name="supplier"
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select customer"></SelectValue> 
+                          <SelectValue placeholder="Select supplier"></SelectValue>
                         </SelectTrigger>
                         <SelectContent>
-                          {customers && Object.keys(customers).length > 0 && Object.entries(customers).map(([key, customer]) => (
+                          {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, supplier]) => (
                             <SelectItem value={key} key={key}>
-                              {customer.name}
+                              {supplier.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -220,25 +206,16 @@ const CreateSalesInvoice = () => {
 
               <div className="flex gap-6 mb-6">
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="date_issued">Date Issued</Label>
-                  <Input id="date_issued" type="date" {...register("date_issued")} />
-                </div>
-                <div className="flex-1 space-y-1">
                   <Label htmlFor="date_due">Date Due</Label>
                   <Input id="date_due" type="date" {...register("date_due")} />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="delivery">Delivery Date</Label>
+                  <Input id="delivery" type="date" {...register("delivery")} />
                 </div>
               </div>
 
               <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="discount">Discount</Label>
-                  <div className="relative">
-                    <Input id="discount" {...register("discount")} placeholder="0.0" />
-                    <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {discountType === "percentage" ? <Button type="button" variant="outline" onClick={() => setDiscountType("amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setDiscountType("percentage")}>PKR</Button>}
-                    </span>
-                  </div>
-                </div>
                 <div className="flex-1 space-y-1">
                   <Label htmlFor="tax">Tax</Label>
                   <div className="relative">
@@ -246,6 +223,12 @@ const CreateSalesInvoice = () => {
                     <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
                       {taxType === "percentage" ? <Button type="button" variant="outline" onClick={() => setTaxType("amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setTaxType("percentage")}>PKR</Button>}
                     </span>
+                  </div>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="amount_paid">Amount Paid</Label>
+                  <div className="relative">
+                    <Input id="amount_paid" {...register("amount_paid")} placeholder="0.0" />
                   </div>
                 </div>
               </div>
@@ -279,8 +262,8 @@ const CreateSalesInvoice = () => {
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                         <SelectContent>
-                          {Object.entries(SalesInvoiceStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key} disabled={!(key !== "PC" && key !== "C")}>
+                          {Object.entries(PurchaseInvoiceStatusMap).map(([key, value]) => (
+                            <SelectItem value={key} key={key} disabled={!(key !== "R" && key !== "PR")}>
                               {value}
                             </SelectItem>
                           ))}
@@ -308,7 +291,7 @@ const CreateSalesInvoice = () => {
                         <SelectContent>
                           {products && Object.keys(products).length > 0 && Object.entries(products).map(([key, item]) => (
                             <SelectItem key={key} value={key}>
-                              {item.product.name} (available: {item.available_quantity})
+                              {item.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -321,14 +304,14 @@ const CreateSalesInvoice = () => {
                   <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
                 </div>
                 <div className="w-[20%] space-y-1">
-                  <Label htmlFor="newItemPrice">Unit Cost</Label>
-                  <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
+                  <Label htmlFor="newItemCost">Unit Cost</Label>
+                  <Input id="newItemCost" type="number" {...register("newItemCost")} />
                 </div>
                 <div className="w-[20%] flex items-end">
                   <Button
                     type="button"
                     onClick={() =>
-                      addItem(watch("newItemProduct"), parseInt(watch("newItemQuantity") || 0), parseFloat(watch("newItemPrice") || 0.0))
+                      addItem(watch("newItemProduct"), parseInt(watch("newItemQuantity") || 0), parseFloat(watch("newItemCost") || 0.0))
                     }
                     className="w-full"
                   >
@@ -341,8 +324,8 @@ const CreateSalesInvoice = () => {
               {/* Invoice Items Header */}
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-lg font-semibold">Invoice Items</h3>
-                <Button 
-                  variant="destructive" 
+                <Button
+                  variant="destructive"
                   size="sm"
                   onClick={() => {
                     setInvoiceItems(invoiceItems.filter(item => !selectedRows.includes(item.id)));
@@ -372,13 +355,12 @@ const CreateSalesInvoice = () => {
                     <div
                       key={item.id}
                       onClick={() => toggleRowSelection(item.id)}
-                      className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${
-                        selectedRows.includes(item.id) ? "border-2 border-[#4285F4]" : "border border-border"
-                      }`}
+                      className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${selectedRows.includes(item.id) ? "border-2 border-[#4285F4]" : "border border-border"
+                        }`}
                     >
                       <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
                         <div>{item.id}</div>
-                        <div className="font-medium">{item.product.product.name}</div>
+                        <div className="font-medium">{item.product.name}</div>
                         <div>{item.quantity}</div>
                         <div>{item.unit_cost}</div>
                         <div className="font-semibold">{item.total}</div>
@@ -410,4 +392,4 @@ const CreateSalesInvoice = () => {
   );
 }
 
-export default CreateSalesInvoice;
+export default CreatePurchaseInvoice;

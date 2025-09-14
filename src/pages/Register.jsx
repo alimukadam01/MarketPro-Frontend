@@ -1,46 +1,60 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Eye, EyeOff, Mail, Lock, User } from "lucide-react";
+import { useState } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { useForm } from "react-hook-form"
+import { register } from "../../services/api"
+import { zodResolver } from "@hookform/resolvers/zod"
+import * as z from "zod"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Eye, EyeOff, Mail, Lock, User } from "lucide-react"
+import { toast } from "sonner"
 
 const registerSchema = z.object({
-  firstName: z.string().min(2, "First name must be at least 2 characters"),
-  lastName: z.string().min(2, "Last name must be at least 2 characters"),
+  first_name: z.string().min(2, "First name must be at least 2 characters"),
+  last_name: z.string().min(2, "Last name must be at least 2 characters"),
   email: z.string().email("Please enter a valid email address"),
   password: z.string().min(6, "Password must be at least 6 characters"),
-  confirmPassword: z.string().min(6, "Password confirmation must be at least 6 characters"),
+  re_password: z.string().min(6, "Password confirmation must be at least 6 characters"),
   terms: z.boolean().refine((val) => val === true, "You must agree to the terms and conditions"),
-}).refine((data) => data.password === data.confirmPassword, {
+  }).refine((data) => data.password === data.re_password, {
   message: "Passwords don't match",
-  path: ["confirmPassword"],
+  path: ["re_password"],
 });
 
 const Register = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const navigate = useNavigate()
   
   const form = useForm({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      firstName: "",
-      lastName: "",
+      first_name: "",
+      last_name: "",
       email: "",
       password: "",
-      confirmPassword: "",
+      re_password: "",
       terms: false,
     },
   });
 
-  const onSubmit = (data) => {
-    console.log("Register form submitted:", data);
-    // Handle registration logic here
-  };
+  const onSubmit = async (data) => {
+    try{
+      const isCreated = await register(data)
+      if (isCreated){
+        navigate('/')
+        toast.success("User registered successfully. Welcome to Market Pro!")
+      }else{
+        toast.error("User registration failed")
+        console.log("User registration failed")
+      }
+    }catch(error){
+      console.log(error)
+      toast.error("User registration failed") 
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -55,7 +69,7 @@ const Register = () => {
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="firstName"
+                name="first_name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>First Name</FormLabel>
@@ -77,7 +91,7 @@ const Register = () => {
 
               <FormField
                 control={form.control}
-                name="lastName"
+                name="last_name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Last Name</FormLabel>
@@ -155,7 +169,7 @@ const Register = () => {
 
             <FormField
               control={form.control}
-              name="confirmPassword"
+              name="re_password"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Confirm Password</FormLabel>

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
   PaymentStatusMap,
@@ -19,11 +19,12 @@ import {
 import {
   getAvailableProductsList,
   getCustomersList,
-  postSalesInvoiceAndItems
+  updateSalesInvoiceAndItems,
+  getSalesInvoiceDetail
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
-const CreateSalesInvoice = () => {
+const UpdateSalesInvoice = () => {
   
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [invoiceItems, setInvoiceItems] = useState([])
@@ -33,6 +34,8 @@ const CreateSalesInvoice = () => {
   const token = localStorage.getItem("market-pro-access-token")
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
+  const location = useLocation()
+  const invoice_id = location.state?.invoice_id || null
 
   // react-hook-form setup
   const { register, handleSubmit, control, watch, reset, setValue } = useForm({
@@ -78,24 +81,25 @@ const CreateSalesInvoice = () => {
     }
 
     const items = invoiceItems.map(item => ({
-      product_id: item.product.product.id,
+      id: item.id,
+      product_id: item.product.id,
       quantity: item.quantity,
-      unit_cost: item.unit_cost,
+      unit_price: item.unit_price,
     }))
 
     try {
-        const success = await postSalesInvoiceAndItems(token, {
-            ...rest,
-            tax: tax,
-            discount: discount,
-            items: items
+        const success = await updateSalesInvoiceAndItems(token, invoice_id, {
+          ...rest,
+          tax: tax,
+          discount: discount,
+          items: items
         })
 
         if (success) {
-            toast.success("Sales invoice created successfully!")
-            navigate("/sales");
+          toast.success("Sales invoice updated successfully!")
+          navigate("/sales");
         } else {
-            toast.error("Failed to create sales invoice.")
+          toast.error("Failed to update sales invoice.")
         }
     } catch (error) {
         console.log("Error creating sales invoice:", error)
@@ -104,15 +108,15 @@ const CreateSalesInvoice = () => {
     console.log("Form Submitted:", { ...rest, tax: tax, discount: discount, "items": items });
   }
 
-  const addItem = (product, quantity, unit_cost) => {
+  const addItem = (product, quantity, unit_price) => {
     if (product && quantity > 0) {
       const selectedProduct = products[product]
       const newInvoiceItem = {
         id: invoiceItems.length + 1,
-        product: selectedProduct,
+        product: selectedProduct.product,
         quantity,
-        unit_cost,
-        total: quantity * unit_cost,
+        unit_price,
+        total: quantity * unit_price,
       };
       setInvoiceItems([...invoiceItems, newInvoiceItem]);
       reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true });
@@ -125,7 +129,55 @@ const CreateSalesInvoice = () => {
     )
   }
 
+  const populateInvoiceFields = (data) => {
+  // fill the main form fields
+    reset({
+      invoice_number: data.invoice_number || "",
+      customer: data.customer?.id || "",
+      notes: data.notes || "",
+      date_issued: data.date_issued?.split("T")[0] || "",
+      date_due: data.date_due || "",
+      discount: data.discount?.value ?? "0.0",
+      tax: data.tax?.value ?? "0.0",
+      payment_status: data.payment_status || "Pending",
+      status: data.status || "Pending",
+      newItemProduct: "",
+      newItemQuantity: 0,
+      newItemPrice: 0,
+    })
+
+    // build your items array for state
+    const items = (data.invoice_items || []).map((item) => ({
+      id: item?.id,
+      product: item?.product,
+      quantity: item?.quantity,
+      unit_price: item?.unit_price,
+      total: (item?.quantity * item?.unit_price) || 0,
+    }))
+    setInvoiceItems(items)
+
+    setDiscountType(data.discount?.type)
+    setTaxType(data.tax?.type)
+  }
+
   useEffect(() => {
+    
+    const fetchSalesInvoice = async () => {
+      if (!token) return
+      try{
+        const salesInvoice = await getSalesInvoiceDetail(token, invoice_id)
+        if (salesInvoice){
+          console.log("Fetched sales invoice:", salesInvoice)
+          populateInvoiceFields(salesInvoice)
+        }else{
+          toast.error("Failed to fetch sales invoice")
+        }
+      }catch(error){
+        console.log(error)
+        toast.error("Failed to fetch sales invoice")
+      }
+    }
+
     const fetchProducts = async () => {
       if (!token) return;
 
@@ -159,16 +211,21 @@ const CreateSalesInvoice = () => {
         toast.error("Failed to fetch customers")
       }
     }
-
+    
+    fetchSalesInvoice()
     fetchProducts()
     fetchCustomers()
   }, [token])
 
   useEffect(() => {
     if (selectedProduct){
-      setValue("newItemPrice", selectedProduct.unit_cost, { shouldDirty: false });
+      setValue("newItemPrice", selectedProduct.unit_price, { shouldDirty: false });
     }
   }, [selectedProduct])
+
+  {
+    console.log("Invoice Items:", invoiceItems)
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -280,7 +337,7 @@ const CreateSalesInvoice = () => {
                         <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                         <SelectContent>
                           {Object.entries(SalesInvoiceStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key} disabled={!(key !== "PC" && key !== "C")}>
+                            <SelectItem value={key} key={key}>
                               {value}
                             </SelectItem>
                           ))}
@@ -321,7 +378,7 @@ const CreateSalesInvoice = () => {
                   <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
                 </div>
                 <div className="w-[20%] space-y-1">
-                  <Label htmlFor="newItemPrice">Unit Cost</Label>
+                  <Label htmlFor="newItemPrice">Unit Price</Label>
                   <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
                 </div>
                 <div className="w-[20%] flex items-end">
@@ -363,7 +420,7 @@ const CreateSalesInvoice = () => {
                       <div>id</div>
                       <div>product</div>
                       <div>quantity</div>
-                      <div>unit cost</div>
+                      <div>unit price</div>
                       <div>total</div>
                     </div>
                   </div>
@@ -378,9 +435,11 @@ const CreateSalesInvoice = () => {
                     >
                       <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
                         <div>{item.id}</div>
-                        <div className="font-medium">{item.product.product.name}</div>
+                        <div className="font-medium">{
+                          item.product.name? item.product.name : item.product.product.name
+                        }</div>
                         <div>{item.quantity}</div>
-                        <div>{item.unit_cost}</div>
+                        <div>{item.unit_price}</div>
                         <div className="font-semibold">{item.total}</div>
                       </div>
                     </div>
@@ -400,7 +459,7 @@ const CreateSalesInvoice = () => {
               </div>
 
               <div className="flex justify-end gap-3 mt-auto">
-                <Button type="submit">Create Invoice</Button>
+                <Button type="submit">Update Invoice</Button>
               </div>
             </div>
           </form>
@@ -410,4 +469,4 @@ const CreateSalesInvoice = () => {
   );
 }
 
-export default CreateSalesInvoice;
+export default UpdateSalesInvoice;
