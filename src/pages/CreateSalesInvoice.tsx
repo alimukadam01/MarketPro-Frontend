@@ -80,7 +80,7 @@ const CreateSalesInvoice = () => {
     const items = invoiceItems.map(item => ({
       product_id: item.product.product.id,
       quantity: item.quantity,
-      unit_cost: item.unit_cost,
+      unit_price: item.unit_price,
     }))
 
     try {
@@ -104,15 +104,15 @@ const CreateSalesInvoice = () => {
     console.log("Form Submitted:", { ...rest, tax: tax, discount: discount, "items": items });
   }
 
-  const addItem = (product, quantity, unit_cost) => {
+  const addItem = (product, quantity, unit_price) => {
     if (product && quantity > 0) {
       const selectedProduct = products[product]
       const newInvoiceItem = {
         id: invoiceItems.length + 1,
         product: selectedProduct,
         quantity,
-        unit_cost,
-        total: quantity * unit_cost,
+        unit_price,
+        total: quantity * unit_price,
       };
       setInvoiceItems([...invoiceItems, newInvoiceItem]);
       reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true });
@@ -166,7 +166,7 @@ const CreateSalesInvoice = () => {
 
   useEffect(() => {
     if (selectedProduct){
-      setValue("newItemPrice", selectedProduct.unit_cost, { shouldDirty: false });
+      setValue("newItemPrice", selectedProduct.unit_price, { shouldDirty: false });
     }
   }, [selectedProduct])
 
@@ -321,7 +321,7 @@ const CreateSalesInvoice = () => {
                   <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
                 </div>
                 <div className="w-[20%] space-y-1">
-                  <Label htmlFor="newItemPrice">Unit Cost</Label>
+                  <Label htmlFor="newItemPrice">Unit Price</Label>
                   <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
                 </div>
                 <div className="w-[20%] flex items-end">
@@ -363,7 +363,7 @@ const CreateSalesInvoice = () => {
                       <div>id</div>
                       <div>product</div>
                       <div>quantity</div>
-                      <div>unit cost</div>
+                      <div>unit price</div>
                       <div>total</div>
                     </div>
                   </div>
@@ -380,7 +380,7 @@ const CreateSalesInvoice = () => {
                         <div>{item.id}</div>
                         <div className="font-medium">{item.product.product.name}</div>
                         <div>{item.quantity}</div>
-                        <div>{item.unit_cost}</div>
+                        <div>{item.unit_price}</div>
                         <div className="font-semibold">{item.total}</div>
                       </div>
                     </div>

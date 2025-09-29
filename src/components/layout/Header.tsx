@@ -15,6 +15,7 @@ export function Header() {
 
   const handleLogout = () =>{
     localStorage.removeItem('market-pro-access-token')
+    localStorage.removeItem('mp-business-id')
     setUser(null)
     navigate('/login')
   }
@@ -26,11 +27,13 @@ export function Header() {
         if (userData){
           setUser(userData)
         }else{
-          toast.error("Error fetching user information. Please reload.")
+          toast.error("Error fetching user information. Please login again.")
+          handleLogout()
         }
       }catch(error){
         console.log(error)
-        toast.error("Error fetching user information. Please reload.")
+        toast.error("Error fetching user information. Please login again.")
+        handleLogout()
       }
     }
 

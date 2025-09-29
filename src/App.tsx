@@ -10,13 +10,17 @@ import CreateSalesInvoice from "./pages/CreateSalesInvoice";
 import UpdateSalesInvoice from "./pages/UpdateSalesInvoice";
 import CreatePurchaseInvoice from "./pages/CreatePurchaseInvoice";
 import UpdatePurchaseInvoice from "./pages/UpdatePurchaseInvoice";
+import InventoryOverview from "./pages/InventoryOverview";
+import CreateInventoryItem from "./pages/CreateInventoryItem";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
+const App = () => {
+  
+  return (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Sonner />
@@ -29,6 +33,8 @@ const App = () => (
           <Route path="/purchases" element={<Purchases />} />
           <Route path="/purchases/create-invoice" element={<CreatePurchaseInvoice />} />
           <Route path="/purchases/update-invoice" element={<UpdatePurchaseInvoice />} />
+          <Route path="/inventory" element={<InventoryOverview />} />
+          <Route path="/inventory/create-item" element={<CreateInventoryItem />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
@@ -38,6 +44,6 @@ const App = () => (
     <ToastContainer />
     </TooltipProvider>
   </QueryClientProvider>
-);
+)};
 
 export default App;

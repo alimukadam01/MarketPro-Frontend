@@ -2,7 +2,8 @@
 import axios from "axios";
 import { 
     transformSalesInvoice,
-    transformPurchaseInvoice
+    transformPurchaseInvoice,
+    transformInventoryItem
 } from "./utils";
 
 const BASE_URL = "http://localhost:8000/"
@@ -14,6 +15,46 @@ const apiClient = axios.create({
     },
     timeout: 30000
 })
+
+export const getUnitsList = async (token) => {
+    try {
+        const res = await apiClient.get("/units/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status === 200) {
+            return res.data
+        }
+
+        console.log("There was an error fetching the unit list.")
+        return []
+    } catch (error) {
+        console.log("There was an error fetching the unit list: ", error)
+        return []
+    }
+}
+
+export const getLocationsList = async (token) => {
+    try {
+        const res = await apiClient.get("/locations/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status === 200) {
+            return res.data
+        }
+
+        console.log("There was an error fetching the locations list.")
+        return []
+    } catch (error) {
+        console.log("There was an error fetching the locations list: ", error)
+        return []
+    }
+}
 
 export const getProductsList = async (token) => {
     try {
@@ -55,6 +96,26 @@ export const getAvailableProductsList = async (token, businessId) => {
         return []
     }
 }
+
+export const postProduct = async (token, productData) => {
+    try {
+        const res = await apiClient.post("/products/", productData, {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status === 201) {
+            return true
+        }
+        console.log(res.data.detail)
+        return false
+    }
+    catch (error) {
+        console.log("There was an error creating the product: ", error)
+        return false
+    }
+}        
 
 export const getCustomersList = async (token) => {
     try {
@@ -423,5 +484,77 @@ export const updatePurchaseInvoiceAndItems = async (token, invoiceId, invoiceDat
     } catch(error){
         console.log(error)
         return null
+    }
+}
+
+export const getInventoryItemList = async (token, businessId) => {
+    try {
+        const res = await apiClient.get(`/inventory/${businessId}/items/`, {
+            headers: {
+                Authorization: token
+            }
+        })
+        if (res.status === 200) {
+            return res.data.map(transformInventoryItem)
+        }
+        console.log("Error fetching the inventory items.")
+        return null
+    } catch (error) {
+        console.log("Error fetching the inventory items: ", error)
+        return null
+    }
+}
+
+export const deleteInventoryItem = async (token, businessId, itemId) => {
+    try {
+        const res = await apiClient.delete(`/inventory/${businessId}/items/${itemId}/`, {
+            headers: {
+                Authorization: token
+            }
+        })
+        if (res.status === 204) {
+            return true
+        }
+        console.log(res.data.detail)
+        return false
+    } catch (error) {
+        console.log(error)
+        return false
+    }
+}
+
+export const bulkDeleteInventoryItems = async (token, businessId, itemIds) => {
+    try {
+        const res = await apiClient.post(`/inventory/${businessId}/items/bulk-delete/`, { item_ids: itemIds }, {
+            headers: {
+                Authorization: token
+            }
+        })
+        if (res.status === 200) {
+            return true
+        }
+        console.log(res.data.detail)
+        return false
+    } catch (error) {
+        console.log(error)
+        return false
+    }
+}
+
+export const postInventoryItem = async (token, businessId, itemData) => {
+    try{
+        const res = await apiClient.post(`/inventory/${businessId}/items/`, itemData, {
+            headers: {
+                Authorization: token
+            }
+        })
+        if (res.status === 201) {
+            return true
+        }
+        console.log(res.data.detail)
+        return false
+    }catch(error){
+        console.log(error)
+        return false
     }
 }

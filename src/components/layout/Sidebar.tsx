@@ -14,9 +14,9 @@ import { useNavigate, useLocation } from "react-router-dom";
 const sidebarItems = [
   { name: "Sales", icon: ShoppingCart, href: "/sales" },
   { name: "Purchases", icon: Package, href: "/purchases" },
+  { name: "Inventory", icon: Archive, href: "/inventory" },
   { name: "Projects", icon: FolderOpen, href: "/projects" },
   { name: "Customers", icon: Users, href: "/customers" },
-  { name: "Inventory", icon: Archive, href: "/inventory" },
 ];
 
 interface SidebarProps {

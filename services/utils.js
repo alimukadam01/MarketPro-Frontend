@@ -116,6 +116,38 @@ export function transformPurchaseInvoice(data) {
   }
 }
 
+export function transformInventoryItem(data) {
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+      timeZone: "UTC"
+    })
+  }
+
+  // Helper to format currency as "PKR X,XXX"
+  const formatCurrency = (amount) => {
+    return `PKR ${Number(amount).toLocaleString()}`;
+  }
+
+  return {
+    id: data.id,
+    product: data.product.name,
+    quantity: data.quantity,
+    quantity_on_hand: data.quantity_on_hand,
+    quantity_reserved: data.quantity_reserved,
+    unit_cost: formatCurrency(data.unit_cost),
+    unit_price: formatCurrency(data.unit_price),
+    reorder_level: data.reorder_level,
+    last_updated: formatDate(data.last_updated)
+  }
+}
+
 export function createIdMap(arr, field = null) {
   return arr.reduce((acc, item) => {
     if (!item.id) {
