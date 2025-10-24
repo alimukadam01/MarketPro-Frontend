@@ -130,7 +130,6 @@ const UpdateSalesInvoice = () => {
   }
 
   const populateInvoiceFields = (data) => {
-  // fill the main form fields
     reset({
       invoice_number: data.invoice_number || "",
       customer: data.customer?.id || "",
@@ -222,10 +221,6 @@ const UpdateSalesInvoice = () => {
       setValue("newItemPrice", selectedProduct.unit_price, { shouldDirty: false });
     }
   }, [selectedProduct])
-
-  {
-    console.log("Invoice Items:", invoiceItems)
-  }
 
   return (
     <div className="min-h-screen bg-background">

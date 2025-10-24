@@ -4,11 +4,17 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner"
 import DataTable from "@/components/ui/DataTable";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
-import { getStatusColor, getPaymentStatusColor, PurchaseInvoiceStatusMap, PaymentStatusMap } from "../../services/utils"
 import { 
-  getPurchaseInvoiceList, 
-  bulkDeletePurchaseInvoice, 
-  deletePurchaseInvoice 
+  getStatusColor, 
+  getPaymentStatusColor, 
+  PurchaseInvoiceStatusMap, 
+  PaymentStatusMap,
+  formatSearchQuery 
+} from "../../services/utils"
+import {
+  getPurchaseInvoiceList,
+  bulkDeletePurchaseInvoice,
+  deletePurchaseInvoice
 } from "../../services/api"
 import { Eye, ArrowLeft, Plus, Filter, Search, Edit, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -57,6 +63,7 @@ const Purchases = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [selectedRows, setSelectedRows] = useState([])
   const [purchasesData, setPurchasesData] = useState(null)
+  const [searchTerm, setSearchTerm] = useState(null)
   const token = localStorage.getItem("market-pro-access-token") || null
   const [isDeleted, setIsDeleted] = useState(false)
   const navigate = useNavigate()
@@ -71,9 +78,9 @@ const Purchases = () => {
 
   const handleDeletion = async () => {
     if (selectedRows.length <= 0) return
-    
+
     let is_deleted = false
-    try{
+    try {
       if (selectedRows.length > 1) {
         is_deleted = await bulkDeletePurchaseInvoice(token, selectedRows)
 
@@ -82,42 +89,55 @@ const Purchases = () => {
       }
 
       if (is_deleted) {
-        toast.success("Purchase invoices deleted successfully.") 
-        setIsDeleted(!isDeleted)    
-        setSelectedRows([]) 
-      }else{
+        toast.success("Purchase invoices deleted successfully.")
+        setIsDeleted(!isDeleted)
+        setSelectedRows([])
+      } else {
         toast.error("Failed to delete Purchase invoices.")
       }
-    }catch(error){
+    } catch (error) {
       toast.error("Failed to delete Purchase invoices.")
       console.error(error)
     }
   }
 
-  const handleUpdateClick = ()  => {
+  const handleUpdateClick = () => {
     if (selectedRows.length !== 1) return
     navigate("/purchases/update-invoice", { state: { invoice_id: selectedRows[0] } })
   }
 
-  useEffect(()=>{
-    const fetchPurchaseInvoices = async ()=>{
-      if (!token) return
-      
-      try {
-        const res = await getPurchaseInvoiceList(token)
-        if (res){
-          setPurchasesData(res)
-        }else{
-          toast.error("Failed to fetch purchase invoices.")
-        }
-      }catch(error){
-        toast.error("Failed to fetch purchase invoices.")
-        console.error("Error fetching purchase invoices:", error)
-      }
-    }
+  const fetchPurchaseInvoices = async (searchQuery=null) => {
+    if (!token) return
 
+    try {
+      const res = await getPurchaseInvoiceList(token, searchQuery)
+      if (res) {
+        setPurchasesData(res)
+      } else {
+        toast.error("Failed to fetch purchase invoices.")
+      }
+    } catch (error) {
+      toast.error("Failed to fetch purchase invoices.")
+      console.error("Error fetching purchase invoices:", error)
+    }
+  }
+
+  useEffect(() => {
     fetchPurchaseInvoices()
   }, [token, isDeleted])
+
+  useEffect(() => {
+    const delayDebounce = setTimeout(async () => {
+      if (searchTerm.trim() !== "") {
+        const query = formatSearchQuery(searchTerm)
+        await fetchPurchaseInvoices(query)
+      } else {
+        await fetchPurchaseInvoices()
+      }
+    }, 400) // wait 400ms after user stops typing
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchTerm]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -182,6 +202,8 @@ const Purchases = () => {
                   <Input
                     placeholder="Search purchases by customer name or ID..."
                     className="pl-10 w-80"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
                 <Button variant="outline" className="flex items-center space-x-2">
@@ -193,7 +215,7 @@ const Purchases = () => {
               {/* Action Icons */}
               <div className="flex items-center space-x-3">
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={() => navigate("/purchases/view-invoice")}>
-                  <Eye className="h-4 w-4"/>
+                  <Eye className="h-4 w-4" />
                   <span>View Invoice</span>
                 </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={() => navigate("/purchases/create-invoice")}>
@@ -211,7 +233,7 @@ const Purchases = () => {
               </div>
             </div>
 
-          </div> 
+          </div>
 
           {purchasesData && purchasesData.length > 0 ? <DataTable columns={cols} data={purchasesData} selectedRows={selectedRows} onRowClick={toggleRowSelection} /> : null}
         </main>

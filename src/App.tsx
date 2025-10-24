@@ -12,6 +12,7 @@ import CreatePurchaseInvoice from "./pages/CreatePurchaseInvoice";
 import UpdatePurchaseInvoice from "./pages/UpdatePurchaseInvoice";
 import InventoryOverview from "./pages/InventoryOverview";
 import CreateInventoryItem from "./pages/CreateInventoryItem";
+import UpdateInventoryItem from "./pages/UpdateInventoryItem";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
@@ -35,6 +36,7 @@ const App = () => {
           <Route path="/purchases/update-invoice" element={<UpdatePurchaseInvoice />} />
           <Route path="/inventory" element={<InventoryOverview />} />
           <Route path="/inventory/create-item" element={<CreateInventoryItem />} />
+          <Route path="/inventory/update-item" element={<UpdateInventoryItem />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

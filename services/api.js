@@ -56,9 +56,9 @@ export const getLocationsList = async (token) => {
     }
 }
 
-export const getProductsList = async (token) => {
+export const getProductsList = async (token, searchQuery=null) => {
     try {
-        const res = await apiClient.get(`/products/`, {
+        const res = await apiClient.get(`/products/${searchQuery? searchQuery: ""}`, {
             headers: {
                 Authorization: token
             }
@@ -227,9 +227,9 @@ export const getUserInfo = async (token) => {
     }
 }
 
-export const getSalesInvoiceList = async (token) => {
+export const getSalesInvoiceList = async (token, searchQuery=null) => {
     try{
-        const res = await apiClient.get("/sales-invoices/", {
+        const res = await apiClient.get(`/sales-invoices/${searchQuery? searchQuery: ""}`, {
             headers: {
                 Authorization: token
             }
@@ -379,9 +379,9 @@ export const updateSalesInvoiceAndItems = async (token, invoiceId, invoiceData) 
     }
 }
 
-export const getPurchaseInvoiceList = async (token) => {
+export const getPurchaseInvoiceList = async (token, searchQuery=null) => {
     try{
-        const res = await apiClient.get("/purchase-invoices/", {
+        const res = await apiClient.get(`/purchase-invoices/${searchQuery? searchQuery: ""}`, {
             headers: {
                 Authorization: token
             }
@@ -487,9 +487,10 @@ export const updatePurchaseInvoiceAndItems = async (token, invoiceId, invoiceDat
     }
 }
 
-export const getInventoryItemList = async (token, businessId) => {
+export const getInventoryItemList = async (token, businessId, searchQuery=null) => {
     try {
-        const res = await apiClient.get(`/inventory/${businessId}/items/`, {
+
+        const res = await apiClient.get(`/inventory/${businessId}/items/${searchQuery? searchQuery: ""}`, {
             headers: {
                 Authorization: token
             }
@@ -501,6 +502,24 @@ export const getInventoryItemList = async (token, businessId) => {
         return null
     } catch (error) {
         console.log("Error fetching the inventory items: ", error)
+        return null
+    }
+}
+
+export const getInventoryItemDetail = async (token, businessId, itemId) => {
+    try {
+        const res = await apiClient.get(`/inventory/${businessId}/items/${itemId}/`, {
+            headers: {
+                Authorization: token
+            }
+        })
+        if (res.status === 200) {
+            return res.data
+        }
+        console.log("Error fetching the inventory item details.")
+        return null
+    } catch (error) {
+        console.log("Error fetching the inventory item details: ", error)
         return null
     }
 }
@@ -549,6 +568,24 @@ export const postInventoryItem = async (token, businessId, itemData) => {
             }
         })
         if (res.status === 201) {
+            return true
+        }
+        console.log(res.data.detail)
+        return false
+    }catch(error){
+        console.log(error)
+        return false
+    }
+}
+
+export const updateInventoryItem = async (token, businessId, itemId, itemData) => {
+    try{
+        const res = await apiClient.put(`/inventory/${businessId}/items/${itemId}/`, itemData, {
+            headers: {
+                Authorization: token
+            }
+        })
+        if (res.status === 200) {
             return true
         }
         console.log(res.data.detail)

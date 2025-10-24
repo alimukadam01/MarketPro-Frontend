@@ -175,3 +175,19 @@ export function createNestedIdMap(arr, keyPath, valueField = null) {
     return acc;
   }, {});
 }
+
+export const formatSearchQuery = (searchInput) => {
+  if (!searchInput || searchInput.trim() === "") return null;
+  
+  const encoded = encodeURIComponent(searchInput.trim());
+  return `?search=${encoded}`;
+}
+
+export const formatFilterQuery = (filters = {}) => {
+  const params = Object.entries(filters)
+    .filter(([_, value]) => value !== undefined && value !== "" && value !== null)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+
+  return params ? `?${params}` : "";
+}

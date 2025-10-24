@@ -4,11 +4,17 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner"
 import DataTable from "@/components/ui/DataTable";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
-import { getStatusColor, getPaymentStatusColor, SalesInvoiceStatusMap, PaymentStatusMap } from "../../services/utils"
 import { 
-  getSalesInvoiceList, 
-  bulkDeleteSalesInvoice, 
-  deleteSalesInvoice 
+  getStatusColor, 
+  getPaymentStatusColor, 
+  SalesInvoiceStatusMap, 
+  PaymentStatusMap,
+  formatSearchQuery
+} from "../../services/utils"
+import {
+  getSalesInvoiceList,
+  bulkDeleteSalesInvoice,
+  deleteSalesInvoice
 } from "../../services/api"
 import { Eye, ArrowLeft, Plus, Filter, Search, Edit, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -57,6 +63,7 @@ const Sales = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [selectedRows, setSelectedRows] = useState([])
   const [salesData, setSalesData] = useState(null)
+  const [searchTerm, setSearchTerm] = useState(null)
   const token = localStorage.getItem("market-pro-access-token") || null
   const [isDeleted, setIsDeleted] = useState(false)
   const navigate = useNavigate()
@@ -71,9 +78,9 @@ const Sales = () => {
 
   const handleDeletion = async () => {
     if (selectedRows.length <= 0) return
-    
+
     let is_deleted = false
-    try{
+    try {
       if (selectedRows.length > 1) {
         is_deleted = await bulkDeleteSalesInvoice(token, selectedRows)
 
@@ -86,41 +93,52 @@ const Sales = () => {
         toast.success("Sales invoices deleted successfully.")
         setIsDeleted(!isDeleted)
         setSelectedRows([])
-      }else{
+      } else {
         toast.error("Failed to delete sales invoices.")
       }
-    }catch(error){
+    } catch (error) {
       toast.error("Failed to delete sales invoices.")
       console.error(error)
     }
   }
 
-  const handleUpdateClick = ()  => {
+  const handleUpdateClick = () => {
     if (selectedRows.length !== 1) return
     navigate("/sales/update-invoice", { state: { invoice_id: selectedRows[0] } })
   }
 
-  useEffect(()=>{
-    const fetchSalesInvoices = async ()=>{
-      if (!token) return
-      
-      try {
-        const res = await getSalesInvoiceList(token)
-        if (res){
-          setSalesData(res)
-        }else{
-          toast.error("Failed to fetch sales invoices.")
-        }
-      }catch(error){
-        toast.error("Failed to fetch sales invoices.")
-        console.error("Error fetching sales invoices:", error)
-      }
-    }
+  const fetchSalesInvoices = async (searchQuery=null) => {
+    if (!token) return
 
+    try {
+      const res = await getSalesInvoiceList(token, searchQuery)
+      if (res) {
+        setSalesData(res)
+      } else {
+        toast.error("Failed to fetch sales invoices.")
+      }
+    } catch (error) {
+      toast.error("Failed to fetch sales invoices.")
+      console.error("Error fetching sales invoices:", error)
+    }
+  }
+
+  useEffect(() => {
     fetchSalesInvoices()
   }, [token, isDeleted])
 
-  { console.log(selectedRows) }
+  useEffect(() => {
+    const delayDebounce = setTimeout(async () => {
+      if (searchTerm.trim() !== "") {
+        const query = formatSearchQuery(searchTerm)
+        await fetchSalesInvoices(query)
+      } else {
+        await fetchSalesInvoices()
+      }
+    }, 400); // wait 400ms after user stops typing
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchTerm]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -185,6 +203,8 @@ const Sales = () => {
                   <Input
                     placeholder="Search sales by customer name or ID..."
                     className="pl-10 w-80"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
                 <Button variant="outline" className="flex items-center space-x-2">
@@ -196,7 +216,7 @@ const Sales = () => {
               {/* Action Icons */}
               <div className="flex items-center space-x-3">
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={() => navigate("/sales/view-invoice")}>
-                  <Eye className="h-4 w-4"/>
+                  <Eye className="h-4 w-4" />
                   <span>View Invoice</span>
                 </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={() => navigate("/sales/create-invoice")}>
@@ -216,8 +236,8 @@ const Sales = () => {
 
             {/* Sales Table */}
             {/* <div className="space-y-[10px]"> */}
-              {/* Table Header */}
-              {/* <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
+            {/* Table Header */}
+            {/* <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
                 <div className="grid grid-cols-11 gap-4 w-full text-sm font-medium text-muted-foreground">
                   <div className="min-w-0">ID</div>
                   <div className="min-w-0">Invoice No</div>
@@ -233,8 +253,8 @@ const Sales = () => {
                 </div>
               </div> */}
 
-              {/* Table Rows */}
-              {/* {salesData.map((sale) => (
+            {/* Table Rows */}
+            {/* {salesData.map((sale) => (
                 <div
                   key={sale.id}
                   onClick={() => toggleRowSelection(sale.id)}
@@ -268,7 +288,7 @@ const Sales = () => {
                 </div>
               ))}
             </div>*/}
-          </div> 
+          </div>
 
           {salesData && salesData.length > 0 ? <DataTable columns={cols} data={salesData} selectedRows={selectedRows} onRowClick={toggleRowSelection} /> : null}
         </main>

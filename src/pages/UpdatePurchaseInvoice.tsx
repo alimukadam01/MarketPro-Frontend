@@ -121,7 +121,6 @@ const UpdatePurchaseInvoice = () => {
   }
 
   const populateInvoiceFields = (data) => {
-    console.log("Populating invoice fields with data:", data)
   // fill the main form fields
     reset({
       invoice_number: data.invoice_number || "",

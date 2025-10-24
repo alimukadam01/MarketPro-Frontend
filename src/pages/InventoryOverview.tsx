@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner"
 import DataTable from "@/components/ui/DataTable";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
-import { getStatusColor, getPaymentStatusColor, SalesInvoiceStatusMap, PaymentStatusMap } from "../../services/utils"
-import { 
-  getInventoryItemList, 
-  bulkDeleteInventoryItems, 
-  deleteInventoryItem 
-} from "../../services/api"
+import { formatSearchQuery } from "../../services/utils"
+import {
+  getInventoryItemList,
+  bulkDeleteInventoryItems,
+  deleteInventoryItem
+} from "../../services/api";
 import { Eye, ArrowLeft, Plus, Filter, Search, Edit, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
@@ -31,6 +31,7 @@ const InventoryOverview = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [selectedRows, setSelectedRows] = useState([])
   const [inventoryData, setInventoryData] = useState(null)
+  const [searchTerm, setSearchTerm] = useState(null);
   const token = localStorage.getItem("market-pro-access-token") || null
   const businessId = localStorage.getItem("mp-business-id") || null
   const [isDeleted, setIsDeleted] = useState(false)
@@ -46,9 +47,9 @@ const InventoryOverview = () => {
 
   const handleDeletion = async () => {
     if (selectedRows.length <= 0) return
-    
+
     let is_deleted = false
-    try{
+    try {
       if (selectedRows.length > 1) {
         is_deleted = await bulkDeleteInventoryItems(token, businessId, selectedRows)
 
@@ -60,40 +61,52 @@ const InventoryOverview = () => {
         toast.success("Inventory items deleted successfully.")
         setIsDeleted(!isDeleted)
         setSelectedRows([])
-      }else{
+      } else {
         toast.error("Failed to delete Inventory items.")
       }
-    }catch(error){
+    } catch (error) {
       toast.error("Failed to delete Inventory items.")
       console.error(error)
     }
   }
 
-  const handleUpdateClick = ()  => {
+  const handleUpdateClick = () => {
     if (selectedRows.length !== 1) return
-    navigate("/inventory/update-inventory-item", { state: { item_id: selectedRows[0] } })
+    navigate("/inventory/update-item", { state: { item_id: selectedRows[0] } })
   }
 
-  useEffect(()=>{
-    const fetchInventoryItems = async ()=>{
-      if (!token) return
-      
-      try {
-        const res = await getInventoryItemList(token, businessId)
-        if (res){
-          setInventoryData(res)
-          toast.success("Successfully fetched Inventory items.")
-        }else{
-          toast.error("Failed to fetch Inventory items.")
-        }
-      }catch(error){
-        toast.error("Failed to fetch Inventory items.")
-        console.error("Error fetching Inventory items:", error)
-      }
-    }
+  const fetchInventoryItems = async (searchQuery=null) => {
+    if (!token) return
 
+    try {
+      const res = await getInventoryItemList(token, businessId, searchQuery)
+      if (res) {
+        setInventoryData(res)
+      } else {
+        toast.error("Failed to fetch Inventory items.")
+      }
+    } catch (error) {
+      toast.error("Failed to fetch Inventory items.")
+      console.error("Error fetching Inventory items:", error)
+    }
+  }
+
+  useEffect(() => {
     fetchInventoryItems()
   }, [token, isDeleted])
+
+  useEffect(() => {
+    const delayDebounce = setTimeout(async () => {
+      if (searchTerm.trim() !== "") {
+        const query = formatSearchQuery(searchTerm)
+        await fetchInventoryItems(query)
+      } else {
+        await fetchInventoryItems()
+      }
+    }, 400); // wait 400ms after user stops typing
+
+    return () => clearTimeout(delayDebounce);
+  }, [searchTerm]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -156,8 +169,10 @@ const InventoryOverview = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
-                    placeholder="Search sales by customer name or ID..."
+                    placeholder="Search inventory items"
                     className="pl-10 w-80"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
                 <Button variant="outline" className="flex items-center space-x-2">
@@ -169,12 +184,12 @@ const InventoryOverview = () => {
               {/* Action Icons */}
               <div className="flex items-center space-x-3">
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={() => navigate("/inventory/view-item")}>
-                  <Eye className="h-4 w-4"/>
-                  <span>View Invoice</span>
+                  <Eye className="h-4 w-4" />
+                  <span>View Item</span>
                 </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={() => navigate("/inventory/create-item")}>
                   <Plus className="w-4 h-4" />
-                  <span>Create Invoice</span>
+                  <span>Create Item</span>
                 </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={handleUpdateClick}>
                   <Edit className="w-4 h-4" />
@@ -191,7 +206,7 @@ const InventoryOverview = () => {
             <div className="space-y-[10px]">
               {/* Table Header */}
               <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
-                <div className="grid grid-cols-11 gap-4 w-full text-sm font-medium text-muted-foreground">
+                <div className="grid grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
                   <div className="min-w-0">ID</div>
                   <div className="min-w-0">Product</div>
                   <div className="min-w-0">Quantity</div>
@@ -209,15 +224,14 @@ const InventoryOverview = () => {
                 <div
                   key={sale.id}
                   onClick={() => toggleRowSelection(sale.id)}
-                  className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer transition-colors hover:bg-muted/20 ${
-                    selectedRows.includes(sale.id)
-                    ? 'border-2 border-[#4285F4]'
-                    : sale.quantity < sale.reorder_level
-                    ? 'border-2 border-red-500'
-                    : 'border border-border'
+                  className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer transition-colors hover:bg-muted/20 ${selectedRows.includes(sale.id)
+                      ? 'border-2 border-[#4285F4]'
+                      : sale.quantity < sale.reorder_level
+                        ? 'border-2 border-red-500'
+                        : 'border border-border'
                     }`}
                 >
-                  <div className="grid grid-cols-11 gap-4 w-full text-sm">
+                  <div className="grid grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr] gap-4 w-full text-sm">
                     <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.id}</div>
                     <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.product}</div>
                     <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.quantity}</div>
@@ -232,7 +246,7 @@ const InventoryOverview = () => {
                 </div>
               ))}
             </div>
-          </div> 
+          </div>
 
           {/* {inventoryData && inventoryData.length > 0 ? <DataTable columns={cols} data={inventoryData} selectedRows={selectedRows} onRowClick={toggleRowSelection} /> : null} */}
         </main>
