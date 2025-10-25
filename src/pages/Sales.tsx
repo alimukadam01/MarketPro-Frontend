@@ -6,20 +6,37 @@ import { ArrowLeft, Plus, Filter, Search, Edit, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const salesData = [
-  { id: "1", productName: "Wireless Headphones", category: "Electronics", price: "PKR 12,500", quantity: 2, total: "PKR 25,000", status: "Completed" },
-  { id: "2", productName: "Gaming Mouse", category: "Electronics", price: "PKR 3,500", quantity: 1, total: "PKR 3,500", status: "Pending" },
-  { id: "3", productName: "Office Chair", category: "Furniture", price: "PKR 18,000", quantity: 1, total: "PKR 18,000", status: "Completed" },
-  { id: "4", productName: "Laptop Stand", category: "Accessories", price: "PKR 4,200", quantity: 3, total: "PKR 12,600", status: "Shipped" },
-  { id: "5", productName: "Bluetooth Speaker", category: "Electronics", price: "PKR 8,900", quantity: 1, total: "PKR 8,900", status: "Cancelled" },
-  { id: "6", productName: "Desk Lamp", category: "Accessories", price: "PKR 2,800", quantity: 2, total: "PKR 5,600", status: "Completed" },
-  { id: "7", productName: "Keyboard", category: "Electronics", price: "PKR 5,500", quantity: 1, total: "PKR 5,500", status: "Pending" },
+  { id: "1", customer_name: "John Doe", productName: "Wireless Headphones", category: "Electronics", price: "PKR 12,500", quantity: 2, sub_total: 25000, total: 25000, status: "Completed", payment_status: "Paid", is_deducted: true, is_partially_deducted: false },
+  { id: "2", customer_name: "Jane Smith", productName: "Gaming Mouse", category: "Electronics", price: "PKR 3,500", quantity: 1, sub_total: 3500, total: 3500, status: "Pending", payment_status: "Unpaid", is_deducted: false, is_partially_deducted: false },
+  { id: "3", customer_name: "Bob Johnson", productName: "Office Chair", category: "Furniture", price: "PKR 18,000", quantity: 1, sub_total: 18000, total: 18000, status: "Completed", payment_status: "Paid", is_deducted: true, is_partially_deducted: false },
+  { id: "4", customer_name: "Alice Williams", productName: "Laptop Stand", category: "Accessories", price: "PKR 4,200", quantity: 3, sub_total: 12600, total: 12600, status: "Shipped", payment_status: "Partial", is_deducted: false, is_partially_deducted: true },
+  { id: "5", customer_name: "Charlie Brown", productName: "Bluetooth Speaker", category: "Electronics", price: "PKR 8,900", quantity: 1, sub_total: 8900, total: 8900, status: "Cancelled", payment_status: "Refunded", is_deducted: false, is_partially_deducted: false },
+  { id: "6", customer_name: "Diana Prince", productName: "Desk Lamp", category: "Accessories", price: "PKR 2,800", quantity: 2, sub_total: 5600, total: 5600, status: "Completed", payment_status: "Paid", is_deducted: true, is_partially_deducted: false },
+  { id: "7", customer_name: "Eve Adams", productName: "Keyboard", category: "Electronics", price: "PKR 5,500", quantity: 1, sub_total: 5500, total: 5500, status: "Pending", payment_status: "Unpaid", is_deducted: false, is_partially_deducted: false },
 ];
 
 const Sales = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filters, setFilters] = useState({
+    customer_name: "",
+    status: "all",
+    payment_status: "all",
+    min_sub_total: "",
+    max_sub_total: "",
+    min_total: "",
+    max_total: "",
+    is_deducted: false,
+    is_partially_deducted: false,
+  });
+  const [filteredData, setFilteredData] = useState(salesData);
   const navigate = useNavigate();
 
   const getStatusColor = (status: string) => {
@@ -38,6 +55,57 @@ const Sales = () => {
         ? prev.filter(rowId => rowId !== id)
         : [...prev, id]
     );
+  };
+
+  const applyFilters = () => {
+    let filtered = salesData.filter(sale => {
+      if (filters.customer_name && !sale.customer_name.toLowerCase().includes(filters.customer_name.toLowerCase())) {
+        return false;
+      }
+      if (filters.status !== "all" && sale.status !== filters.status) {
+        return false;
+      }
+      if (filters.payment_status !== "all" && sale.payment_status !== filters.payment_status) {
+        return false;
+      }
+      if (filters.min_sub_total && sale.sub_total < parseFloat(filters.min_sub_total)) {
+        return false;
+      }
+      if (filters.max_sub_total && sale.sub_total > parseFloat(filters.max_sub_total)) {
+        return false;
+      }
+      if (filters.min_total && sale.total < parseFloat(filters.min_total)) {
+        return false;
+      }
+      if (filters.max_total && sale.total > parseFloat(filters.max_total)) {
+        return false;
+      }
+      if (filters.is_deducted && !sale.is_deducted) {
+        return false;
+      }
+      if (filters.is_partially_deducted && !sale.is_partially_deducted) {
+        return false;
+      }
+      return true;
+    });
+    setFilteredData(filtered);
+    setFilterOpen(false);
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      customer_name: "",
+      status: "all",
+      payment_status: "all",
+      min_sub_total: "",
+      max_sub_total: "",
+      min_total: "",
+      max_total: "",
+      is_deducted: false,
+      is_partially_deducted: false,
+    });
+    setFilteredData(salesData);
+    setFilterOpen(false);
   };
 
   return (
@@ -100,7 +168,7 @@ const Sales = () => {
                     className="pl-10 w-80"
                   />
                 </div>
-                <Button variant="outline" className="flex items-center space-x-2">
+                <Button variant="outline" className="flex items-center space-x-2" onClick={() => setFilterOpen(true)}>
                   <Filter className="w-4 h-4" />
                   <span>Filter</span>
                 </Button>
@@ -142,7 +210,7 @@ const Sales = () => {
               </div>
 
               {/* Table Rows */}
-              {salesData.map((sale) => (
+              {filteredData.map((sale) => (
                 <div
                   key={sale.id}
                   onClick={() => toggleRowSelection(sale.id)}
@@ -171,6 +239,120 @@ const Sales = () => {
 
         </main>
       </div>
+
+      {/* Filter Dialog */}
+      <Dialog open={filterOpen} onOpenChange={setFilterOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Filter Sales Records</DialogTitle>
+          </DialogHeader>
+          
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="customer_name">Customer Name</Label>
+              <Input
+                id="customer_name"
+                placeholder="Enter customer name"
+                value={filters.customer_name}
+                onChange={(e) => setFilters({ ...filters, customer_name: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="status">Status</Label>
+              <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
+                <SelectTrigger id="status">
+                  <SelectValue placeholder="Select status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="Completed">Completed</SelectItem>
+                  <SelectItem value="Pending">Pending</SelectItem>
+                  <SelectItem value="Shipped">Shipped</SelectItem>
+                  <SelectItem value="Cancelled">Cancelled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="payment_status">Payment Status</Label>
+              <Select value={filters.payment_status} onValueChange={(value) => setFilters({ ...filters, payment_status: value })}>
+                <SelectTrigger id="payment_status">
+                  <SelectValue placeholder="Select payment status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Payment Statuses</SelectItem>
+                  <SelectItem value="Paid">Paid</SelectItem>
+                  <SelectItem value="Unpaid">Unpaid</SelectItem>
+                  <SelectItem value="Partial">Partial</SelectItem>
+                  <SelectItem value="Refunded">Refunded</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Sub Total Range</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="Min"
+                  value={filters.min_sub_total}
+                  onChange={(e) => setFilters({ ...filters, min_sub_total: e.target.value })}
+                />
+                <Input
+                  type="number"
+                  placeholder="Max"
+                  value={filters.max_sub_total}
+                  onChange={(e) => setFilters({ ...filters, max_sub_total: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Total Range</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="number"
+                  placeholder="Min"
+                  value={filters.min_total}
+                  onChange={(e) => setFilters({ ...filters, min_total: e.target.value })}
+                />
+                <Input
+                  type="number"
+                  placeholder="Max"
+                  value={filters.max_total}
+                  onChange={(e) => setFilters({ ...filters, max_total: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is_deducted"
+                  checked={filters.is_deducted}
+                  onCheckedChange={(checked) => setFilters({ ...filters, is_deducted: checked as boolean })}
+                />
+                <Label htmlFor="is_deducted" className="cursor-pointer">Is Deducted</Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="is_partially_deducted"
+                  checked={filters.is_partially_deducted}
+                  onCheckedChange={(checked) => setFilters({ ...filters, is_partially_deducted: checked as boolean })}
+                />
+                <Label htmlFor="is_partially_deducted" className="cursor-pointer">Is Partially Deducted</Label>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={resetFilters}>Reset</Button>
+            <Button onClick={applyFilters}>Apply Filters</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
