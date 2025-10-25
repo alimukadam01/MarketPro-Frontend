@@ -191,3 +191,4 @@ export const formatFilterQuery = (filters = {}) => {
 
   return params ? `?${params}` : "";
 }
+

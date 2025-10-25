@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { login, getActiveBusinessId } from "../../services/api"
 import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner"
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,12 +40,12 @@ const Login = () => {
 
       }else{
         setIsLoading(false)
-        showErrorToast("Please provide correct credentials.")
+        toast.error("Please provide correct credentials.")
       }
     }catch(error){
       setIsLoading(false)
       console.log(error)
-      showErrorToast("There was an error logging in. Please try again.")
+      toast.error("There was an error logging in. Please try again.")
     }
   };
 

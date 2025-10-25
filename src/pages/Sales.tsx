@@ -1,25 +1,36 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
+import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner"
+import { toast } from "sonner";
 import DataTable from "@/components/ui/DataTable";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
-import { 
-  getStatusColor, 
-  getPaymentStatusColor, 
-  SalesInvoiceStatusMap, 
+import {
+  getStatusColor,
+  getPaymentStatusColor,
+  SalesInvoiceStatusMap,
   PaymentStatusMap,
-  formatSearchQuery
-} from "../../services/utils"
+  formatSearchQuery,
+} from "../../services/utils";
 import {
   getSalesInvoiceList,
   bulkDeleteSalesInvoice,
-  deleteSalesInvoice
-} from "../../services/api"
-import { Eye, ArrowLeft, Plus, Filter, Search, Edit, Trash2 } from "lucide-react";
+  deleteSalesInvoice,
+} from "../../services/api";
+import {
+  Eye,
+  ArrowLeft,
+  Plus,
+  Filter,
+  Search,
+  Edit,
+  Trash2,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
+//v2 idea: create an endpoint that serves these 2 arrays individually for each customer.
 
 const cols = [
   { key: "id", label: "ID" },
@@ -57,100 +68,162 @@ const cols = [
   { key: "total_items", label: "Total Items" },
   { key: "sub_total", label: "Subtotal" },
   { key: "total", label: "Total" },
-]
+];
+
+const filter_fields_template = {
+  customer__name: "",
+  status: "",
+  payment_status: "",
+  sub_total: "",
+  total: "",
+  is_deducted: false,
+  is_partially_deducted: false,
+};
+
+const filter_fields_mapper = {
+  customer__name: {
+    label: "Customer Name",
+    type: "text",
+    placeholder: "Enter customer name",
+  },
+  status: {
+    label: "Order Status",
+    type: "text",
+    placeholder: "e.g. pending, completed, cancelled",
+  },
+  payment_status: {
+    label: "Payment Status",
+    type: "text",
+    placeholder: "e.g. paid, unpaid, partial",
+  },
+  sub_total: {
+    label: "Subtotal",
+    type: "number",
+    placeholder: "Enter minimum subtotal",
+  },
+  total: {
+    label: "Total",
+    type: "number",
+    placeholder: "Enter minimum total",
+  },
+  is_deducted: {
+    label: "Is Deducted",
+    type: "checkbox",
+  },
+  is_partially_deducted: {
+    label: "Is Partially Deducted",
+    type: "checkbox",
+  },
+};
 
 const Sales = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [selectedRows, setSelectedRows] = useState([])
-  const [salesData, setSalesData] = useState(null)
-  const [searchTerm, setSearchTerm] = useState(null)
-  const token = localStorage.getItem("market-pro-access-token") || null
-  const [isDeleted, setIsDeleted] = useState(false)
-  const navigate = useNavigate()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [salesData, setSalesData] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const token = localStorage.getItem("market-pro-access-token") || null;
+  const [isDeleted, setIsDeleted] = useState(false);
+  const [filterWindowOpen, setFilterWindowOpen] = useState(true);
+  const navigate = useNavigate();
 
   const toggleRowSelection = (id: string) => {
-    setSelectedRows(prev =>
-      prev.includes(id)
-        ? prev.filter(rowId => rowId !== id)
-        : [...prev, id]
+    setSelectedRows((prev) =>
+      prev.includes(id) ? prev.filter((rowId) => rowId !== id) : [...prev, id]
     );
-  }
+  };
 
   const handleDeletion = async () => {
-    if (selectedRows.length <= 0) return
+    if (selectedRows.length <= 0) return;
 
-    let is_deleted = false
+    let is_deleted = false;
     try {
       if (selectedRows.length > 1) {
-        is_deleted = await bulkDeleteSalesInvoice(token, selectedRows)
-
+        is_deleted = await bulkDeleteSalesInvoice(token, selectedRows);
       } else {
-        console.log("Deleting single invoice with ID:", selectedRows[0])
-        is_deleted = await deleteSalesInvoice(token, selectedRows[0])
+        console.log("Deleting single invoice with ID:", selectedRows[0]);
+        is_deleted = await deleteSalesInvoice(token, selectedRows[0]);
       }
 
       if (is_deleted) {
-        toast.success("Sales invoices deleted successfully.")
-        setIsDeleted(!isDeleted)
-        setSelectedRows([])
+        toast.success("Sales invoices deleted successfully.");
+        setIsDeleted(!isDeleted);
+        setSelectedRows([]);
       } else {
-        toast.error("Failed to delete sales invoices.")
+        toast.error("Failed to delete sales invoices.");
       }
     } catch (error) {
-      toast.error("Failed to delete sales invoices.")
-      console.error(error)
+      toast.error("Failed to delete sales invoices.");
+      console.error(error);
     }
-  }
+  };
 
   const handleUpdateClick = () => {
-    if (selectedRows.length !== 1) return
-    navigate("/sales/update-invoice", { state: { invoice_id: selectedRows[0] } })
-  }
+    if (selectedRows.length !== 1) return;
+    navigate("/sales/update-invoice", {
+      state: { invoice_id: selectedRows[0] },
+    });
+  };
 
-  const fetchSalesInvoices = async (searchQuery=null) => {
-    if (!token) return
+  const fetchSalesInvoices = async (searchQuery = null) => {
+    if (!token) return;
 
     try {
-      const res = await getSalesInvoiceList(token, searchQuery)
+      const res = await getSalesInvoiceList(token, searchQuery);
       if (res) {
-        setSalesData(res)
+        setSalesData(res);
       } else {
-        toast.error("Failed to fetch sales invoices.")
+        toast.error("Failed to fetch sales invoices.");
       }
     } catch (error) {
-      toast.error("Failed to fetch sales invoices.")
-      console.error("Error fetching sales invoices:", error)
+      toast.error("Failed to fetch sales invoices.");
+      console.error("Error fetching sales invoices:", error);
     }
-  }
+  };
+
+  const toggleFilterWindow = () => {
+    setFilterWindowOpen(!filterWindowOpen);
+  };
+
+  const handleFilterClick = (e) => {
+    e.preventDefault();
+    toggleFilterWindow();
+  };
 
   useEffect(() => {
-    fetchSalesInvoices()
-  }, [token, isDeleted])
+    fetchSalesInvoices();
+  }, [token, isDeleted]);
 
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
       if (searchTerm.trim() !== "") {
-        const query = formatSearchQuery(searchTerm)
-        await fetchSalesInvoices(query)
+        const query = formatSearchQuery(searchTerm);
+        await fetchSalesInvoices(query);
       } else {
-        await fetchSalesInvoices()
+        await fetchSalesInvoices();
       }
     }, 400); // wait 400ms after user stops typing
 
     return () => clearTimeout(delayDebounce);
   }, [searchTerm]);
 
+  {
+    console.log("Sales Reloaded with filterWindowOpen: ", filterWindowOpen);
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Sidebar onCollapseChange={setSidebarCollapsed} />
 
-      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 flex flex-col`}>
+      <div
+        className={`${
+          sidebarCollapsed ? "ml-16" : "ml-64"
+        } transition-all duration-300 flex flex-col`}
+      >
         <Header />
 
         <main className="flex-1 p-6 space-y-6">
           {/* Header with Back Icon */}
           <div className="space-y-1">
-
             <DynamicBreadCrumb />
 
             <div className="flex-1  justify-between">
@@ -161,7 +234,9 @@ const Sales = () => {
                 />
                 <div className="flex-1 items-center justify-between">
                   <h1 className="text-2xl font-semibold">Sales Overview</h1>
-                  <p className="text-sm text-muted-foreground">View and manage all sales transactions</p>
+                  <p className="text-sm text-muted-foreground">
+                    View and manage all sales transactions
+                  </p>
                 </div>
               </div>
             </div>
@@ -170,24 +245,38 @@ const Sales = () => {
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Sales</div>
+              <div className="text-sm text-muted-foreground mb-2">
+                Total Sales
+              </div>
               <div className="text-3xl font-bold">PKR 77,650</div>
-              <div className="text-sm text-green-600 mt-1">+12% from last month</div>
+              <div className="text-sm text-green-600 mt-1">
+                +12% from last month
+              </div>
             </div>
             <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Completed</div>
+              <div className="text-sm text-muted-foreground mb-2">
+                Completed
+              </div>
               <div className="text-3xl font-bold text-green-600">3</div>
-              <div className="text-sm text-muted-foreground mt-1">Sales completed</div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Sales completed
+              </div>
             </div>
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">Pending</div>
               <div className="text-3xl font-bold text-yellow-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">Awaiting processing</div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Awaiting processing
+              </div>
             </div>
             <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Cancelled</div>
+              <div className="text-sm text-muted-foreground mb-2">
+                Cancelled
+              </div>
               <div className="text-3xl font-bold text-red-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">Cancelled orders</div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Cancelled orders
+              </div>
             </div>
           </div>
 
@@ -207,7 +296,12 @@ const Sales = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <Button variant="outline" className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  className="flex items-center space-x-2"
+                  onClick={handleFilterClick}
+                  type="button"
+                >
                   <Filter className="w-4 h-4" />
                   <span>Filter</span>
                 </Button>
@@ -215,19 +309,42 @@ const Sales = () => {
 
               {/* Action Icons */}
               <div className="flex items-center space-x-3">
-                <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={() => navigate("/sales/view-invoice")}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-2"
+                  disabled={selectedRows.length !== 1}
+                  onClick={() => navigate("/sales/view-invoice")}
+                >
                   <Eye className="h-4 w-4" />
                   <span>View Invoice</span>
                 </Button>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={() => navigate("/sales/create-invoice")}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-2"
+                  onClick={() => navigate("/sales/create-invoice")}
+                >
                   <Plus className="w-4 h-4" />
                   <span>Create Invoice</span>
                 </Button>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={handleUpdateClick}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-2"
+                  disabled={selectedRows.length !== 1}
+                  onClick={handleUpdateClick}
+                >
                   <Edit className="w-4 h-4" />
                   <span>Update</span>
                 </Button>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={handleDeletion} disabled={selectedRows.length === 0}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-2"
+                  onClick={handleDeletion}
+                  disabled={selectedRows.length === 0}
+                >
                   <Trash2 className="w-4 h-4" />
                   <span>Delete</span>
                 </Button>
@@ -290,7 +407,23 @@ const Sales = () => {
             </div>*/}
           </div>
 
-          {salesData && salesData.length > 0 ? <DataTable columns={cols} data={salesData} selectedRows={selectedRows} onRowClick={toggleRowSelection} /> : null}
+          {salesData && salesData.length > 0 ? (
+            <DataTable
+              columns={cols}
+              data={salesData}
+              selectedRows={selectedRows}
+              onRowClick={toggleRowSelection}
+            />
+          ) : null}
+
+          <CustomFilter
+            template={filter_fields_template}
+            templateMapper={filter_fields_mapper}
+            setData={setSalesData}
+            dataFetcher={fetchSalesInvoices}
+            open={filterWindowOpen}
+            setOpen={setFilterWindowOpen}
+          />
         </main>
       </div>
     </div>
