@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner"
 import DataTable from "@/components/ui/DataTable";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
-import { 
-  getStatusColor, 
-  getPaymentStatusColor, 
-  PurchaseInvoiceStatusMap, 
+import CustomFilter from "@/components/layout/CustomFilter";
+import {
+  getStatusColor,
+  getPaymentStatusColor,
+  PurchaseInvoiceStatusMap,
   PaymentStatusMap,
-  formatSearchQuery 
+  formatSearchQuery
 } from "../../services/utils"
 import {
   getPurchaseInvoiceList,
@@ -59,6 +60,52 @@ const cols = [
   { key: "total", label: "Total" },
 ]
 
+const filter_fields_template = {
+  supplier__name: "",
+  status: "",
+  payment_status: "",
+  sub_total: "",
+  total: "",
+  is_restocked: false,
+  is_partially_restocked: false
+};
+
+const filter_fields_mapper = {
+  supplier__name: {
+    label: "Supplier Name",
+    type: "text",
+    placeholder: "Enter Supplier name",
+  },
+  status: {
+    label: "Order Status",
+    type: "text",
+    placeholder: "e.g. pending, completed, cancelled",
+  },
+  payment_status: {
+    label: "Payment Status",
+    type: "text",
+    placeholder: "e.g. paid, unpaid, partial",
+  },
+  sub_total: {
+    label: "Subtotal",
+    type: "number",
+    placeholder: "Enter subtotal",
+  },
+  total: {
+    label: "Total",
+    type: "number",
+    placeholder: "Enter total",
+  },
+  is_restocked: {
+    label: "Is Restocked",
+    type: "checkbox",
+  },
+  is_partially_restocked: {
+    label: "Is Partially Restocked",
+    type: "checkbox",
+  },
+};
+
 const Purchases = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [selectedRows, setSelectedRows] = useState([])
@@ -66,6 +113,7 @@ const Purchases = () => {
   const [searchTerm, setSearchTerm] = useState(null)
   const token = localStorage.getItem("market-pro-access-token") || null
   const [isDeleted, setIsDeleted] = useState(false)
+  const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate()
 
   const toggleRowSelection = (id: string) => {
@@ -106,7 +154,7 @@ const Purchases = () => {
     navigate("/purchases/update-invoice", { state: { invoice_id: selectedRows[0] } })
   }
 
-  const fetchPurchaseInvoices = async (searchQuery=null) => {
+  const fetchPurchaseInvoices = async (searchQuery = null) => {
     if (!token) return
 
     try {
@@ -121,6 +169,11 @@ const Purchases = () => {
       console.error("Error fetching purchase invoices:", error)
     }
   }
+
+  const handleFilterClick = (e) => {
+    e.preventDefault();
+    setFilterWindowOpen(!filterWindowOpen);
+  };
 
   useEffect(() => {
     fetchPurchaseInvoices()
@@ -206,7 +259,12 @@ const Purchases = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <Button variant="outline" className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  className="flex items-center space-x-2"
+                  onClick={handleFilterClick}
+                  type="button"
+                >
                   <Filter className="w-4 h-4" />
                   <span>Filter</span>
                 </Button>
@@ -236,6 +294,14 @@ const Purchases = () => {
           </div>
 
           {purchasesData && purchasesData.length > 0 ? <DataTable columns={cols} data={purchasesData} selectedRows={selectedRows} onRowClick={toggleRowSelection} /> : null}
+
+          <CustomFilter
+            template={filter_fields_template}
+            templateMapper={filter_fields_mapper}
+            dataFetcher={fetchPurchaseInvoices}
+            open={filterWindowOpen}
+            setOpen={setFilterWindowOpen}
+          />
         </main>
       </div>
     </div>

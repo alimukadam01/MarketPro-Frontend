@@ -1,4 +1,3 @@
-// CustomFilter.jsx
 import React, { useState } from "react";
 import * as DialogUI from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -19,7 +18,6 @@ import { ArrowLeft } from "lucide-react";
 export default function CustomFilter({
   template,
   templateMapper,
-  setData,
   dataFetcher,
   open,
   setOpen,
@@ -29,30 +27,24 @@ export default function CustomFilter({
 
   const handleChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-  };
+  }
 
   const applyFilters = async () => {
     const query = formatFilterQuery(filters);
-    const data = await dataFetcher(query);
-    if (setData) setData(data);
+    await dataFetcher(query);    
     if (setOpen) setOpen(false);
-  };
+  }
 
   const resetFilters = async () => {
-    const data = await dataFetcher();
-    if (setData) setData(data);
+    await dataFetcher();
     setFilters(() => ({ ...(template || {}) })); // reset local state
     if (setOpen) setOpen(false);
-  };
+  }
 
   return (
     <DialogUI.Dialog open={!!open} onOpenChange={setOpen}>
       <DialogUI.DialogContent className="max-w-2xl">
         <DialogUI.DialogHeader className="flex items-center gap-3">
-          <ArrowLeft
-            className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary"
-            onClick={() => setOpen && setOpen(false)}
-          />
           <DialogUI.DialogTitle>Filter Sales Records</DialogUI.DialogTitle>
         </DialogUI.DialogHeader>
 

@@ -2,6 +2,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner"
+import CustomFilter from "@/components/layout/CustomFilter";
 import DataTable from "@/components/ui/DataTable";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
 import { formatSearchQuery } from "../../services/utils"
@@ -27,6 +28,30 @@ const cols = [
   { key: "updated_at", label: "Last Updated" },
 ]
 
+const filter_fields_template = {
+  product__name: "",
+  location__name: "",
+  track_code: "",
+};
+
+const filter_fields_mapper = {
+  product__name: {
+    label: "Product Name",
+    type: "text",
+    placeholder: "Enter Product name",
+  },
+  location__name: {
+    label: "Location Name",
+    type: "text",
+    placeholder: "Enter Location name",
+  },
+  track_code: {
+    label: "Track Code",
+    type: "text",
+    placeholder: "Enter Track Code",
+  },
+};
+
 const InventoryOverview = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [selectedRows, setSelectedRows] = useState([])
@@ -35,6 +60,7 @@ const InventoryOverview = () => {
   const token = localStorage.getItem("market-pro-access-token") || null
   const businessId = localStorage.getItem("mp-business-id") || null
   const [isDeleted, setIsDeleted] = useState(false)
+  const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate()
 
   const toggleRowSelection = (id: string) => {
@@ -75,7 +101,12 @@ const InventoryOverview = () => {
     navigate("/inventory/update-item", { state: { item_id: selectedRows[0] } })
   }
 
-  const fetchInventoryItems = async (searchQuery=null) => {
+  const handleFilterClick = (e) => {
+    e.preventDefault();
+    setFilterWindowOpen(!filterWindowOpen);
+  };
+
+  const fetchInventoryItems = async (searchQuery = null) => {
     if (!token) return
 
     try {
@@ -175,7 +206,12 @@ const InventoryOverview = () => {
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <Button variant="outline" className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  className="flex items-center space-x-2"
+                  onClick={handleFilterClick}
+                  type="button"
+                >
                   <Filter className="w-4 h-4" />
                   <span>Filter</span>
                 </Button>
@@ -225,10 +261,10 @@ const InventoryOverview = () => {
                   key={sale.id}
                   onClick={() => toggleRowSelection(sale.id)}
                   className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer transition-colors hover:bg-muted/20 ${selectedRows.includes(sale.id)
-                      ? 'border-2 border-[#4285F4]'
-                      : sale.quantity < sale.reorder_level
-                        ? 'border-2 border-red-500'
-                        : 'border border-border'
+                    ? 'border-2 border-[#4285F4]'
+                    : sale.quantity < sale.reorder_level
+                      ? 'border-2 border-red-500'
+                      : 'border border-border'
                     }`}
                 >
                   <div className="grid grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr] gap-4 w-full text-sm">
@@ -249,6 +285,15 @@ const InventoryOverview = () => {
           </div>
 
           {/* {inventoryData && inventoryData.length > 0 ? <DataTable columns={cols} data={inventoryData} selectedRows={selectedRows} onRowClick={toggleRowSelection} /> : null} */}
+
+          <CustomFilter
+            template={filter_fields_template}
+            templateMapper={filter_fields_mapper}
+            dataFetcher={fetchInventoryItems}
+            open={filterWindowOpen}
+            setOpen={setFilterWindowOpen}
+          />
+
         </main>
       </div>
     </div>

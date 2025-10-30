@@ -99,12 +99,22 @@ const filter_fields_mapper = {
   sub_total: {
     label: "Subtotal",
     type: "number",
-    placeholder: "Enter minimum subtotal",
+    placeholder: "Enter subtotal",
   },
   total: {
     label: "Total",
     type: "number",
-    placeholder: "Enter minimum total",
+    placeholder: "Enter total",
+  },
+  discount: {
+    label: "Discount",
+    type: "number",
+    placeholder: "Enter Discount (PKR)",
+  },
+  tax: {
+    label: "Tax",
+    type: "number",
+    placeholder: "Enter Tax (%)",
   },
   is_deducted: {
     label: "Is Deducted",
@@ -123,7 +133,7 @@ const Sales = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const token = localStorage.getItem("market-pro-access-token") || null;
   const [isDeleted, setIsDeleted] = useState(false);
-  const [filterWindowOpen, setFilterWindowOpen] = useState(true);
+  const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();
 
   const toggleRowSelection = (id: string) => {
@@ -180,18 +190,14 @@ const Sales = () => {
     }
   };
 
-  const toggleFilterWindow = () => {
-    setFilterWindowOpen(!filterWindowOpen);
-  };
-
   const handleFilterClick = (e) => {
     e.preventDefault();
-    toggleFilterWindow();
+    setFilterWindowOpen(!filterWindowOpen);
   };
 
   useEffect(() => {
     fetchSalesInvoices();
-  }, [token, isDeleted]);
+  }, [token, isDeleted])
 
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
@@ -204,11 +210,7 @@ const Sales = () => {
     }, 400); // wait 400ms after user stops typing
 
     return () => clearTimeout(delayDebounce);
-  }, [searchTerm]);
-
-  {
-    console.log("Sales Reloaded with filterWindowOpen: ", filterWindowOpen);
-  }
+  }, [searchTerm])
 
   return (
     <div className="min-h-screen bg-background">
@@ -419,7 +421,6 @@ const Sales = () => {
           <CustomFilter
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
-            setData={setSalesData}
             dataFetcher={fetchSalesInvoices}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
