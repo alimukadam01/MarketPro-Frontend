@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Sales from "./pages/Sales";
 import Purchases from "./pages/Purchases";
+import Products from "./pages/Products";
 import CreateSalesInvoice from "./pages/CreateSalesInvoice";
 import UpdateSalesInvoice from "./pages/UpdateSalesInvoice";
 import CreatePurchaseInvoice from "./pages/CreatePurchaseInvoice";
@@ -28,15 +29,23 @@ const App = () => {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          
           <Route path="/sales" element={<Sales />} />
           <Route path="/sales/create-invoice" element={<CreateSalesInvoice />} />
           <Route path="/sales/update-invoice" element={<UpdateSalesInvoice />} />
+          
           <Route path="/purchases" element={<Purchases />} />
           <Route path="/purchases/create-invoice" element={<CreatePurchaseInvoice />} />
           <Route path="/purchases/update-invoice" element={<UpdatePurchaseInvoice />} />
+          
           <Route path="/inventory" element={<InventoryOverview />} />
           <Route path="/inventory/create-item" element={<CreateInventoryItem />} />
           <Route path="/inventory/update-item" element={<UpdateInventoryItem />} />
+          
+          <Route path="/products" element={<Products />} />
+          {/* <Route path="/inventory/create-item" element={<CreateProduct />} />
+          <Route path="/inventory/update-item" element={<UpdateProduct />} /> */}
+
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

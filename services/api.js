@@ -115,7 +115,30 @@ export const postProduct = async (token, productData) => {
         console.log("There was an error creating the product: ", error)
         return false
     }
-}        
+}
+
+export const deleteProduct = async (token, productId) => {
+    try {
+        const res = await apiClient.delete(`/products/${productId}/`, 
+        {
+            headers: {
+                Authorization: token
+            }
+        })
+    
+        if (res.status === 204) {
+            return true
+        }
+    
+        console.log(res.data.detail)
+        return false
+    
+    } catch (error) {
+        console.log("There was an error deleting the product: ", error)
+        return false
+    }
+}
+
 
 export const getCustomersList = async (token) => {
     try {
