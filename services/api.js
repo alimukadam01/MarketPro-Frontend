@@ -3,7 +3,8 @@ import axios from "axios";
 import { 
     transformSalesInvoice,
     transformPurchaseInvoice,
-    transformInventoryItem
+    transformInventoryItem,
+    transformProduct
 } from "./utils";
 
 const BASE_URL = "http://localhost:8000/"
@@ -56,7 +57,7 @@ export const getLocationsList = async (token) => {
     }
 }
 
-export const getProductsList = async (token, searchQuery=null) => {
+export const getProductsList = async (token, searchQuery=null, is_formatted=false) => {
     try {
         const res = await apiClient.get(`/products/${searchQuery? searchQuery: ""}`, {
             headers: {
@@ -65,6 +66,10 @@ export const getProductsList = async (token, searchQuery=null) => {
         })
 
         if (res.status === 200) {
+
+            if (is_formatted){
+                return res.data.map(transformProduct)
+            }
             return res.data
         }
 
@@ -139,6 +144,24 @@ export const deleteProduct = async (token, productId) => {
     }
 }
 
+export const bulkDeleteProducts = async (token, productIds) => {
+    try {
+        const res = await apiClient.post("/products/bulk-delete/", { product_ids: productIds }, {
+            headers: {
+                Authorization: token
+            }
+        })
+        if (res.status === 200) {
+            return true
+        }
+
+        console.log(res.data.detail)
+        return false
+    } catch (error) {
+        console.log("There was an error deleting products: ", error)
+        return false
+    }
+}
 
 export const getCustomersList = async (token) => {
     try {
@@ -618,3 +641,4 @@ export const updateInventoryItem = async (token, businessId, itemId, itemData) =
         return false
     }
 }
+

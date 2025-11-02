@@ -1,11 +1,13 @@
 import { cn } from "@/lib/utils";
 import { 
   ShoppingCart, 
-  Package, 
+  Package,
+  PackageOpen,
   FolderOpen, 
   Users, 
   Archive,
-  Menu
+  Menu,
+
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -16,6 +18,7 @@ const sidebarItems = [
   { name: "Purchases", icon: Package, href: "/purchases" },
   { name: "Inventory", icon: Archive, href: "/inventory" },
   { name: "Projects", icon: FolderOpen, href: "/projects" },
+  { name: "Products", icon: PackageOpen, href: "/products" },
   { name: "Customers", icon: Users, href: "/customers" },
 ];
 

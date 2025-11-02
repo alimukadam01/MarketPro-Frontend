@@ -59,8 +59,6 @@ export const getPaymentStatusColor = (paymentStatus) =>{
 
 export function transformSalesInvoice(data) {
 
-  console.log(data)
-
   // Helper to format date as DD/MM/YYYY
   const formatDate = (dateString) => {
     const date = new Date(dateString);
@@ -145,6 +143,15 @@ export function transformInventoryItem(data) {
     unit_price: formatCurrency(data.unit_price),
     reorder_level: data.reorder_level,
     last_updated: formatDate(data.last_updated)
+  }
+}
+
+export function transformProduct(data) {
+  return {
+    id: data.id,
+    name: data.name,
+    unit: `${data.unit.name} (${data.unit.abv})`,
+    desc: data.desc || ""
   }
 }
 

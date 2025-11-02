@@ -11,7 +11,7 @@ import {
 import {
   getProductsList,
   bulkDeleteProducts,
-  deleteProducts,
+  deleteProduct,
 } from "../../services/api";
 import {
   Eye,
@@ -72,7 +72,7 @@ const Products = () => {
         is_deleted = await bulkDeleteProducts(token, selectedRows);
       } else {
         console.log("Deleting single invoice with ID:", selectedRows[0]);
-        is_deleted = await deleteProducts(token, selectedRows[0]);
+        is_deleted = await deleteProduct(token, selectedRows[0]);
       }
 
       if (is_deleted) {
@@ -99,7 +99,7 @@ const Products = () => {
     if (!token) return;
 
     try {
-      const res = await getProductsList(token, searchQuery);
+      const res = await getProductsList(token, searchQuery, true);
       if (res) {
         setProductsData(res);
       } else {
