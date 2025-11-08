@@ -155,6 +155,28 @@ export function transformProduct(data) {
   }
 }
 
+export function transformCustomer(data) {
+  return {
+    id: data.id,
+    name: data.name,
+    phone: data.phone || "N/A",
+    email: data.email || "N/A",
+    address: data.address || "N/A",
+    city: data.city.name
+  }
+}
+
+export function transformReturnedItem(data){
+  return {
+    id: data.id,
+    sales_invoice: data.invoice_item.sales_invoice.id,
+    invoice_date: data.invoice_item.sales_invoice.date_issued,
+    product: data.invoice_item.product.name,
+    quantity: data.quantity,
+    returned_at: data.created_at
+  }
+}
+
 export function createIdMap(arr, field = null) {
   return arr.reduce((acc, item) => {
     if (!item.id) {

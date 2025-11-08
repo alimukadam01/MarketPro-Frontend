@@ -32,7 +32,6 @@ const UpdatePurchaseInvoice = () => {
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const token = localStorage.getItem("market-pro-access-token")
-  const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
   const location = useLocation()
   const invoice_id = location.state?.invoice_id || null

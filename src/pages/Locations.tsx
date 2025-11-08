@@ -7,17 +7,15 @@ import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
 import {
   formatSearchQuery,
+  transformLocation
 } from "../../services/utils";
 import {
-  getProductsList,
-  bulkDeleteProducts,
-  deleteProduct,
+  locationsAPIPackage
 } from "../../services/api";
 import {
   Eye,
   ArrowLeft,
   Plus,
-  Filter,
   Search,
   Edit,
   Trash2,
@@ -31,30 +29,29 @@ import { useNavigate } from "react-router-dom";
 const cols = [
   { key: "id", label: "ID" },
   { key: "name", label: "Name" },
-  { key: "unit", label: "Unit" },
-  { key: "desc", label: "Description" },
+  { key: "address", label: "Address" },
 ];
 
-const filter_fields_template = {
-  unit__name: ""
-};
+// const filter_fields_template = {
+//   city__name: ""
+// };
 
-const filter_fields_mapper = {
-  unit__name: {
-    label: "Unit",
-    type: "text",
-    placeholder: "Enter unit",
-  },
-};
+// const filter_fields_mapper = {
+//   city__name: {
+//     label: "City",
+//     type: "text",
+//     placeholder: "Enter city name",
+//   },
+// };
 
-const Products = () => {
+const Locations = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
-  const [productsData, setProductsData] = useState(null);
+  const [locationsData, setLocationsData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const token = localStorage.getItem("market-pro-access-token") || null;
   const [isDeleted, setIsDeleted] = useState(false);
-  const [filterWindowOpen, setFilterWindowOpen] = useState(false);
+//   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();
 
   const toggleRowSelection = (id: string) => {
@@ -69,64 +66,67 @@ const Products = () => {
     let is_deleted = false;
     try {
       if (selectedRows.length > 1) {
-        is_deleted = await bulkDeleteProducts(token, selectedRows);
+        is_deleted = await locationsAPIPackage.bulkDelete(token, selectedRows);
       } else {
         console.log("Deleting single invoice with ID:", selectedRows[0]);
-        is_deleted = await deleteProduct(token, selectedRows[0]);
+        is_deleted = await locationsAPIPackage.delete(token, selectedRows[0]);
       }
 
       if (is_deleted) {
-        toast.success("Products deleted successfully.");
+        toast.success("Locations deleted successfully.");
         setIsDeleted(!isDeleted);
         setSelectedRows([]);
       } else {
-        toast.error("Failed to delete products.");
+        toast.error("Failed to delete locations.");
       }
     } catch (error) {
-      toast.error("Failed to delete products.");
+      toast.error("Failed to delete locations.");
       console.error(error);
     }
   };
 
   const handleUpdateClick = () => {
     if (selectedRows.length !== 1) return
-    navigate("/products/update-product", {
-      state: { product_id: selectedRows[0] },
+    navigate("/locations/update-location", {
+      state: { location_id: selectedRows[0] },
     });
   };
 
-  const fetchProducts = async (searchQuery = null) => {
+  const fetchLocations = async (searchQuery = null) => {
     if (!token) return;
 
     try {
-      const res = await getProductsList(token, searchQuery, true);
+      const res = await locationsAPIPackage.list(token, searchQuery);
+      if (searchQuery){
+        console.log(res)
+      }
       if (res) {
-        setProductsData(res);
+        setLocationsData(res);
       } else {
-        toast.error("Failed to fetch products.");
+        toast.error("Failed to fetch locations.");
       }
     } catch (error) {
-      toast.error("Failed to fetch products.");
-      console.error("Error fetching products:", error);
+      toast.error("Failed to fetch locations.");
+      console.error("Error fetching locations:", error);
     }
   };
 
-  const handleFilterClick = (e) => {
-    e.preventDefault();
-    setFilterWindowOpen(!filterWindowOpen);
-  };
+//   const handleFilterClick = (e) => {
+//     e.preventDefault();
+//     setFilterWindowOpen(!filterWindowOpen);
+//   };
 
   useEffect(() => {
-    fetchProducts();
+    fetchLocations();
   }, [token, isDeleted])
 
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
       if (searchTerm.trim() !== "") {
         const query = formatSearchQuery(searchTerm);
-        await fetchProducts(query);
+        await fetchLocations(query);
       } else {
-        await fetchProducts();
+        await fetchLocations();
       }
     }, 400); // wait 400ms after user stops typing
 
@@ -156,9 +156,9 @@ const Products = () => {
                   onClick={() => navigate("/")}
                 />
                 <div className="flex-1 items-center justify-between">
-                  <h1 className="text-2xl font-semibold">Products Overview</h1>
+                  <h1 className="text-2xl font-semibold">Locations Overview</h1>
                   <p className="text-sm text-muted-foreground">
-                    View and manage products.
+                    View and manage locations.
                   </p>
                 </div>
               </div>
@@ -169,7 +169,7 @@ const Products = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">
-                Total Products
+                Total Locations
               </div>
               <div className="text-3xl font-bold">PKR 7,000</div>
             </div>
@@ -202,7 +202,7 @@ const Products = () => {
 
           {/* Sales Records Section */}
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Product Listing</h2>
+            <h2 className="text-xl font-semibold">Location Listing</h2>
 
             {/* Search and Filter */}
             <div className="flex items-center justify-between mb-4">
@@ -210,13 +210,13 @@ const Products = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
-                    placeholder="Search product by name, ID or Unit."
+                    placeholder="Search location by name, ID or Unit."
                     className="pl-10 w-80"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                <Button
+                {/* <Button
                   variant="outline"
                   className="flex items-center space-x-2"
                   onClick={handleFilterClick}
@@ -224,7 +224,7 @@ const Products = () => {
                 >
                   <Filter className="w-4 h-4" />
                   <span>Filter</span>
-                </Button>
+                </Button> */}
               </div>
 
               {/* Action Icons */}
@@ -234,19 +234,19 @@ const Products = () => {
                   size="sm"
                   className="flex items-center space-x-2"
                   disabled={selectedRows.length !== 1}
-                  onClick={() => navigate("/products/view-product")}
+                  onClick={() => navigate("/locations/view-location")}
                 >
                   <Eye className="h-4 w-4" />
-                  <span>View Product</span>
+                  <span>View Location</span>
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  onClick={() => navigate("/products/create-product")}
+                  onClick={() => navigate("/locations/create-location")}
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Create Product</span>
+                  <span>Create Location</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -272,26 +272,26 @@ const Products = () => {
             </div>
           </div>
 
-          {productsData && productsData.length > 0 ? (
+          {locationsData && locationsData.length > 0 ? (
             <DataTable
               columns={cols}
-              data={productsData}
+              data={locationsData}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
             />
           ) : null}
 
-          <CustomFilter
+          {/* <CustomFilter
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
-            dataFetcher={fetchProducts}
+            dataFetcher={fetchLocations}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
-          />
+          /> */}
         </main>
       </div>
     </div>
   );
 };
 
-export default Products;
+export default Locations;

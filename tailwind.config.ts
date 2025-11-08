@@ -8,6 +8,14 @@ export default {
 		"./app/**/*.{ts,tsx,jsx}",
 		"./src/**/*.{ts,tsx,jsx}",
 	],
+	safelist: [
+    // grid column counts you need
+    ...Array.from({ length: 12 }, (_, i) => `grid-cols-${i + 1}`),
+    // any other dynamic classes you rely on, e.g. custom borders
+    "border-2",
+    "border-border",
+    "hover:bg-muted/20",
+  ],
 	prefix: "",
 	theme: {
 		container: {

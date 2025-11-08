@@ -2,7 +2,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner"
-import DataTable from "@/components/ui/DataTable";
+import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
 import CustomFilter from "@/components/layout/CustomFilter";
 import {

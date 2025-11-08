@@ -1,13 +1,15 @@
 import { cn } from "@/lib/utils";
-import { 
-  ShoppingCart, 
+import {
+  ShoppingCart,
   Package,
   PackageOpen,
-  FolderOpen, 
-  Users, 
+  FolderOpen,
+  Users,
   Archive,
   Menu,
-
+  Truck,
+  MapPin,
+  Undo2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -20,6 +22,9 @@ const sidebarItems = [
   { name: "Projects", icon: FolderOpen, href: "/projects" },
   { name: "Products", icon: PackageOpen, href: "/products" },
   { name: "Customers", icon: Users, href: "/customers" },
+  { name: "Suppliers", icon: Truck, href: "/suppliers" },
+  { name: "Locations", icon: MapPin, href: "/locations" },
+  { name: "Returned Items", icon: Undo2, href: "/returned-items" },
 ];
 
 interface SidebarProps {
