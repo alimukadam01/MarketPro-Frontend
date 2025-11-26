@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Undo2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
@@ -23,10 +23,13 @@ import {
   getSalesInvoiceDetail
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import ReturnItem from "@/components/ui/return-item";
 
 const UpdateSalesInvoice = () => {
-  
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [returnItemWindowOpen, setReturnItemWindowOpen] = useState(false)
+  const [itemReturned, setItemReturned] = useState(false)
   const [invoiceItems, setInvoiceItems] = useState([])
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
@@ -68,7 +71,7 @@ const UpdateSalesInvoice = () => {
 
   const onSubmit = async (data) => {
 
-    const {newItemPrice, newItemProduct, newItemQuantity, ...rest} = data
+    const { newItemPrice, newItemProduct, newItemQuantity, ...rest } = data
 
     const tax = {
       "value": parseFloat(data.tax),
@@ -88,21 +91,21 @@ const UpdateSalesInvoice = () => {
     }))
 
     try {
-        const success = await updateSalesInvoiceAndItems(token, invoice_id, {
-          ...rest,
-          tax: tax,
-          discount: discount,
-          items: items
-        })
+      const success = await updateSalesInvoiceAndItems(token, invoice_id, {
+        ...rest,
+        tax: tax,
+        discount: discount,
+        items: items
+      })
 
-        if (success) {
-          toast.success("Sales invoice updated successfully!")
-          navigate("/sales");
-        } else {
-          toast.error("Failed to update sales invoice.")
-        }
+      if (success) {
+        toast.success("Sales invoice updated successfully!")
+        navigate("/sales");
+      } else {
+        toast.error("Failed to update sales invoice.")
+      }
     } catch (error) {
-        console.log("Error creating sales invoice:", error)
+      console.log("Error creating sales invoice:", error)
     }
 
     console.log("Form Submitted:", { ...rest, tax: tax, discount: discount, "items": items });
@@ -152,6 +155,7 @@ const UpdateSalesInvoice = () => {
       quantity: item?.quantity,
       unit_price: item?.unit_price,
       total: (item?.quantity * item?.unit_price) || 0,
+      is_returned: item?.is_returned
     }))
     setInvoiceItems(items)
 
@@ -159,33 +163,38 @@ const UpdateSalesInvoice = () => {
     setTaxType(data.tax?.type)
   }
 
-  useEffect(() => {
-    
-    const fetchSalesInvoice = async () => {
+  const handleFilterClick = (e) => {
+    e.preventDefault();
+    setReturnItemWindowOpen(!returnItemWindowOpen);
+  };
+
+  const fetchSalesInvoice = async () => {
       if (!token) return
-      try{
+      try {
         const salesInvoice = await getSalesInvoiceDetail(token, invoice_id)
-        if (salesInvoice){
+        if (salesInvoice) {
           console.log("Fetched sales invoice:", salesInvoice)
           populateInvoiceFields(salesInvoice)
-        }else{
+        } else {
           toast.error("Failed to fetch sales invoice")
         }
-      }catch(error){
+      } catch (error) {
         console.log(error)
         toast.error("Failed to fetch sales invoice")
       }
     }
+
+  useEffect(() => {
 
     const fetchProducts = async () => {
       if (!token) return;
 
       try {
         const products = await getAvailableProductsList(token, businessId)
-        if (products){
+        if (products) {
           const productMap = createNestedIdMap(products, "product.id")
           setProducts(productMap)
-        }else{
+        } else {
           toast.error("Failed to fetch products")
         }
       } catch (error) {
@@ -195,32 +204,38 @@ const UpdateSalesInvoice = () => {
     }
 
     const fetchCustomers = async () => {
-      try{
+      try {
         const customers = await getCustomersList(token)
-        if (customers){
+        if (customers) {
           const customerMap = createIdMap(customers)
           console.log("Fetched customers:", customerMap)
           setCustomers(customerMap)
           console.log(customerMap)
-        }else{
+        } else {
           toast.error("Failed to fetch customers")
         }
-      }catch(error){
+      } catch (error) {
         console.log("Error fetching customers:", error)
         toast.error("Failed to fetch customers")
       }
     }
-    
+
     fetchSalesInvoice()
     fetchProducts()
     fetchCustomers()
   }, [token])
 
   useEffect(() => {
-    if (selectedProduct){
+    if (selectedProduct) {
       setValue("newItemPrice", selectedProduct.unit_price, { shouldDirty: false });
     }
   }, [selectedProduct])
+
+  useEffect(()=>{
+    fetchSalesInvoice()
+    setItemReturned(false)
+    setSelectedRows([])
+  }, [itemReturned == true])
 
   return (
     <div className="min-h-screen bg-background">
@@ -250,7 +265,7 @@ const UpdateSalesInvoice = () => {
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select customer"></SelectValue> 
+                          <SelectValue placeholder="Select customer"></SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {customers && Object.keys(customers).length > 0 && Object.entries(customers).map(([key, customer]) => (
@@ -393,18 +408,31 @@ const UpdateSalesInvoice = () => {
               {/* Invoice Items Header */}
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-lg font-semibold">Invoice Items</h3>
-                <Button 
-                  variant="destructive" 
-                  size="sm"
-                  onClick={() => {
-                    setInvoiceItems(invoiceItems.filter(item => !selectedRows.includes(item.id)));
-                    setSelectedRows([]);
-                  }}
-                  disabled={selectedRows.length === 0}
-                >
-                  <Trash2 className="w-4 mr-2" />
-                  Delete Selected
-                </Button>
+                <div className="flex items-center space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                    onClick={handleFilterClick}
+                    disabled={selectedRows.length !== 1}
+                  >
+                    <Undo2 className="w-4 h-4" />
+                    Return
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                    onClick={() => {
+                      setInvoiceItems(invoiceItems.filter(item => !selectedRows.includes(item.id)));
+                      setSelectedRows([]);
+                    }}
+                    disabled={selectedRows.length === 0}
+                  >
+                    <Trash2 className="w-4" />
+                    Delete
+                  </Button>
+                </div>
               </div>
 
               {/* Invoice Items */}
@@ -420,25 +448,29 @@ const UpdateSalesInvoice = () => {
                     </div>
                   </div>
 
-                  {invoiceItems.map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => toggleRowSelection(item.id)}
-                      className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${
-                        selectedRows.includes(item.id) ? "border-2 border-[#4285F4]" : "border border-border"
-                      }`}
-                    >
-                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
-                        <div>{item.id}</div>
-                        <div className="font-medium">{
-                          item.product.name? item.product.name : item.product.product.name
-                        }</div>
-                        <div>{item.quantity}</div>
-                        <div>{item.unit_price}</div>
-                        <div className="font-semibold">{item.total}</div>
+                  {invoiceItems.map((item) => {
+                    const isDisabled = item.is_returned; // disable if is_returned is false
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => !isDisabled && toggleRowSelection(item.id)}
+                        className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${selectedRows.includes(item.id)
+                            ? "border-2 border-[#4285F4]"
+                            : "border border-border"
+                          } ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                      >
+                        <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
+                          <div>{item.id}</div>
+                          <div className="font-medium">
+                            {item.product.name ? item.product.name : item.product.product.name}
+                          </div>
+                          <div>{item.quantity}</div>
+                          <div>{item.unit_price}</div>
+                          <div className="font-semibold">{item.total}</div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -458,6 +490,15 @@ const UpdateSalesInvoice = () => {
               </div>
             </div>
           </form>
+
+          <ReturnItem
+            invoiceId={invoice_id}
+            invoiceItem={invoiceItems.find(item => selectedRows.includes(item.id))}
+            open={returnItemWindowOpen}
+            setOpen={setReturnItemWindowOpen}
+            setItemReturned={setItemReturned}
+          />
+
         </main>
       </div>
     </div>

@@ -4,7 +4,8 @@ import {
     transformSalesInvoice,
     transformPurchaseInvoice,
     transformInventoryItem,
-    transformProduct
+    transformProduct,
+    formatSearchQuery
 } from "./utils";
 
 const BASE_URL = "http://localhost:8000/"
@@ -358,7 +359,6 @@ export const bulkDeleteSuppliers = async (token, supplierIds) => {
         return false
     }
 }
-
 
 // Product Endpoints
 
@@ -773,6 +773,29 @@ export const bulkDeleteSalesInvoice = async (token, invoiceIds) => {
     }
 }
 
+// quantity removed for now
+export const returnSalesInvoiceItem = async (token, invoiceId, itemId, reason) => {
+    try{
+        const res = await apiClient.post(`sales-invoices/${invoiceId}/items/${itemId}/return/`, {
+            reason: reason
+        }, {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200){
+            return true
+        }else{
+            console.log("error returning item.")
+            return false
+        }
+    }catch(error){
+        console.log("error returning item: ", error)
+        return false
+    }
+}
+
 // Purchase Invoice Endpoints
 
 export const getPurchaseInvoiceList = async (token, searchQuery=null) => {
@@ -995,3 +1018,18 @@ export const bulkDeleteInventoryItems = async (token, businessId, itemIds) => {
 }
 
 export const returnedItemsAPIPackage = new APIPackage("returned-items")
+
+export const globalSearch = async (query) => {
+    try{
+        res = await apiClient.get(`search/${formatSearchQuery(query)}`)
+        if (res.status == 200){
+            return res.data.results
+        }
+        
+        console.log("error performing search: ", res.data.detail)
+        return []
+    }catch(error){
+        console.log("error performing search", error)
+        return []
+    }
+}

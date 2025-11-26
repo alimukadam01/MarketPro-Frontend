@@ -31,13 +31,13 @@ const cols = [
   { key: "id", label: "ID" },
   { key: "sales_invoice", label: "Sales Invoice ID" },
   { key: "product", label: "Product" },
-  { key: "quantity", label: "Quantity" },
   { key: "invoice_date", label: "Invoice Dated At" },
   { key: "returned_at", label: "Returned At" },
 ];
 
 const filter_fields_template = {
-  invoice_item__sales_invoice__id: ""
+  invoice_item__sales_invoice__id: "",
+  invoice_item__product__name: ""
 };
 
 const filter_fields_mapper = {
@@ -243,30 +243,12 @@ const ReturnedItems = () => {
                   size="sm"
                   className="flex items-center space-x-2"
                   disabled={selectedRows.length !== 1}
-                  onClick={() => navigate("/returned-items/view-returned-item")}
-                >
-                  <Eye className="h-4 w-4" />
-                  <span>View Returned Item</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-2"
-                  onClick={() => navigate("/returned-items/create-returned-item")}
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Returned Item</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1}
                   onClick={handleUpdateClick}
                 >
                   <Edit className="w-4 h-4" />
-                  <span>Update</span>
+                  <span>View/Update Item</span>
                 </Button>
+
                 <Button
                   variant="outline"
                   size="sm"

@@ -5,8 +5,6 @@ export const SalesInvoiceStatusMap = {
   "X": "Cancelled",
   "C": "Completed",
   "PC": "Partially Completed",
-  "R": "Received",
-  "PR": "Partially Received"
 }
 
 export const PurchaseInvoiceStatusMap = {
@@ -57,13 +55,12 @@ export const getPaymentStatusColor = (paymentStatus) =>{
   }
 }
 
-export function transformSalesInvoice(data) {
+const formatDate = (dateString) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString("en-GB"); // Format: DD/MM/YYYY
+}
 
-  // Helper to format date as DD/MM/YYYY
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-GB"); // Format: DD/MM/YYYY
-  }
+export function transformSalesInvoice(data) {
 
   // Helper to format currency as "PKR X,XXX"
   const formatCurrency = (amount) => {
@@ -87,12 +84,6 @@ export function transformSalesInvoice(data) {
 
 export function transformPurchaseInvoice(data) {
 
-  // Helper to format date as DD/MM/YYYY
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-GB"); // Format: DD/MM/YYYY
-  }
-
   // Helper to format currency as "PKR X,XXX"
   const formatCurrency = (amount) => {
     return `PKR ${Number(amount).toLocaleString()}`;
@@ -115,18 +106,6 @@ export function transformPurchaseInvoice(data) {
 }
 
 export function transformInventoryItem(data) {
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleString("en-GB", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-      timeZone: "UTC"
-    })
-  }
 
   // Helper to format currency as "PKR X,XXX"
   const formatCurrency = (amount) => {
@@ -142,7 +121,7 @@ export function transformInventoryItem(data) {
     unit_cost: formatCurrency(data.unit_cost),
     unit_price: formatCurrency(data.unit_price),
     reorder_level: data.reorder_level,
-    last_updated: formatDate(data.last_updated)
+    last_updated: formatDate(data.updated_at)
   }
 }
 
@@ -170,10 +149,10 @@ export function transformReturnedItem(data){
   return {
     id: data.id,
     sales_invoice: data.invoice_item.sales_invoice.id,
-    invoice_date: data.invoice_item.sales_invoice.date_issued,
+    invoice_date: formatDate(data.invoice_item.sales_invoice.date_issued),
     product: data.invoice_item.product.name,
     quantity: data.quantity,
-    returned_at: data.created_at
+    returned_at: formatDate(data.created_at)
   }
 }
 

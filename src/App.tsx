@@ -36,6 +36,7 @@ import Locations from "./pages/Locations";
 import CreateLocation from "./pages/CreateLocation";
 import UpdateLocation from "./pages/UpdateLocation";
 import ReturnedItems from "./pages/ReturnedItems";
+import UpdateReturnedItem from "./pages/UpdateReturnedItem";
 
 const queryClient = new QueryClient();
 
@@ -78,6 +79,7 @@ const App = () => {
           <Route path="/locations/update-location" element={<UpdateLocation />} />
           
           <Route path="/returned-items" element={<ReturnedItems />} />
+          <Route path="/returned-items/update-returned-item" element={<UpdateReturnedItem />} />
           
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

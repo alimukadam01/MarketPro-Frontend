@@ -352,61 +352,6 @@ const Sales = () => {
                 </Button>
               </div>
             </div>
-
-            {/* Sales Table */}
-            {/* <div className="space-y-[10px]"> */}
-            {/* Table Header */}
-            {/* <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
-                <div className="grid grid-cols-11 gap-4 w-full text-sm font-medium text-muted-foreground">
-                  <div className="min-w-0">ID</div>
-                  <div className="min-w-0">Invoice No</div>
-                  <div className="min-w-0">Status</div>
-                  <div className="min-w-0">Date Issued</div>
-                  <div className="min-w-0">Date Due</div>
-                  <div className="min-w-0">Payment Status</div>
-                  <div className="min-w-0">Tax</div>
-                  <div className="min-w-0">Discount</div>
-                  <div className="min-w-0">Total Items</div>
-                  <div className="min-w-0">Subtotal</div>
-                  <div className="min-w-0">Total</div>
-                </div>
-              </div> */}
-
-            {/* Table Rows */}
-            {/* {salesData.map((sale) => (
-                <div
-                  key={sale.id}
-                  onClick={() => toggleRowSelection(sale.id)}
-                  className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer transition-colors hover:bg-muted/20 ${selectedRows.includes(sale.id)
-                    ? 'border-2 border-[#4285F4]'
-                    : 'border border-border'
-                    }`}
-                >
-                  <div className="grid grid-cols-11 gap-4 w-full text-sm">
-                    <div className="font-medium min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.id}</div>
-                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.invoice_no}</div>
-                    <div className="min-w-0">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(sale.status)}`}>
-                        {sale.status}
-                      </span>
-                    </div>
-                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.date_issued}</div>
-                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.date_due}</div>
-                    <div className="min-w-0">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(sale.payment_status)}`}>
-                        {sale.payment_status}
-                      </span>
-                    </div>
-                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.tax}</div>
-                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.discount}</div>
-                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.total_items}</div>
-                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.subtotal}</div>
-                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.total}</div>
-
-                  </div>
-                </div>
-              ))}
-            </div>*/}
           </div>
 
           {salesData && salesData.length > 0 ? (
