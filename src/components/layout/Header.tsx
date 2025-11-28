@@ -52,9 +52,10 @@ export function Header() {
                     </div>
                     <div className="space-y-2">
                       {mockResults.salesInvoices.map((invoice) => (
-                        <div
+                        <button
+                          type="button"
                           key={invoice.id}
-                          className="p-3 rounded-md hover:bg-accent cursor-pointer transition-colors"
+                          className="p-3 rounded-md hover:bg-accent cursor-pointer transition-colors w-full text-left"
                         >
                           <div className="flex items-center justify-between">
                             <div>
@@ -66,7 +67,7 @@ export function Header() {
                               <p className="text-xs text-muted-foreground">{invoice.date}</p>
                             </div>
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -81,9 +82,10 @@ export function Header() {
                     </div>
                     <div className="space-y-2">
                       {mockResults.purchaseInvoices.map((invoice) => (
-                        <div
+                        <button
+                          type="button"
                           key={invoice.id}
-                          className="p-3 rounded-md hover:bg-accent cursor-pointer transition-colors"
+                          className="p-3 rounded-md hover:bg-accent cursor-pointer transition-colors w-full text-left"
                         >
                           <div className="flex items-center justify-between">
                             <div>
@@ -95,7 +97,7 @@ export function Header() {
                               <p className="text-xs text-muted-foreground">{invoice.date}</p>
                             </div>
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -110,9 +112,10 @@ export function Header() {
                     </div>
                     <div className="space-y-2">
                       {mockResults.products.map((product) => (
-                        <div
+                        <button
+                          type="button"
                           key={product.id}
-                          className="p-3 rounded-md hover:bg-accent cursor-pointer transition-colors"
+                          className="p-3 rounded-md hover:bg-accent cursor-pointer transition-colors w-full text-left"
                         >
                           <div className="flex items-center justify-between">
                             <div>
@@ -123,7 +126,7 @@ export function Header() {
                               <p className="text-sm text-muted-foreground">Stock: {product.stock}</p>
                             </div>
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
