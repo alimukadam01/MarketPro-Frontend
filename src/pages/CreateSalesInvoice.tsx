@@ -17,6 +17,7 @@ import {
   createIdMap,
   createNestedIdMap
 } from "../../services/utils"
+import { useAuth } from "../../services/AuthProvider"
 import {
   getAvailableProductsList,
   getCustomersList,
@@ -31,7 +32,7 @@ const CreateSalesInvoice = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
-  const token = localStorage.getItem("market-pro-access-token")
+  const { token } = useAuth()
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
 
@@ -41,12 +42,12 @@ const CreateSalesInvoice = () => {
       invoice_number: "",
       customer: "",
       notes: "",
-      date_issued: "2025-08-09",
-      date_due: "2025-08-09",
+      date_issued: new Date().toISOString().split("T")[0],
+      date_due: new Date().toISOString().split("T")[0],
       discount: "0.0",
       tax: "0.0",
-      payment_status: "Pending",
-      status: "Pending",
+      payment_status: "P",
+      status: "C",
       newItemProduct: "",
       newItemQuantity: 0,
       newItemPrice: 0
@@ -259,7 +260,9 @@ const CreateSalesInvoice = () => {
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select payment status" /></SelectTrigger>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select payment status" />
+                        </SelectTrigger>
                         <SelectContent>
                           {Object.entries(PaymentStatusMap).map(([key, value]) => (
                             <SelectItem value={key} key={key}>
@@ -281,7 +284,7 @@ const CreateSalesInvoice = () => {
                         <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                         <SelectContent>
                           {Object.entries(SalesInvoiceStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key} disabled={!(key !== "PC" && key !== "C")}>
+                            <SelectItem value={key} key={key}>
                               {value}
                             </SelectItem>
                           ))}

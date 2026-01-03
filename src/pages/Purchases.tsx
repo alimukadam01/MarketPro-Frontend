@@ -12,6 +12,7 @@ import {
   PaymentStatusMap,
   formatSearchQuery
 } from "../../services/utils"
+import { useAuth } from "../../services/AuthProvider"
 import {
   getPurchaseInvoiceList,
   bulkDeletePurchaseInvoice,
@@ -111,7 +112,7 @@ const Purchases = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [purchasesData, setPurchasesData] = useState(null)
   const [searchTerm, setSearchTerm] = useState(null)
-  const token = localStorage.getItem("market-pro-access-token") || null
+  const { token } = useAuth() || null
   const [isDeleted, setIsDeleted] = useState(false)
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate()

@@ -9,11 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { locationsAPIPackage } from "../../services/api";
+import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
 const UpdateLocation = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-    const token = localStorage.getItem("market-pro-access-token");
+    const { token } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const location_id = location.state?.location_id || null
@@ -38,7 +39,7 @@ const UpdateLocation = () => {
                 toast.error("Failed to update location.");
             }
         } catch (error) {
-            console.log("Error creating location:", error);
+            console.log("Error updating location:", error);
         }
     };
 
@@ -71,7 +72,7 @@ const UpdateLocation = () => {
         };
     
         fetchLocation();
-      }, [token]);
+      }, [token, location_id]);
 
 
     return (

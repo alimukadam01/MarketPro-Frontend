@@ -9,11 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { locationsAPIPackage } from "../../services/api";
+import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
 const CreateLocation = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-    const token = localStorage.getItem("market-pro-access-token");
+    const { token } = useAuth()
     const navigate = useNavigate();
 
     // react-hook-form setup

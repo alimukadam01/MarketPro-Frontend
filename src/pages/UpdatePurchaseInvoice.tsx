@@ -16,6 +16,7 @@ import {
   createIdMap,
   createNestedIdMap
 } from "../../services/utils"
+import { useAuth } from "../../services/AuthProvider"
 import {
   getProductsList,
   getSuppliersList,
@@ -31,7 +32,7 @@ const UpdatePurchaseInvoice = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState([])
-  const token = localStorage.getItem("market-pro-access-token")
+  const { token } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const invoice_id = location.state?.invoice_id || null
@@ -200,7 +201,7 @@ const UpdatePurchaseInvoice = () => {
     fetchPurchaseInvoice()
     fetchProducts()
     fetchSuppliers()
-  }, [token])
+  }, [token, invoice_id])
 
   useEffect(() => {
     if (selectedProduct){

@@ -9,11 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { returnedItemsAPIPackage } from "../../services/api";
+import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
 const UpdateReturnedItem = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-    const token = localStorage.getItem("market-pro-access-token");
+    const { token } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const returned_item_id = location.state?.returned_item_id || null
@@ -75,7 +76,7 @@ const UpdateReturnedItem = () => {
         };
 
         fetchReturnedItem();
-    }, [token]);
+    }, [token, returned_item_id]);
 
 
     {

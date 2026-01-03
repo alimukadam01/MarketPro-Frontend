@@ -7,17 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useNavigate } from "react-router-dom";
 
-const recentSales = [
-  { item: "1/2 inch nut bolts x 350", amount: "3500" },
-  { item: "20 Pressure Blowers x 350", amount: "200000" },
-  { item: "1/2 inch nut bolts x 350", amount: "3500" },
-  { item: "6 WD40 x 350", amount: "2100" },
-  { item: "1/2 inch nut bolts x 350", amount: "3500" },
-  { item: "1/2 inch nut bolts x 350", amount: "3500" },
-];
+export function RecentSales( { recentSales } ) {
 
-export function RecentSales() {
+  const navigate = useNavigate()
+
   return (
     <Card className="shadow-sm">
       <CardHeader>
@@ -25,20 +20,29 @@ export function RecentSales() {
       </CardHeader>
       <CardContent>
         <Table>
+        
           <TableHeader>
             <TableRow>
               <TableHead>Item</TableHead>
               <TableHead className="text-right">Amount</TableHead>
             </TableRow>
           </TableHeader>
+          
           <TableBody>
             {recentSales.map((sale, index) => (
-              <TableRow key={index}>
-                <TableCell className="font-medium">{sale.item}</TableCell>
-                <TableCell className="text-right">{sale.amount}</TableCell>
+              <TableRow key={index} style = {{cursor: "pointer",}} onClick={()=>navigate(
+                  'sales/update-invoice', {
+                    state: {
+                      invoice_id: sale.id
+                    }
+                  }
+                )}>
+                <TableCell className="font-medium">{sale.product} x {sale.quantity}</TableCell>
+                <TableCell className="text-right">PKR {sale.quantity * sale.price}</TableCell>
               </TableRow>
             ))}
           </TableBody>
+        
         </Table>
       </CardContent>
     </Card>

@@ -12,6 +12,7 @@ import {
   PaymentStatusMap,
   formatSearchQuery,
 } from "../../services/utils";
+import { useAuth } from "../../services/AuthProvider"
 import {
   getSalesInvoiceList,
   bulkDeleteSalesInvoice,
@@ -131,7 +132,7 @@ const Sales = () => {
   const [selectedRows, setSelectedRows] = useState([]);
   const [salesData, setSalesData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const token = localStorage.getItem("market-pro-access-token") || null;
+  const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();

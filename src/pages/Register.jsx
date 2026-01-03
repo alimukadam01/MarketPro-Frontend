@@ -44,7 +44,7 @@ const Register = () => {
     try{
       const isCreated = await register(data)
       if (isCreated){
-        navigate('/')
+        navigate('/login')
         toast.success("User registered successfully. Welcome to Market Pro!")
       }else{
         toast.error("User registration failed")

@@ -11,6 +11,7 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
 import {
   formatSearchQuery,
 } from "../../services/utils";
+import { useAuth } from "../../services/AuthProvider"
 import {
   getSuppliersList,
   bulkDeleteSuppliers,
@@ -56,7 +57,7 @@ const Suppliers = () => {
   const [selectedRows, setSelectedRows] = useState([]);
   const [suppliersData, setSuppliersData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const token = localStorage.getItem("market-pro-access-token") || null;
+  const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
 //   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();

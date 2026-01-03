@@ -3,6 +3,7 @@ import * as DialogUI from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { useAuth } from "../../../services/AuthProvider"
 import { returnSalesInvoiceItem } from "../../../services/api";
 
 function ReturnItem({
@@ -12,7 +13,7 @@ function ReturnItem({
   setOpen,
   setItemReturned,
 }) {
-  const token = localStorage.getItem("market-pro-access-token");
+  const { token } = useAuth();
   const [quantity, setQuantity] = useState(0);
   const [reason, setReason] = useState("");
 

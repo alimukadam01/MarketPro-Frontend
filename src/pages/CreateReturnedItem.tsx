@@ -10,9 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ChartNoAxesColumnDecreasing, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
-import {
-    createIdMap
-} from "../../services/utils"
+import { useAuth } from "../../services/AuthProvider"
 import {
     returnedItemsAPIPackage
 } from "../../services/api"
@@ -22,7 +20,7 @@ const CreateReturnedItem = () => {
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [units, setUnits] = useState([])
-    const token = localStorage.getItem("market-pro-access-token")
+    const { token } = useAuth()
     const navigate = useNavigate()
 
     // react-hook-form setup

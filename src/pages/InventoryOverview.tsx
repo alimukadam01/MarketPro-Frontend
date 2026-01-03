@@ -6,6 +6,7 @@ import CustomFilter from "@/components/layout/CustomFilter";
 import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
 import { formatSearchQuery } from "../../services/utils"
+import { useAuth } from "../../services/AuthProvider"
 import {
   getInventoryItemList,
   bulkDeleteInventoryItems,
@@ -57,7 +58,7 @@ const InventoryOverview = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [inventoryData, setInventoryData] = useState(null)
   const [searchTerm, setSearchTerm] = useState(null);
-  const token = localStorage.getItem("market-pro-access-token") || null
+  const { token } = useAuth() || null
   const businessId = localStorage.getItem("mp-business-id") || null
   const [isDeleted, setIsDeleted] = useState(false)
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
@@ -262,7 +263,7 @@ const InventoryOverview = () => {
                   onClick={() => toggleRowSelection(sale.id)}
                   className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer transition-colors hover:bg-muted/20 ${selectedRows.includes(sale.id)
                     ? 'border-2 border-[#4285F4]'
-                    : sale.quantity < sale.reorder_level
+                    : sale.quantity <= sale.reorder_level
                       ? 'border-2 border-red-500'
                       : 'border border-border'
                     }`}

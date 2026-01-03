@@ -17,13 +17,14 @@ import { ChartNoAxesColumnDecreasing, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { createIdMap } from "../../services/utils";
+import { useAuth } from "../../services/AuthProvider";
 import { getCitiesList, postCustomer } from "../../services/api";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
 const CreateCustomer = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [cities, setCities] = useState([]);
-  const token = localStorage.getItem("market-pro-access-token");
+  const { token } = useAuth()
   const navigate = useNavigate();
 
   // react-hook-form setup
@@ -39,8 +40,6 @@ const CreateCustomer = () => {
   });
 
   const onCustomerCreate = async (data) => {
-    console.log(data);
-
     try {
       const success = await postCustomer(token, data);
 

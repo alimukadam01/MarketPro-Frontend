@@ -16,6 +16,7 @@ import {
   createIdMap,
   createNestedIdMap
 } from "../../services/utils"
+import { useAuth } from "../../services/AuthProvider"
 import {
   getAvailableProductsList,
   getCustomersList,
@@ -34,7 +35,7 @@ const UpdateSalesInvoice = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
-  const token = localStorage.getItem("market-pro-access-token")
+  const { token } = useAuth()
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
   const location = useLocation()
@@ -107,8 +108,6 @@ const UpdateSalesInvoice = () => {
     } catch (error) {
       console.log("Error creating sales invoice:", error)
     }
-
-    console.log("Form Submitted:", { ...rest, tax: tax, discount: discount, "items": items });
   }
 
   const addItem = (product, quantity, unit_price) => {
@@ -223,7 +222,7 @@ const UpdateSalesInvoice = () => {
     fetchSalesInvoice()
     fetchProducts()
     fetchCustomers()
-  }, [token])
+  }, [token, invoice_id])
 
   useEffect(() => {
     if (selectedProduct) {

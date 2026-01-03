@@ -19,7 +19,7 @@ const sidebarItems = [
   { name: "Sales", icon: ShoppingCart, href: "/sales" },
   { name: "Purchases", icon: Package, href: "/purchases" },
   { name: "Inventory", icon: Archive, href: "/inventory" },
-  { name: "Projects", icon: FolderOpen, href: "/projects" },
+  // { name: "Projects", icon: FolderOpen, href: "/projects" },
   { name: "Products", icon: PackageOpen, href: "/products" },
   { name: "Customers", icon: Users, href: "/customers" },
   { name: "Suppliers", icon: Truck, href: "/suppliers" },

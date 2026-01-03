@@ -18,7 +18,7 @@ export function ChartCard({ title, data, color = "#8b5cf6" }: ChartCardProps) {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data}>
               <XAxis 
-                dataKey="name" 
+                dataKey="day"
                 tick={false}
                 axisLine={false}
               />

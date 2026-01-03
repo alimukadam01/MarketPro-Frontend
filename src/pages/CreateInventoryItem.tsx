@@ -7,12 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChartNoAxesColumnDecreasing, Plus, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
-import {
-    createIdMap
-} from "../../services/utils"
+import { createIdMap } from "../../services/utils"
+import { useAuth } from "../../services/AuthProvider"
 import {
     getProductsList,
     getUnitsList,
@@ -32,7 +30,7 @@ const CreateInventoryItem = () => {
     const [products, setProducts] = useState([])
     const [units, setUnits] = useState([])
     const [locations, setLocations] = useState([])
-    const token = localStorage.getItem("market-pro-access-token")
+    const { token } = useAuth()
     const businessId = localStorage.getItem("mp-business-id")
     const navigate = useNavigate()
 
@@ -51,7 +49,7 @@ const CreateInventoryItem = () => {
             unit_cost: "0.0",
             unit_price: "0.0",
             reorder_level: "0",
-            newItemProduct: 0,
+            newItemProduct: "",
             newItemQuantity: 0,
             newItemLocation: "",
             newItemCost: 0

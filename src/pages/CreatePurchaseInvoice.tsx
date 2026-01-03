@@ -15,6 +15,7 @@ import {
   PurchaseInvoiceStatusMap,
   createIdMap
 } from "../../services/utils"
+import { useAuth } from "../../services/AuthProvider"
 import {
   getProductsList,
   getSuppliersList,
@@ -29,7 +30,7 @@ const CreatePurchaseInvoice = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState([])
-  const token = localStorage.getItem("market-pro-access-token")
+  const { token } = useAuth()
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
 
@@ -40,11 +41,11 @@ const CreatePurchaseInvoice = () => {
       amount_paid: "0.0",
       supplier: "",
       notes: "",
-      delivery: "2025-08-09",
-      date_due: "2025-08-09",
+      delivery: new Date().toISOString().split("T")[0],
+      date_due: new Date().toISOString().split("T")[0],
       tax: "0.0",
-      payment_status: "Pending",
-      status: "Pending",
+      payment_status: "P",
+      status: "R",
       newItemProduct: "",
       newItemQuantity: 0,
       newItemCost: 0

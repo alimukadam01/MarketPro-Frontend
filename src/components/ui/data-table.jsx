@@ -2,9 +2,6 @@ import { React, useState } from "react";
 
 function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = null }){
 
-  console.log("colsConfig:", colsConfig);
-  console.log("columns:", columns);
-
   return (
     <div className="space-y-[10px]">
       {/* Table Header */}

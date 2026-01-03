@@ -13,6 +13,7 @@ import { useForm, Controller } from "react-hook-form";
 import {
     createIdMap
 } from "../../services/utils"
+import { useAuth } from "../../services/AuthProvider"
 import {
     getProductDetail,
     getUnitsList,
@@ -24,7 +25,7 @@ const UpdateProduct = () => {
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [units, setUnits] = useState([])
-    const token = localStorage.getItem("market-pro-access-token")
+    const { token } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
     const product_id = location.state?.product_id || null
@@ -102,7 +103,7 @@ const UpdateProduct = () => {
 
         fetchUnits()
         fetchProduct()
-    }, [token])
+    }, [token, product_id])
 
     return (
         <div className="min-h-screen bg-background">

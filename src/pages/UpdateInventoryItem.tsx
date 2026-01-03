@@ -13,6 +13,7 @@ import { useForm, Controller } from "react-hook-form";
 import {
     createIdMap
 } from "../../services/utils"
+import { useAuth } from "../../services/AuthProvider"
 import {
     getProductsList,
     getLocationsList,
@@ -27,7 +28,7 @@ const UpdateInventoryItem = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
     const [products, setProducts] = useState([])
     const [locations, setLocations] = useState([])
-    const token = localStorage.getItem("market-pro-access-token")
+    const { token } = useAuth()
     const businessId = localStorage.getItem("mp-business-id")
     const navigate = useNavigate()
     const location = useLocation()
@@ -158,14 +159,7 @@ const UpdateInventoryItem = () => {
         }
 
         fetchInventoryItem()
-    }, [products])
-
-    {
-        console.log(products)
-        console.log(locations)
-        console.log("product_id:", watch("product"))
-        console.log("location_id:", watch("location"))
-    }
+    }, [products, item_id])
 
     return (
         <div className="min-h-screen bg-background">

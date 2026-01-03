@@ -9,11 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { updateSupplier, getSupplierDetail } from "../../services/api";
+import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
 const UpdateSupplier = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-    const token = localStorage.getItem("market-pro-access-token");
+    const { token } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const supplier_id = location.state?.supplier_id || null
@@ -77,7 +78,7 @@ const UpdateSupplier = () => {
         };
     
         fetchSupplier();
-      }, [token]);
+      }, [token, supplier_id]);
 
 
     return (

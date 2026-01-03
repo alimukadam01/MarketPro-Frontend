@@ -17,6 +17,7 @@ import {
   bulkDeleteCustomers,
   deleteCustomer,
 } from "../../services/api";
+import { useAuth } from "../../services/AuthProvider"
 import {
   Eye,
   ArrowLeft,
@@ -57,7 +58,7 @@ const Customers = () => {
   const [selectedRows, setSelectedRows] = useState([]);
   const [customersData, setCustomersData] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const token = localStorage.getItem("market-pro-access-token") || null;
+  const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();

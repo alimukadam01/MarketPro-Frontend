@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
-import { login, getActiveBusinessId } from "../../services/api"
+import { login, getActiveBusinessId, getUserInfo } from "../../services/api"
+import { useAuth } from '../../services/AuthProvider'
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner"
 import * as z from "zod";
@@ -21,6 +22,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const navigate = useNavigate()
+  const { login: authLogIn } = useAuth()
   const form = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -36,6 +38,8 @@ const Login = () => {
       if (accessToken){
         setIsLoading(false)
         await getActiveBusinessId(accessToken)
+        const userData = await getUserInfo(accessToken)
+        authLogIn(accessToken, userData)
         navigate('/')
 
       }else{

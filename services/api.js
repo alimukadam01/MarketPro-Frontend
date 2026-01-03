@@ -180,7 +180,6 @@ export const login = async (creds) => {
     try{
         const res = await apiClient.post("/auth/jwt/create/", creds)
         if (res.status === 200){
-            localStorage.setItem("market-pro-access-token", `JWT ${ res.data.access }`)
             return `JWT ${ res.data.access }`
         }
         
@@ -229,7 +228,7 @@ export const getActiveBusinessId = async (token) => {
 
 export const getUserInfo = async (token) => {
     try{
-        const res = await apiClient.get("/auth/users/me", {
+        const res = await apiClient.get("/auth/users/me/", {
             headers:{
                 'Authorization': token
             }
@@ -1019,17 +1018,123 @@ export const bulkDeleteInventoryItems = async (token, businessId, itemIds) => {
 
 export const returnedItemsAPIPackage = new APIPackage("returned-items")
 
-export const globalSearch = async (query) => {
+export const globalSearch = async (token, searchQuery) => {
     try{
-        res = await apiClient.get(`search/${formatSearchQuery(query)}`)
+        const res = await apiClient.get(`search/${searchQuery}`, {
+            headers: {
+                Authorization: token
+            }
+        })
         if (res.status == 200){
-            return res.data.results
+            return res.data
         }
         
         console.log("error performing search: ", res.data.detail)
         return []
     }catch(error){
         console.log("error performing search", error)
+        return []
+    }
+}
+
+export const getRecentSales = async (token) =>{
+    try {
+        const res = await apiClient.get("kpis/recent-sales/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.recent_sales
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getTotalInventoryValue = async (token) =>{
+    try {
+        const res = await apiClient.get("kpis/total-inventory-value/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_inventory_value
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getTotalSalesDaily = async (token) =>{
+    try {
+        const res = await apiClient.get("kpis/daily-total-sales/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_daily_sales
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getAvgOrderValue = async (token) =>{
+    try {
+        const res = await apiClient.get("kpis/average-order-value/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.avg_order_value
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getTotalPurchases = async (token) =>{
+    try {
+        const res = await apiClient.get("kpis/total-purchases/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_purchases
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getMonthlySalesTrend = async (token) =>{
+    try {
+        const res = await apiClient.get("kpis/monthly-sales-trend/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.monthly_sales_trend
+        }
+    } catch (error) {
+        console.log(error)
         return []
     }
 }
