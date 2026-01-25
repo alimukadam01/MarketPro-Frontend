@@ -16,7 +16,12 @@ import { useAuth } from "../../services/AuthProvider"
 import {
   getPurchaseInvoiceList,
   bulkDeletePurchaseInvoice,
-  deletePurchaseInvoice
+  deletePurchaseInvoice,
+  getTotalPurchasesMonthly,
+  getTotalPurchaseInvoicesMonthly,
+  getTotalPendingPurchaseInvoices,
+  getTotalPendingPayment
+
 } from "../../services/api"
 import { Eye, ArrowLeft, Plus, Filter, Search, Edit, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -111,6 +116,10 @@ const Purchases = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [selectedRows, setSelectedRows] = useState([])
   const [purchasesData, setPurchasesData] = useState(null)
+  const [totalPurchasesMonthly, setTotalPurchasesMonthly] = useState(null)
+  const [totalPurchaseInvoicesMonthly, setTotalPurchaseInvoicesMonthly] = useState(null)
+  const [totalPendingPurchaseInvoices, setTotalPendingPurchaseInvoices] = useState(null)
+  const [totalPendingPayment, setTotalPendingPayment] = useState(null)
   const [searchTerm, setSearchTerm] = useState(null)
   const { token } = useAuth() || null
   const [isDeleted, setIsDeleted] = useState(false)
@@ -177,6 +186,75 @@ const Purchases = () => {
   };
 
   useEffect(() => {
+
+    const fetchTotalPurchases = async () => {
+      if (!token) return
+
+      try {
+        const res = await getTotalPurchasesMonthly(token)
+        if (res) {
+          setTotalPurchasesMonthly(res)
+        } else {
+          toast.error("Failed to fetch total purchase data.")
+        }
+      } catch (error) {
+        toast.error("Failed to fetch purchase data.")
+        console.error("Error fetching purchase data:", error)
+      }
+    }
+
+    const fetchTotalPurchaseInvoicesMonthly = async () => {
+      if (!token) return
+
+      try {
+        const res = await getTotalPurchaseInvoicesMonthly(token)
+        if (res) {
+          setTotalPurchaseInvoicesMonthly(res)
+        } else {
+          toast.error("Failed to fetch total monthly purchase invoices.")
+        }
+      } catch (error) {
+        toast.error("Failed to fetch monthly purchase invoices.")
+        console.error("Error fetching monthly purchase invoices:", error)
+      }
+    }
+
+    const fetchTotalPendingPurchaseInvoices = async () => {
+      if (!token) return
+
+      try {
+        const res = await getTotalPendingPurchaseInvoices(token)
+        if (res) {
+          setTotalPendingPurchaseInvoices(res)
+        } else {
+          toast.error("Failed to fetch total pending purchase invoices.")
+        }
+      } catch (error) {
+        toast.error("Failed to fetch pending purchase invoices.")
+        console.error("Error fetching pending purchase invoices:", error)
+      }
+    }
+
+    const fetchTotalPendingPayment = async () => {
+      if (!token) return
+
+      try {
+        const res = await getTotalPendingPayment(token)
+        if (res) {
+          setTotalPendingPayment(res)
+        } else {
+          toast.error("Failed to fetch total pending payment.")
+        }
+      } catch (error) {
+        toast.error("Failed to fetch pending payment.")
+        console.error("Error fetching pending payment:", error)
+      }
+    }
+
+    fetchTotalPendingPayment()
+    fetchTotalPendingPurchaseInvoices()
+    fetchTotalPurchaseInvoicesMonthly()
+    fetchTotalPurchases()
     fetchPurchaseInvoices()
   }, [token, isDeleted])
 
@@ -223,24 +301,22 @@ const Purchases = () => {
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Purchases</div>
-              <div className="text-3xl font-bold">PKR 77,650</div>
+              <div className="text-sm text-muted-foreground mb-2">Total Purchase Expense this month</div>
+              <div className="text-3xl font-bold">PKR {totalPurchasesMonthly}</div>
               <div className="text-sm text-green-600 mt-1">+12% from last month</div>
             </div>
             <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Completed</div>
-              <div className="text-3xl font-bold text-green-600">3</div>
-              <div className="text-sm text-muted-foreground mt-1">Purchases completed</div>
+              <div className="text-sm text-muted-foreground mb-2">Total Purchase Invoices this month</div>
+              <div className="text-3xl font-bold text-black-600">{totalPurchaseInvoicesMonthly}</div>
             </div>
             <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Pending</div>
-              <div className="text-3xl font-bold text-yellow-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">Awaiting processing</div>
+              <div className="text-sm text-muted-foreground mb-2">Total Pending Invoices</div>
+              <div className="text-3xl font-bold text-black-600">{totalPendingPurchaseInvoices}</div>
+              <div className="text-sm text-muted-foreground mt-1">Awaiting payment</div>
             </div>
             <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Cancelled</div>
-              <div className="text-3xl font-bold text-red-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">Cancelled orders</div>
+              <div className="text-sm text-muted-foreground mb-2">Total Pending Payment</div>
+              <div className="text-3xl font-bold text-red-600">PKR {totalPendingPayment}</div>
             </div>
           </div>
 
@@ -273,17 +349,13 @@ const Purchases = () => {
 
               {/* Action Icons */}
               <div className="flex items-center space-x-3">
-                <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={() => navigate("/purchases/view-invoice")}>
-                  <Eye className="h-4 w-4" />
-                  <span>View Invoice</span>
-                </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={() => navigate("/purchases/create-invoice")}>
                   <Plus className="w-4 h-4" />
                   <span>Create Invoice</span>
                 </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={handleUpdateClick}>
                   <Edit className="w-4 h-4" />
-                  <span>Update</span>
+                  <span>View/Update</span>
                 </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={handleDeletion} disabled={selectedRows.length === 0}>
                   <Trash2 className="w-4 h-4" />

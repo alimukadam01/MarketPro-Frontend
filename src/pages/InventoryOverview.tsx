@@ -10,7 +10,9 @@ import { useAuth } from "../../services/AuthProvider"
 import {
   getInventoryItemList,
   bulkDeleteInventoryItems,
-  deleteInventoryItem
+  deleteInventoryItem,
+  getTotalInventoryValue,
+  getTotalRestocksReq
 } from "../../services/api";
 import { Eye, ArrowLeft, Plus, Filter, Search, Edit, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -57,6 +59,8 @@ const InventoryOverview = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [selectedRows, setSelectedRows] = useState([])
   const [inventoryData, setInventoryData] = useState(null)
+  const [totalInventoryValue, setTotalInventoryValue] = useState(null)
+  const [totalRestocksReq, setTotalRestocksReq] = useState(null)
   const [searchTerm, setSearchTerm] = useState(null);
   const { token } = useAuth() || null
   const businessId = localStorage.getItem("mp-business-id") || null
@@ -124,6 +128,41 @@ const InventoryOverview = () => {
   }
 
   useEffect(() => {
+
+    const fetchTotalInventoryValue = async () => {
+      if (!token) return
+
+      try {
+        const res = await getTotalInventoryValue(token)
+        if (res) {
+          setTotalInventoryValue(res)
+        } else {
+          toast.error("Failed to fetch Total Inventory Value.")
+        }
+      } catch (error) {
+        toast.error("Failed to fetch Total Inventory Value.")
+        console.error("Error fetching Total Inventory Value:", error)
+      }
+    }
+
+    const fetchTotalRestocksReq = async () => {
+      if (!token) return
+
+      try {
+        const res = await getTotalRestocksReq(token)
+        if (res) {
+          setTotalRestocksReq(res)
+        } else {
+          toast.error("Failed to fetch Total Inventory Value.")
+        }
+      } catch (error) {
+        toast.error("Failed to fetch Total Inventory Value.")
+        console.error("Error fetching Total Inventory Value:", error)
+      }
+    }
+
+    fetchTotalRestocksReq()
+    fetchTotalInventoryValue()
     fetchInventoryItems()
   }, [token, isDeleted])
 
@@ -161,7 +200,7 @@ const InventoryOverview = () => {
                 />
                 <div className="flex-1 items-center justify-between">
                   <h1 className="text-2xl font-semibold">Inventory Overview</h1>
-                  <p className="text-sm text-muted-foreground">View and manage all inventory items.</p>
+                  <p className="text-sm text-muted-foreground">View and manage all inventory items</p>
                 </div>
               </div>
             </div>
@@ -170,24 +209,14 @@ const InventoryOverview = () => {
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Inventory Overview</div>
-              <div className="text-3xl font-bold">PKR 77,650</div>
+              <div className="text-sm text-muted-foreground mb-2">Total Inventory Value</div>
+              <div className="text-3xl font-bold">PKR {totalInventoryValue}</div>
               <div className="text-sm text-green-600 mt-1">+12% from last month</div>
             </div>
             <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Completed</div>
-              <div className="text-3xl font-bold text-green-600">3</div>
-              <div className="text-sm text-muted-foreground mt-1">Total Items</div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Pending</div>
-              <div className="text-3xl font-bold text-yellow-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">Awaiting processing</div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Cancelled</div>
-              <div className="text-3xl font-bold text-red-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">Cancelled orders</div>
+              <div className="text-sm text-muted-foreground mb-2">Total Restocks Required</div>
+              <div className="text-3xl font-bold text-red-600">{totalRestocksReq} Item{totalRestocksReq > 1? 's': ''}</div>
+              <div className="text-sm text-muted-foreground mt-1">Running out of stock</div>
             </div>
           </div>
 
@@ -220,17 +249,13 @@ const InventoryOverview = () => {
 
               {/* Action Icons */}
               <div className="flex items-center space-x-3">
-                <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={() => navigate("/inventory/view-item")}>
-                  <Eye className="h-4 w-4" />
-                  <span>View Item</span>
-                </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={() => navigate("/inventory/create-item")}>
                   <Plus className="w-4 h-4" />
                   <span>Create Item</span>
                 </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={handleUpdateClick}>
                   <Edit className="w-4 h-4" />
-                  <span>Update</span>
+                  <span>View/Update</span>
                 </Button>
                 <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={handleDeletion} disabled={selectedRows.length === 0}>
                   <Trash2 className="w-4 h-4" />

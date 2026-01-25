@@ -7,7 +7,8 @@ import {
   Archive,
   UserPlus,
   PackagePlus,
-  ShoppingCart
+  ShoppingCart,
+  Wallet2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -15,7 +16,7 @@ const quickActions = [
   { label: "Create Sales Invoice", icon: ShoppingCart, actionLink: '/sales/create-invoice' },
   { label: "Create Purchase Invoice", icon: Package, actionLink: '/purchases/create-invoice' },
   { label: "View All Sales Invoice", icon: ShoppingCart, actionLink: '/sales' },
-  { label: "View All Purchase Invoices", icon: Package, actionLink: '/purchases' },
+  { label: "Create New Expense", icon: Wallet2, actionLink: '/expenses/create-expense' },
   { label: "Create New Product", icon: PackageOpen, actionLink: '/products/create-product' },
   { label: "Create New Inventory Item", icon: Archive, actionLink: '/inventory/create-item' },
   { label: "Create New Customer", icon: UserPlus, actionLink: '/customers/create-customer' },

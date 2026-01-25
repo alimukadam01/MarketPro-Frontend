@@ -11,7 +11,8 @@ import {
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
-  returnedItemsAPIPackage
+  returnedItemsAPIPackage,
+  getTotalReturnedItems
 } from "../../services/api";
 import {
   Eye,
@@ -58,6 +59,7 @@ const ReturnedItems = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [returnedItemsData, setReturnedItemsData] = useState(null);
+  const [totalReturnedItems, setTotalReturnedItems] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
@@ -127,6 +129,24 @@ const ReturnedItems = () => {
   };
 
   useEffect(() => {
+
+    const fetchTotalReturnedItems = async () => {
+      if (!token) return;
+
+      try {
+        const res = await getTotalReturnedItems(token);
+        if (res) {
+          setTotalReturnedItems(res);
+        } else {
+          toast.error("Failed to fetch total returned items.");
+        }
+      } catch (error) {
+        toast.error("Failed to fetch total returned items.");
+        console.error("Error fetching total returned items:", error);
+      }
+    }
+
+    fetchTotalReturnedItems()
     fetchReturnedItems();
   }, [token, isDeleted])
 
@@ -181,32 +201,7 @@ const ReturnedItems = () => {
               <div className="text-sm text-muted-foreground mb-2">
                 Total Returned Items
               </div>
-              <div className="text-3xl font-bold">PKR 7,000</div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Completed
-              </div>
-              <div className="text-3xl font-bold text-green-600">3</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Sales completed
-              </div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Pending</div>
-              <div className="text-3xl font-bold text-yellow-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Awaiting processing
-              </div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Cancelled
-              </div>
-              <div className="text-3xl font-bold text-red-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Cancelled orders
-              </div>
+              <div className="text-3xl font-bold">{totalReturnedItems}</div>
             </div>
           </div>
 

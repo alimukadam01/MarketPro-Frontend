@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom';
 import {
+  LogOut,
   Search
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -17,16 +18,10 @@ export function Header() {
 
   const { token } = useAuth()
   const { user } = useAuth()
-  const { logout } = useAuth()
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([])
   const [isSearchResOpen, setIsSearchResOpen] = useState(false)
   const containerRef = useRef(null)
-
-  const handleLogout = () => {
-    localStorage.removeItem('mp-business-id')
-    logout()
-  }
 
   const performGlobalSearch = async (searchQuery) => {
     if (!token) return;
@@ -120,9 +115,6 @@ export function Header() {
             </Avatar>
             <span className="font-medium">{user && `${user.first_name} ${user.last_name}`}</span>
           </div>
-          <Button variant="destructive" onClick={handleLogout}>
-            Logout
-          </Button>
         </div>
       </div>
     </header >

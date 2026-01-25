@@ -38,6 +38,9 @@ import CreateLocation from "./pages/CreateLocation";
 import UpdateLocation from "./pages/UpdateLocation";
 import ReturnedItems from "./pages/ReturnedItems";
 import UpdateReturnedItem from "./pages/UpdateReturnedItem";
+import Expenses from "./pages/Expenses";
+import CreateExpense from "./pages/CreateExpense";
+import UpdateExpense from "./pages/UpdateExpense";
 
 const queryClient = new QueryClient();
 
@@ -79,6 +82,10 @@ const App = () => {
           <Route path="/locations" element={<Locations />} />
           <Route path="/locations/create-location" element={<CreateLocation />} />
           <Route path="/locations/update-location" element={<UpdateLocation />} />
+          
+          <Route path="/expenses" element={<Expenses/>} />
+          <Route path="/expenses/create-expense" element={<CreateExpense />} />
+          <Route path="/expenses/update-expense" element={<UpdateExpense />} />
           
           <Route path="/returned-items" element={<ReturnedItems />} />
           <Route path="/returned-items/update-returned-item" element={<UpdateReturnedItem />} />

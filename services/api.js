@@ -114,6 +114,7 @@ export default class APIPackage {
 }
 
 export const locationsAPIPackage = new APIPackage("locations")
+export const expensesAPIPackage = new APIPackage("expenses")
 
 export const getUnitsList = async (token) => {
     try {
@@ -1037,26 +1038,11 @@ export const globalSearch = async (token, searchQuery) => {
     }
 }
 
-export const getRecentSales = async (token) =>{
-    try {
-        const res = await apiClient.get("kpis/recent-sales/", {
-            headers: {
-                Authorization: token
-            }
-        })
-
-        if (res.status == 200) {
-            return res.data.recent_sales
-        }
-    } catch (error) {
-        console.log(error)
-        return []
-    }
-}
+// INVENTORY METRICS
 
 export const getTotalInventoryValue = async (token) =>{
     try {
-        const res = await apiClient.get("kpis/total-inventory-value/", {
+        const res = await apiClient.get("inventory-kpis/total-inventory-value/", {
             headers: {
                 Authorization: token
             }
@@ -1071,9 +1057,104 @@ export const getTotalInventoryValue = async (token) =>{
     }
 }
 
+export const getTotalRestocksReq = async (token) => {
+    try {
+        const res = await apiClient.get("inventory-kpis/total-restocks-required/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.restocks_req
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+// SUPPLIER METRICS
+
+export const getTotalSuppliers = async (token) =>{
+    try {
+        const res = await apiClient.get("supplier-kpis/total-suppliers/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_suppliers
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+// CUSTOMER METRICS
+
+export const getTotalCustomers = async (token) =>{
+    try {
+        const res = await apiClient.get("customer-kpis/total-customers/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_customers
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+// PRODUCT METRICS
+
+export const getTotalProducts = async (token) =>{
+    try {
+        const res = await apiClient.get("product-kpis/total-products/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_products
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+// LOCATION METRICS
+
+export const getTotalLocations = async (token) =>{
+    try {
+        const res = await apiClient.get("location-kpis/total-locations/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_locations
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+//SALES METRICS
+
 export const getTotalSalesDaily = async (token) =>{
     try {
-        const res = await apiClient.get("kpis/daily-total-sales/", {
+        const res = await apiClient.get("sales-kpis/daily-total-sales/", {
             headers: {
                 Authorization: token
             }
@@ -1088,9 +1169,77 @@ export const getTotalSalesDaily = async (token) =>{
     }
 }
 
+export const getTotalItemsSoldDaily = async (token) => {
+    try {
+        const res = await apiClient.get("sales-kpis/daily-total-items/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_items
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getTotalSalesInvoicesDaily = async (token) => {
+    try {
+        const res = await apiClient.get("sales-kpis/daily-total-sales-invoices/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_invoices
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getRecentSales = async (token) =>{
+    try {
+        const res = await apiClient.get("sales-kpis/recent-sales/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.recent_sales
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getMonthlySalesTrend = async (token) =>{
+    try {
+        const res = await apiClient.get("sales-kpis/monthly-sales-trend/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.monthly_sales_trend
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
 export const getAvgOrderValue = async (token) =>{
     try {
-        const res = await apiClient.get("kpis/average-order-value/", {
+        const res = await apiClient.get("sales-kpis/average-order-value/", {
             headers: {
                 Authorization: token
             }
@@ -1105,9 +1254,10 @@ export const getAvgOrderValue = async (token) =>{
     }
 }
 
+// PURCHASES METRICS
 export const getTotalPurchases = async (token) =>{
     try {
-        const res = await apiClient.get("kpis/total-purchases/", {
+        const res = await apiClient.get("purchases-kpis/total-purchases/", {
             headers: {
                 Authorization: token
             }
@@ -1122,16 +1272,159 @@ export const getTotalPurchases = async (token) =>{
     }
 }
 
-export const getMonthlySalesTrend = async (token) =>{
+export const getTotalPurchasesMonthly = async (token) =>{
     try {
-        const res = await apiClient.get("kpis/monthly-sales-trend/", {
+        const res = await apiClient.get("purchases-kpis/monthly-total-purchases/", {
             headers: {
                 Authorization: token
             }
         })
 
         if (res.status == 200) {
-            return res.data.monthly_sales_trend
+            return res.data.total_purchases
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getTotalPendingPurchaseInvoices = async (token) =>{
+    try {
+        const res = await apiClient.get("purchases-kpis/total-pending-invoices/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_invoices
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getTotalPurchaseInvoicesMonthly = async (token) => {
+    try {
+        const res = await apiClient.get("purchases-kpis/monthly-total-purchase-invoices/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_invoices
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getTotalPendingPayment = async (token) => {
+    try {
+        const res = await apiClient.get("purchases-kpis/total-pending-payment/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_payment
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getInvoicePDFData = async (token, invoiceId) =>{
+    try {
+        const res = await apiClient.get(`sales-invoices/${invoiceId}/print-invoice/`, {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+// RETURNED ITEMS METRICS
+
+export const getTotalReturnedItems = async (token) =>{
+    try {
+        const res = await apiClient.get("returned-items-kpis/total-returned-items/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.total_returned_items
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+// SUPPLIER METRICS
+
+// EXPENSES METRICS
+
+
+export const getTotalExpensesMonthly = async (token) =>{
+    try {
+        const res = await apiClient.get("expenses-kpis/monthly-total-expenses/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.monthly_total_expenses
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getTotalExpenseAmountMonthly = async (token) =>{
+    try {
+        const res = await apiClient.get("expenses-kpis/monthly-total-expense-amount/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.monthly_total_expense_amount
+        }
+    } catch (error) {
+        console.log(error)
+        return []
+    }
+}
+
+export const getMonthlyExpensesTrend = async (token) =>{
+    try {
+        const res = await apiClient.get("expenses-kpis/monthly-expenses-trend/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status == 200) {
+            return res.data.monthly_expenses_trend
         }
     } catch (error) {
         console.log(error)

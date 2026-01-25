@@ -21,10 +21,13 @@ import {
   getAvailableProductsList,
   getCustomersList,
   updateSalesInvoiceAndItems,
-  getSalesInvoiceDetail
+  getSalesInvoiceDetail,
+  getInvoicePDFData
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import ReturnItem from "@/components/ui/return-item";
+import { PDFDownloadLink } from "@react-pdf/renderer";
+import Invoice from "@/pages/Invoice";
 
 const UpdateSalesInvoice = () => {
 
@@ -35,6 +38,7 @@ const UpdateSalesInvoice = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
+  const [pdfData, setPdfData] = useState(null)
   const { token } = useAuth()
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
@@ -168,20 +172,20 @@ const UpdateSalesInvoice = () => {
   };
 
   const fetchSalesInvoice = async () => {
-      if (!token) return
-      try {
-        const salesInvoice = await getSalesInvoiceDetail(token, invoice_id)
-        if (salesInvoice) {
-          console.log("Fetched sales invoice:", salesInvoice)
-          populateInvoiceFields(salesInvoice)
-        } else {
-          toast.error("Failed to fetch sales invoice")
-        }
-      } catch (error) {
-        console.log(error)
+    if (!token) return
+    try {
+      const salesInvoice = await getSalesInvoiceDetail(token, invoice_id)
+      if (salesInvoice) {
+        console.log("Fetched sales invoice:", salesInvoice)
+        populateInvoiceFields(salesInvoice)
+      } else {
         toast.error("Failed to fetch sales invoice")
       }
+    } catch (error) {
+      console.log(error)
+      toast.error("Failed to fetch sales invoice")
     }
+  }
 
   useEffect(() => {
 
@@ -219,9 +223,22 @@ const UpdateSalesInvoice = () => {
       }
     }
 
+    const fetchSalesInvoicePDFData = async () => {
+      try {
+        const res = await getInvoicePDFData(token, invoice_id);
+        if (!res) {
+          toast.error("Error fetching invoice PDF. Please reload.")
+        }
+        setPdfData(res)
+      } catch (error) {
+        console.log(error)
+      }
+    }
+
     fetchSalesInvoice()
     fetchProducts()
     fetchCustomers()
+    fetchSalesInvoicePDFData()
   }, [token, invoice_id])
 
   useEffect(() => {
@@ -230,7 +247,7 @@ const UpdateSalesInvoice = () => {
     }
   }, [selectedProduct])
 
-  useEffect(()=>{
+  useEffect(() => {
     fetchSalesInvoice()
     setItemReturned(false)
     setSelectedRows([])
@@ -454,8 +471,8 @@ const UpdateSalesInvoice = () => {
                         key={item.id}
                         onClick={() => !isDisabled && toggleRowSelection(item.id)}
                         className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${selectedRows.includes(item.id)
-                            ? "border-2 border-[#4285F4]"
-                            : "border border-border"
+                          ? "border-2 border-[#4285F4]"
+                          : "border border-border"
                           } ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`}
                       >
                         <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
@@ -485,7 +502,18 @@ const UpdateSalesInvoice = () => {
               </div>
 
               <div className="flex justify-end gap-3 mt-auto">
-                <Button type="submit">Update Invoice</Button>
+                {
+                  pdfData &&
+                    <PDFDownloadLink
+                      document={<Invoice token = {token} invoice_id = {invoice_id}  />}
+                      fileName={`invoice.pdf`}
+                    >
+                        <Button type="button">Download PDF</Button>
+                    </PDFDownloadLink>
+                }
+                <div className="flex justify-end gap-3 mt-auto">
+                  <Button type="submit">Update Invoice</Button>
+                </div>
               </div>
             </div>
           </form>

@@ -16,6 +16,7 @@ import {
   getCustomersList,
   bulkDeleteCustomers,
   deleteCustomer,
+  getTotalCustomers
 } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -57,6 +58,7 @@ const Customers = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [customersData, setCustomersData] = useState(null);
+  const [totalCustomers, setTotalCustomers] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
@@ -115,7 +117,7 @@ const Customers = () => {
       toast.error("Failed to fetch customers.");
       console.error("Error fetching customers:", error);
     }
-  };
+  }
 
   const handleFilterClick = (e) => {
     e.preventDefault();
@@ -123,6 +125,24 @@ const Customers = () => {
   };
 
   useEffect(() => {
+
+    const fetchTotalCustomers = async () => {
+      if (!token) return;
+
+      try {
+        const res = await getTotalCustomers(token);
+        if (res) {
+          setTotalCustomers(res);
+        } else {
+          toast.error("Failed to fetch total customers.");
+        }
+      } catch (error) {
+        toast.error("Failed to fetch total customers.");
+        console.error("Error fetching total customers:", error);
+      }
+    }
+
+    fetchTotalCustomers()
     fetchCustomers();
   }, [token, isDeleted])
 
@@ -144,9 +164,8 @@ const Customers = () => {
       <Sidebar onCollapseChange={setSidebarCollapsed} />
 
       <div
-        className={`${
-          sidebarCollapsed ? "ml-16" : "ml-64"
-        } transition-all duration-300 flex flex-col`}
+        className={`${sidebarCollapsed ? "ml-16" : "ml-64"
+          } transition-all duration-300 flex flex-col`}
       >
         <Header />
 
@@ -177,32 +196,7 @@ const Customers = () => {
               <div className="text-sm text-muted-foreground mb-2">
                 Total Customers
               </div>
-              <div className="text-3xl font-bold">PKR 7,000</div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Completed
-              </div>
-              <div className="text-3xl font-bold text-green-600">3</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Sales completed
-              </div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Pending</div>
-              <div className="text-3xl font-bold text-yellow-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Awaiting processing
-              </div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Cancelled
-              </div>
-              <div className="text-3xl font-bold text-red-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Cancelled orders
-              </div>
+              <div className="text-3xl font-bold">{ totalCustomers }</div>
             </div>
           </div>
 
@@ -239,16 +233,6 @@ const Customers = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1}
-                  onClick={() => navigate("/customers/view-customer")}
-                >
-                  <Eye className="h-4 w-4" />
-                  <span>View Customer</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-2"
                   onClick={() => navigate("/customers/create-customer")}
                 >
                   <Plus className="w-4 h-4" />
@@ -262,7 +246,7 @@ const Customers = () => {
                   onClick={handleUpdateClick}
                 >
                   <Edit className="w-4 h-4" />
-                  <span>Update</span>
+                  <span>View/Update</span>
                 </Button>
                 <Button
                   variant="outline"

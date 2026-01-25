@@ -13,6 +13,7 @@ import {
   getProductsList,
   bulkDeleteProducts,
   deleteProduct,
+  getTotalProducts
 } from "../../services/api";
 import {
   Eye,
@@ -52,6 +53,7 @@ const Products = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [productsData, setProductsData] = useState(null);
+  const [totalProducts, setTotalProducts] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
@@ -118,6 +120,24 @@ const Products = () => {
   };
 
   useEffect(() => {
+
+    const fetchTotalProducts = async () => {
+      if (!token) return;
+
+      try {
+        const res = await getTotalProducts(token);
+        if (res) {
+          setTotalProducts(res);
+        } else {
+          toast.error("Failed to fetch total products.");
+        }
+      } catch (error) {
+        toast.error("Failed to fetch total products.");
+        console.error("Error fetching total products:", error);
+      }
+    }
+
+    fetchTotalProducts()
     fetchProducts();
   }, [token, isDeleted])
 
@@ -172,32 +192,7 @@ const Products = () => {
               <div className="text-sm text-muted-foreground mb-2">
                 Total Products
               </div>
-              <div className="text-3xl font-bold">PKR 7,000</div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Completed
-              </div>
-              <div className="text-3xl font-bold text-green-600">3</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Sales completed
-              </div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Pending</div>
-              <div className="text-3xl font-bold text-yellow-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Awaiting processing
-              </div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Cancelled
-              </div>
-              <div className="text-3xl font-bold text-red-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Cancelled orders
-              </div>
+              <div className="text-3xl font-bold">{totalProducts}</div>
             </div>
           </div>
 
@@ -234,16 +229,6 @@ const Products = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1}
-                  onClick={() => navigate("/products/view-product")}
-                >
-                  <Eye className="h-4 w-4" />
-                  <span>View Product</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-2"
                   onClick={() => navigate("/products/create-product")}
                 >
                   <Plus className="w-4 h-4" />
@@ -257,7 +242,7 @@ const Products = () => {
                   onClick={handleUpdateClick}
                 >
                   <Edit className="w-4 h-4" />
-                  <span>Update</span>
+                  <span>View/Update</span>
                 </Button>
                 <Button
                   variant="outline"

@@ -4,21 +4,25 @@ import {
   Package,
   PackageOpen,
   FolderOpen,
+  Wallet2,
   Users,
   Archive,
   Menu,
   Truck,
   MapPin,
-  Undo2
+  Undo2,
+  LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { useAuth } from "../../../services/AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const sidebarItems = [
   { name: "Sales", icon: ShoppingCart, href: "/sales" },
   { name: "Purchases", icon: Package, href: "/purchases" },
   { name: "Inventory", icon: Archive, href: "/inventory" },
+  { name: "Expenses", icon: Wallet2, href: "/expenses" },
   // { name: "Projects", icon: FolderOpen, href: "/projects" },
   { name: "Products", icon: PackageOpen, href: "/products" },
   { name: "Customers", icon: Users, href: "/customers" },
@@ -35,12 +39,18 @@ export function Sidebar({ onCollapseChange }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useAuth()
 
   const handleToggle = () => {
     const newCollapsed = !isCollapsed;
     setIsCollapsed(newCollapsed);
     onCollapseChange?.(newCollapsed);
   };
+
+  const handleLogout = () => {
+    localStorage.removeItem('mp-business-id')
+    logout()
+  }
 
   return (
     <div className={cn(
@@ -91,6 +101,21 @@ export function Sidebar({ onCollapseChange }: SidebarProps) {
           );
         })}
       </nav>
+
+      {/* Logout Button */}
+      <div className="p-4 border-t border-primary-foreground/20">
+        <Button
+          variant="ghost"
+          onClick={handleLogout}
+          className={cn(
+            "w-full justify-start text-primary-foreground hover:bg-primary-foreground/20",
+            isCollapsed ? "px-2" : "px-4"
+          )}
+        >
+          <LogOut className={cn("w-5 h-5", !isCollapsed && "mr-3")} />
+          {!isCollapsed && <span>Logout</span>}
+        </Button>
+      </div>
     </div>
   );
 }

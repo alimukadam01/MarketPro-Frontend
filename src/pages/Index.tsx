@@ -6,12 +6,15 @@ import { QuickActions } from "@/components/dashboard/QuickActions";
 import { RecentSales } from "@/components/dashboard/RecentSales";
 import { useEffect, useState } from "react";
 import { useAuth } from '../../services/AuthProvider'
-import { getRecentSales } from '../../services/api'
-import { getTotalInventoryValue } from '../../services/api'
-import { getTotalSalesDaily } from '../../services/api'
-import { getAvgOrderValue } from '../../services/api'
-import { getTotalPurchases } from '../../services/api'
-import { getMonthlySalesTrend } from '../../services/api'
+import {
+  getRecentSales,
+  getTotalInventoryValue, 
+  getTotalSalesDaily, 
+  getAvgOrderValue, 
+  getTotalPurchases, 
+  getMonthlySalesTrend,
+  getMonthlyExpensesTrend
+} from '../../services/api'
 import { toast } from "react-toastify";
 
 // Sample data for charts
@@ -35,6 +38,7 @@ const Index = () => {
   const [avgOrderValue, setAvgOrderValue] = useState([])
   const [totalPurchases, setTotalPurchases] = useState([])
   const [monthlySalesTrend, setMonthlySalesTrend] = useState([])
+  const [monthlyExpensesTrend, setMonthlyExpensesTrend] = useState([])
   const { user } = useAuth()
 
   useEffect(() => {
@@ -129,6 +133,22 @@ const Index = () => {
       }
     }
 
+    const fetchMonthlyExpenses = async () => {
+      try {
+        const res = await getMonthlyExpensesTrend(token)
+        if (res == null) {
+          toast.error("Error fetching monthly sales trend")
+          return
+        }
+
+        setMonthlyExpensesTrend(res)
+      } catch (error) {
+        console.log(error)
+        toast.error("Error fetching monthly sales trend")
+      }
+    }
+
+    fetchMonthlyExpenses()
     fetchMonthlySales()
     fetchTotalPurchases()
     fetchAvgOrderValue()
@@ -137,75 +157,60 @@ const Index = () => {
     fetchRecentSales()
   }, [token])
 
-return (
-  <div className="min-h-screen bg-background">
-    <Sidebar onCollapseChange={setSidebarCollapsed} />
+  return (
+    <div className="min-h-screen bg-background">
+      <Sidebar onCollapseChange={setSidebarCollapsed} />
 
-    <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 flex flex-col`}>
-      <Header />
+      <div className={`${sidebarCollapsed ? 'ml-16' : 'ml-64'} transition-all duration-300 flex flex-col`}>
+        <Header />
 
-      <main className="flex-1 p-6 space-y-6">
-        {/* Breadcrumb and Greeting */}
-        <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">
-            <span className="text-primary cursor-pointer">home</span> /
-          </p>
-          <div>
-            <h1 className="text-2xl font-bold">Hello, {user && user.first_name}!</h1>
-            <p className="text-muted-foreground">let's get on with the business today</p>
-          </div>
-        </div>
-
-        {/* Charts and Metrics Section */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="grid grid-2 gap-6">
-            <ChartCard
-              title="Total Sales this month"
-              data={monthlySalesTrend}
-              color="#8b5cf6"
-            />
-
-            <ChartCard
-              title="Inventory Value in July"
-              data={inventoryData}
-              color="#ef4444"
-            />
+        <main className="flex-1 p-6 space-y-6">
+          {/* Breadcrumb and Greeting */}
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              <span className="text-primary cursor-pointer">home</span> /
+            </p>
+            <div>
+              <h1 className="text-2xl font-bold">Hello, {user && user.first_name}!</h1>
+              <p className="text-muted-foreground">let's get on with the business today</p>
+            </div>
           </div>
 
-          <div className="grid grid-2 gap-6">
-            <ChartCard
-              title="Inventory Value in July"
-              data={inventoryData}
-              color="#ef4444"
-            />
+          {/* Charts and Metrics Section */}
+          <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-2 gap-6">
+              <ChartCard
+                title="Total Sales this month"
+                data={monthlySalesTrend}
+                color="#00a000"
+              />
+              <ChartCard
+                title="Total Exepenses this month"
+                data={monthlyExpensesTrend}
+                color="red"
+              />
+            </div>
 
-            <ChartCard
-              title="Inventory Value in July"
-              data={inventoryData}
-              color="#ef4444"
-            />
+            <QuickActions />
+
           </div>
 
-          <QuickActions />
+          {/* Bottom Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Metrics Cards Column */}
+            <div className="grid grid-cols-1 gap-4">
+              <MetricCard title="Net Inventory Value" value={`PKR ${totalInventoryValue}`} />
+              <MetricCard title="Total Sales Today" value={`PKR ${totalSalesDaily}`} />
+              <MetricCard title="Average Order Value" value={`PKR ${avgOrderValue}`} />
+              <MetricCard title="Total Purchases" value={`PKR ${totalPurchases}`} />
+            </div>
 
-        </div>
-
-        {/* Bottom Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Metrics Cards Column */}
-          <div className="grid grid-cols-1 gap-4">
-            <MetricCard title="Net Inventory Value" value={`PKR ${totalInventoryValue}`} />
-            <MetricCard title="Total Sales Today" value={`PKR ${totalSalesDaily}`} />
-            <MetricCard title="Average Order Value" value={`PKR ${avgOrderValue}`} />
-            <MetricCard title="Total Purchases" value={`PKR ${totalPurchases}`} />
+            <RecentSales recentSales={recentSales} />
           </div>
-
-          <RecentSales recentSales={recentSales} />
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
-  </div>
-);
+  );
 }
 
 export default Index;

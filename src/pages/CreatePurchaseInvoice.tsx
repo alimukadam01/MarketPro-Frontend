@@ -264,7 +264,7 @@ const CreatePurchaseInvoice = () => {
                         <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
                         <SelectContent>
                           {Object.entries(PurchaseInvoiceStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key} disabled={!(key !== "R" && key !== "PR")}>
+                            <SelectItem value={key} key={key}>
                               {value}
                             </SelectItem>
                           ))}

@@ -4,6 +4,7 @@ import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
+import { PDFDownloadLink } from "@react-pdf/renderer";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
 import {
   getStatusColor,
@@ -15,11 +16,14 @@ import {
 import { useAuth } from "../../services/AuthProvider"
 import {
   getSalesInvoiceList,
+  getTotalSalesDaily,
+  getTotalItemsSoldDaily,
+  getTotalSalesInvoicesDaily,
   bulkDeleteSalesInvoice,
   deleteSalesInvoice,
 } from "../../services/api";
 import {
-  Eye,
+  Download,
   ArrowLeft,
   Plus,
   Filter,
@@ -30,6 +34,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Invoice from '../pages/Invoice'
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each customer.
 
@@ -131,6 +136,9 @@ const Sales = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [salesData, setSalesData] = useState(null);
+  const [totalSalesDaily, setTotalSalesDaily] = useState(null);
+  const [totalItemsSoldDaily, setTotalItemsSoldDaily] = useState(null);
+  const [totalInvoicesDaily, setTotalInvoicesDaily] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
@@ -197,6 +205,58 @@ const Sales = () => {
   };
 
   useEffect(() => {
+
+    const fetchTotalSalesDaily = async ()=>{
+      if (!token) return;
+
+      try {
+        const res = await getTotalSalesDaily(token);
+        if (res != null) {
+          setTotalSalesDaily(res);
+        } else {
+          toast.error("Failed to fetch total sales data.");
+        }
+      } catch (error) {
+        toast.error("Failed to fetch total sales data.");
+        console.error("Error fetching total sales data:", error);
+      }
+    }
+
+    const fetchTotalItemsSoldDaily = async ()=>{
+      if (!token) return;
+
+      try {
+        const res = await getTotalItemsSoldDaily(token);
+        if (res !== null) {
+          setTotalItemsSoldDaily(res);
+        } else {
+          toast.error("Failed to fetch total items sold data.");
+        }
+      } catch (error) {
+        toast.error("Failed to fetch total items sold data.");
+        console.error("Error fetching total items sold data:", error);
+      }
+    }
+
+    const fetchTotalInvoicesDaily = async ()=>{
+      if (!token) return;
+
+      try {
+        const res = await getTotalSalesInvoicesDaily(token);
+        if (res !== null) {
+          setTotalInvoicesDaily(res);
+        } else {
+          toast.error("Failed to fetch total invoices data.");
+        }
+      } catch (error) {
+        toast.error("Failed to fetch total invoices data.");
+        console.error("Error fetching total invoices data:", error);
+      }
+    }
+
+    fetchTotalInvoicesDaily()
+    fetchTotalItemsSoldDaily()
+    fetchTotalSalesDaily()
     fetchSalesInvoices();
   }, [token, isDeleted])
 
@@ -249,38 +309,34 @@ const Sales = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">
-                Total Sales
+                Total Sales Today
               </div>
-              <div className="text-3xl font-bold">PKR 77,650</div>
+              <div className="text-3xl font-bold">PKR {totalSalesDaily}</div>
+              <div className="text-sm text-green-600 mt-1">
+                +12% from last yesterday
+              </div>
+            </div>
+            
+            <div className="bg-card rounded-lg p-6 border">
+              <div className="text-sm text-muted-foreground mb-2">
+                Total Invoices Today
+              </div>
+              <div className="text-3xl font-bold">{totalInvoicesDaily}</div>
               <div className="text-sm text-green-600 mt-1">
                 +12% from last month
               </div>
             </div>
+            
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">
-                Completed
+                Total Items Sold Today
               </div>
-              <div className="text-3xl font-bold text-green-600">3</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Sales completed
-              </div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Pending</div>
-              <div className="text-3xl font-bold text-yellow-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Awaiting processing
+              <div className="text-3xl font-bold">{totalItemsSoldDaily}</div>
+              <div className="text-sm text-green-600 mt-1">
+                +12% from last year
               </div>
             </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Cancelled
-              </div>
-              <div className="text-3xl font-bold text-red-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Cancelled orders
-              </div>
-            </div>
+            
           </div>
 
           {/* Sales Records Section */}
@@ -316,16 +372,6 @@ const Sales = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1}
-                  onClick={() => navigate("/sales/view-invoice")}
-                >
-                  <Eye className="h-4 w-4" />
-                  <span>View Invoice</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-2"
                   onClick={() => navigate("/sales/create-invoice")}
                 >
                   <Plus className="w-4 h-4" />
@@ -339,8 +385,23 @@ const Sales = () => {
                   onClick={handleUpdateClick}
                 >
                   <Edit className="w-4 h-4" />
-                  <span>Update</span>
+                  <span>View/Update</span>
                 </Button>
+                <PDFDownloadLink
+                  document={<Invoice token = {token} invoice_id = {selectedRows[0]}/>}
+                  fileName={`invoice.pdf`}
+                >
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center space-x-2"
+                    disabled={selectedRows.length !== 1}
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download</span>
+                  </Button>
+                </PDFDownloadLink>
+
                 <Button
                   variant="outline"
                   size="sm"

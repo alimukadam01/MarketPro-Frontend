@@ -1,3 +1,4 @@
+
 export const SalesInvoiceStatusMap = {
   "D": "Draft",
   "S": "Sent",
@@ -55,7 +56,7 @@ export const getPaymentStatusColor = (paymentStatus) =>{
   }
 }
 
-const formatDate = (dateString) => {
+export const formatDate = (dateString) => {
   const date = new Date(dateString);
   return date.toLocaleDateString("en-GB"); // Format: DD/MM/YYYY
 }
@@ -199,4 +200,3 @@ export const formatFilterQuery = (filters = {}) => {
 
   return params ? `?${params}` : "";
 }
-

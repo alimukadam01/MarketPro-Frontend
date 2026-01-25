@@ -7,17 +7,17 @@ import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
 import {
   formatSearchQuery,
-  transformLocation
 } from "../../services/utils";
-import {
-  locationsAPIPackage,
-  getTotalLocations
-} from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import {
-  Eye,
+  expensesAPIPackage,
+  getTotalExpensesMonthly,
+  getTotalExpenseAmountMonthly
+} from "../../services/api";
+import {
   ArrowLeft,
   Plus,
+  Filter,
   Search,
   Edit,
   Trash2,
@@ -31,30 +31,44 @@ import { useNavigate } from "react-router-dom";
 const cols = [
   { key: "id", label: "ID" },
   { key: "name", label: "Name" },
-  { key: "address", label: "Address" },
+  { key: "desc", label: "Description" },
+  { key: "amount", label: "Amount" },
 ];
 
-// const filter_fields_template = {
-//   city__name: ""
-// };
+const filter_fields_template = {
+  name: "",
+  desc: "",
+  amount: ""
+};
 
-// const filter_fields_mapper = {
-//   city__name: {
-//     label: "City",
-//     type: "text",
-//     placeholder: "Enter city name",
-//   },
-// };
+const filter_fields_mapper = {
+  name: {
+    label: "Name",
+    type: "text",
+    placeholder: "Enter Expense Name",
+  },
+  desc: {
+    label: "Description",
+    type: "text",
+    placeholder: "Enter Expense Description",
+  },
+  amount: {
+    label: "Amount",
+    type: "number",
+    placeholder: "Enter Expense Amount",
+  },
+};
 
-const Locations = () => {
+const Expenses = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
-  const [locationsData, setLocationsData] = useState(null);
-  const [totalLocations, setTotalLocations] = useState(null);
+  const [expensesData, setExpensesData] = useState(null);
+  const [totalExpenses, setTotalExpenses] = useState(null);
+  const [totalExpenseAmount, setTotalExpenseAmount] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
-  //   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
+  const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();
 
   const toggleRowSelection = (id: string) => {
@@ -69,85 +83,99 @@ const Locations = () => {
     let is_deleted = false;
     try {
       if (selectedRows.length > 1) {
-        is_deleted = await locationsAPIPackage.bulkDelete(token, selectedRows);
+        is_deleted = await expensesAPIPackage.bulkDelete(token, selectedRows);
       } else {
         console.log("Deleting single invoice with ID:", selectedRows[0]);
-        is_deleted = await locationsAPIPackage.delete(token, selectedRows[0]);
+        is_deleted = await expensesAPIPackage.delete(token, selectedRows[0]);
       }
 
       if (is_deleted) {
-        toast.success("Locations deleted successfully.");
+        toast.success("Expenses deleted successfully.");
         setIsDeleted(!isDeleted);
         setSelectedRows([]);
       } else {
-        toast.error("Failed to delete locations.");
+        toast.error("Failed to delete expenses.");
       }
     } catch (error) {
-      toast.error("Failed to delete locations.");
+      toast.error("Failed to delete expenses.");
       console.error(error);
     }
   };
 
   const handleUpdateClick = () => {
     if (selectedRows.length !== 1) return
-    navigate("/locations/update-location", {
-      state: { location_id: selectedRows[0] },
+    navigate("/expenses/update-expense", {
+      state: { expense_id: selectedRows[0] },
     });
   };
 
-  const fetchLocations = async (searchQuery = null) => {
+  const fetchExpenses = async (searchQuery = null) => {
     if (!token) return;
 
     try {
-      const res = await locationsAPIPackage.list(token, searchQuery);
-      if (searchQuery) {
-        console.log(res)
-      }
+      const res = await expensesAPIPackage.list(token, searchQuery, true);
       if (res) {
-        setLocationsData(res);
+        setExpensesData(res);
       } else {
-        toast.error("Failed to fetch locations.");
+        toast.error("Failed to fetch expenses.");
       }
     } catch (error) {
-      toast.error("Failed to fetch locations.");
-      console.error("Error fetching locations:", error);
+      toast.error("Failed to fetch expenses.");
+      console.error("Error fetching expenses:", error);
     }
-  }
+  };
 
-  //   const handleFilterClick = (e) => {
-  //     e.preventDefault();
-  //     setFilterWindowOpen(!filterWindowOpen);
-  //   };
+  const handleFilterClick = (e) => {
+    e.preventDefault();
+    setFilterWindowOpen(!filterWindowOpen);
+  };
 
   useEffect(() => {
 
-    const fetchTotalLocations = async () => {
+    const fetchTotalExpenses = async () => {
       if (!token) return;
 
       try {
-        const res = await getTotalLocations(token);
+        const res = await getTotalExpensesMonthly(token);
         if (res) {
-          setTotalLocations(res);
+          setTotalExpenses(res);
         } else {
-          toast.error("Failed to fetch total locations.");
+          toast.error("Failed to fetch total expenses.");
         }
       } catch (error) {
-        toast.error("Failed to fetch total locations.");
-        console.error("Error fetching total locations:", error);
+        toast.error("Failed to fetch total expenses.");
+        console.error("Error fetching total expenses:", error);
       }
     }
 
-    fetchTotalLocations()
-    fetchLocations()
+    const fetchTotalExpenseAmount = async () => {
+      if (!token) return;
+      
+      try {
+        const res = await getTotalExpenseAmountMonthly(token);
+        if (res) {
+          setTotalExpenseAmount(res);
+        } else {
+          toast.error("Failed to fetch total expenses.");
+        }
+      } catch (error) {
+        toast.error("Failed to fetch total expenses.");
+        console.error("Error fetching total expenses:", error);
+      }
+    }
+    
+    fetchTotalExpenseAmount()
+    fetchTotalExpenses()
+    fetchExpenses();
   }, [token, isDeleted])
 
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
       if (searchTerm.trim() !== "") {
         const query = formatSearchQuery(searchTerm);
-        await fetchLocations(query);
+        await fetchExpenses(query);
       } else {
-        await fetchLocations();
+        await fetchExpenses();
       }
     }, 400); // wait 400ms after user stops typing
 
@@ -159,8 +187,9 @@ const Locations = () => {
       <Sidebar onCollapseChange={setSidebarCollapsed} />
 
       <div
-        className={`${sidebarCollapsed ? "ml-16" : "ml-64"
-          } transition-all duration-300 flex flex-col`}
+        className={`${
+          sidebarCollapsed ? "ml-16" : "ml-64"
+        } transition-all duration-300 flex flex-col`}
       >
         <Header />
 
@@ -176,9 +205,9 @@ const Locations = () => {
                   onClick={() => navigate("/")}
                 />
                 <div className="flex-1 items-center justify-between">
-                  <h1 className="text-2xl font-semibold">Locations Overview</h1>
+                  <h1 className="text-2xl font-semibold">Expenses Overview</h1>
                   <p className="text-sm text-muted-foreground">
-                    View and manage locations.
+                    View and manage expenses.
                   </p>
                 </div>
               </div>
@@ -189,15 +218,23 @@ const Locations = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">
-                Total Locations
+                Total Expenses this month
               </div>
-              <div className="text-3xl font-bold">{totalLocations}</div>
+              <div className="text-3xl font-bold">{totalExpenses}</div>
+            </div>
+            
+            <div className="bg-card rounded-lg p-6 border">
+              <div className="text-sm text-muted-foreground mb-2">
+                Total Expense Amount this month
+              </div>
+              <div className="text-3xl font-bold">{totalExpenseAmount}</div>
             </div>
           </div>
 
+
           {/* Sales Records Section */}
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Location Listing</h2>
+            <h2 className="text-xl font-semibold">Expense Listing</h2>
 
             {/* Search and Filter */}
             <div className="flex items-center justify-between mb-4">
@@ -205,13 +242,13 @@ const Locations = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
-                    placeholder="Search location by name, ID or Unit."
+                    placeholder="Search expense by name, ID or Unit."
                     className="pl-10 w-80"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                {/* <Button
+                <Button
                   variant="outline"
                   className="flex items-center space-x-2"
                   onClick={handleFilterClick}
@@ -219,7 +256,7 @@ const Locations = () => {
                 >
                   <Filter className="w-4 h-4" />
                   <span>Filter</span>
-                </Button> */}
+                </Button>
               </div>
 
               {/* Action Icons */}
@@ -228,10 +265,10 @@ const Locations = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  onClick={() => navigate("/locations/create-location")}
+                  onClick={() => navigate("/expenses/create-expense")}
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Create Location</span>
+                  <span>Create Expense</span>
                 </Button>
                 <Button
                   variant="outline"
@@ -257,26 +294,26 @@ const Locations = () => {
             </div>
           </div>
 
-          {locationsData && locationsData.length > 0 ? (
+          {expensesData && expensesData.length > 0 ? (
             <DataTable
               columns={cols}
-              data={locationsData}
+              data={expensesData}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
             />
           ) : null}
 
-          {/* <CustomFilter
+          <CustomFilter
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
-            dataFetcher={fetchLocations}
+            dataFetcher={fetchExpenses}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
-          /> */}
+          />
         </main>
       </div>
     </div>
   );
 };
 
-export default Locations;
+export default Expenses;

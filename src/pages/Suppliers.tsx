@@ -16,6 +16,7 @@ import {
   getSuppliersList,
   bulkDeleteSuppliers,
   deleteSupplier,
+  getTotalSuppliers
 } from "../../services/api";
 import {
   Eye,
@@ -56,10 +57,11 @@ const Suppliers = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [suppliersData, setSuppliersData] = useState(null);
+  const [totalSuppliers, setTotalSuppliers] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
-//   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
+  //   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();
 
   const toggleRowSelection = (id: string) => {
@@ -116,13 +118,31 @@ const Suppliers = () => {
     }
   };
 
-//   const handleFilterClick = (e) => {
-//     e.preventDefault();
-//     setFilterWindowOpen(!filterWindowOpen);
-//   };
+  //   const handleFilterClick = (e) => {
+  //     e.preventDefault();
+  //     setFilterWindowOpen(!filterWindowOpen);
+  //   };
 
   useEffect(() => {
-    fetchSuppliers();
+
+    const fetchTotalSuppliers = async (searchQuery = null) => {
+      if (!token) return;
+
+      try {
+        const res = await getTotalSuppliers(token, searchQuery);
+        if (res) {
+          setTotalSuppliers(res);
+        } else {
+          toast.error("Failed to fetch total suppliers.");
+        }
+      } catch (error) {
+        toast.error("Failed to fetch total suppliers.");
+        console.error("Error fetching total suppliers:", error);
+      }
+    }
+
+    fetchTotalSuppliers()
+    fetchSuppliers()
   }, [token, isDeleted])
 
   useEffect(() => {
@@ -143,9 +163,8 @@ const Suppliers = () => {
       <Sidebar onCollapseChange={setSidebarCollapsed} />
 
       <div
-        className={`${
-          sidebarCollapsed ? "ml-16" : "ml-64"
-        } transition-all duration-300 flex flex-col`}
+        className={`${sidebarCollapsed ? "ml-16" : "ml-64"
+          } transition-all duration-300 flex flex-col`}
       >
         <Header />
 
@@ -176,32 +195,7 @@ const Suppliers = () => {
               <div className="text-sm text-muted-foreground mb-2">
                 Total Suppliers
               </div>
-              <div className="text-3xl font-bold">PKR 7,000</div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Completed
-              </div>
-              <div className="text-3xl font-bold text-green-600">3</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Sales completed
-              </div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Pending</div>
-              <div className="text-3xl font-bold text-yellow-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Awaiting processing
-              </div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Cancelled
-              </div>
-              <div className="text-3xl font-bold text-red-600">1</div>
-              <div className="text-sm text-muted-foreground mt-1">
-                Cancelled orders
-              </div>
+              <div className="text-3xl font-bold">{totalSuppliers}</div>
             </div>
           </div>
 
