@@ -312,9 +312,9 @@ const Sales = () => {
                 Total Sales Today
               </div>
               <div className="text-3xl font-bold">PKR {totalSalesDaily}</div>
-              <div className="text-sm text-green-600 mt-1">
+              {/* <div className="text-sm text-green-600 mt-1">
                 +12% from last yesterday
-              </div>
+              </div> */}
             </div>
             
             <div className="bg-card rounded-lg p-6 border">
@@ -322,9 +322,9 @@ const Sales = () => {
                 Total Invoices Today
               </div>
               <div className="text-3xl font-bold">{totalInvoicesDaily}</div>
-              <div className="text-sm text-green-600 mt-1">
+              {/* <div className="text-sm text-green-600 mt-1">
                 +12% from last month
-              </div>
+              </div> */}
             </div>
             
             <div className="bg-card rounded-lg p-6 border">
@@ -332,9 +332,9 @@ const Sales = () => {
                 Total Items Sold Today
               </div>
               <div className="text-3xl font-bold">{totalItemsSoldDaily}</div>
-              <div className="text-sm text-green-600 mt-1">
+              {/* <div className="text-sm text-green-600 mt-1">
                 +12% from last year
-              </div>
+              </div> */}
             </div>
             
           </div>

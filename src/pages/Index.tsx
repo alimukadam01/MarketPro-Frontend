@@ -199,10 +199,10 @@ const Index = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Metrics Cards Column */}
             <div className="grid grid-cols-1 gap-4">
-              <MetricCard title="Net Inventory Value" value={`PKR ${totalInventoryValue}`} />
-              <MetricCard title="Total Sales Today" value={`PKR ${totalSalesDaily}`} />
-              <MetricCard title="Average Order Value" value={`PKR ${avgOrderValue}`} />
-              <MetricCard title="Total Purchases" value={`PKR ${totalPurchases}`} />
+              <MetricCard title="Net Inventory Value" value={`PKR ${totalInventoryValue? totalInventoryValue: 0}`} />
+              <MetricCard title="Total Sales Today" value={`PKR ${totalSalesDaily? totalSalesDaily: 0}`} />
+              <MetricCard title="Average Order Value" value={`PKR ${avgOrderValue? avgOrderValue: 0}`} />
+              <MetricCard title="Total Purchases" value={`PKR ${totalPurchases? totalPurchases: 0}`} />
             </div>
 
             <RecentSales recentSales={recentSales} />
