@@ -9,7 +9,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
 
-export default function DynamicBreadcrumb() {
+export default function DynamicBreadCrumb() {
   const location = useLocation();
   const pathnames = location.pathname.split("/").filter(Boolean);
 

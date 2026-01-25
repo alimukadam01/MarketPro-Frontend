@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
 import { PDFDownloadLink } from "@react-pdf/renderer";
-import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
+import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   getStatusColor,
   getPaymentStatusColor,

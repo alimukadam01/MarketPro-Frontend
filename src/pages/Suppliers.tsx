@@ -7,7 +7,7 @@ import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
-import DynamicBreadCrumb from "@/components/layout/DynamicBreadcrumb";
+import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   formatSearchQuery,
 } from "../../services/utils";
