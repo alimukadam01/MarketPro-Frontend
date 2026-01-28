@@ -12,6 +12,7 @@ import {
   Truck,
   Users,
   MapPin,
+  Wallet2,
 } from "lucide-react";
 import {
   transformProduct,
@@ -457,6 +458,53 @@ function SearchLocations({ data, toggleResults }) {
   );
 }
 
+function SearchExpenses({ data, toggleResults }) {
+  const expenses = data
+  const navigate = useNavigate()
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-3">
+        <Wallet2 className="h-4 w-4 text-primary" />
+        <h3 className="font-semibold text-sm text-foreground">Expenses</h3>
+      </div>
+      <div className="space-y-2">
+        {expenses.map((expense) => (
+          <div
+            key={expense.id}
+            className="p-3 rounded-md hover:bg-accent cursor-pointer transition-colors"
+            onClick={() =>{
+              toggleResults(false)
+              navigate("/expenses/update-expense", {
+                state: {
+                  expense_id: expense.id,
+                },
+                replace: true,
+              })
+            }}
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium text-sm text-foreground">
+                  {expense.name}
+                </p>
+                <p className="text-xs text-muted-foreground">{expense.desc}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-foreground">
+                  PKR {expense.amount}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+
 function SearchItemsProvider({ result, toggleResults }) {
   if (result.count == 0) {
     return;
@@ -531,6 +579,14 @@ function SearchItemsProvider({ result, toggleResults }) {
       return (
         <div>
           <SearchLocations data={result.results} toggleResults={toggleResults} />
+          <Separator className="my-4"/>
+        </div>
+    )
+
+    case "Expense":
+      return (
+        <div>
+          <SearchExpenses data={result.results} toggleResults={toggleResults} />
           <Separator className="my-4"/>
         </div>
     )

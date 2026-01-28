@@ -63,8 +63,8 @@ const Expenses = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [expensesData, setExpensesData] = useState(null);
-  const [totalExpenses, setTotalExpenses] = useState(null);
-  const [totalExpenseAmount, setTotalExpenseAmount] = useState(null);
+  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [totalExpenseAmount, setTotalExpenseAmount] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
@@ -137,7 +137,7 @@ const Expenses = () => {
 
       try {
         const res = await getTotalExpensesMonthly(token);
-        if (res) {
+        if (res !== null) {
           setTotalExpenses(res);
         } else {
           toast.error("Failed to fetch total expenses.");
@@ -153,7 +153,7 @@ const Expenses = () => {
       
       try {
         const res = await getTotalExpenseAmountMonthly(token);
-        if (res) {
+        if (res !== null) {
           setTotalExpenseAmount(res);
         } else {
           toast.error("Failed to fetch total expenses.");

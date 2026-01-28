@@ -59,8 +59,8 @@ const InventoryOverview = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [selectedRows, setSelectedRows] = useState([])
   const [inventoryData, setInventoryData] = useState(null)
-  const [totalInventoryValue, setTotalInventoryValue] = useState(null)
-  const [totalRestocksReq, setTotalRestocksReq] = useState(null)
+  const [totalInventoryValue, setTotalInventoryValue] = useState(0)
+  const [totalRestocksReq, setTotalRestocksReq] = useState(0)
   const [searchTerm, setSearchTerm] = useState(null);
   const { token } = useAuth() || null
   const businessId = localStorage.getItem("mp-business-id") || null
@@ -134,7 +134,7 @@ const InventoryOverview = () => {
 
       try {
         const res = await getTotalInventoryValue(token)
-        if (res) {
+        if (res !== null) {
           setTotalInventoryValue(res)
         } else {
           toast.error("Failed to fetch Total Inventory Value.")
@@ -150,7 +150,7 @@ const InventoryOverview = () => {
 
       try {
         const res = await getTotalRestocksReq(token)
-        if (res) {
+        if (res !== null) {
           setTotalRestocksReq(res)
         } else {
           toast.error("Failed to fetch Total Inventory Value.")
@@ -211,7 +211,7 @@ const InventoryOverview = () => {
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">Total Inventory Value</div>
               <div className="text-3xl font-bold">PKR {totalInventoryValue}</div>
-              <div className="text-sm text-green-600 mt-1">+12% from last month</div>
+              {/* <div className="text-sm text-green-600 mt-1">+12% from last month</div> */}
             </div>
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">Total Restocks Required</div>

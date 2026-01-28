@@ -118,7 +118,7 @@ const Login = () => {
               )}
             />
 
-            <div className="flex items-center justify-between">
+            {/* <div className="flex items-center justify-between">
               <FormField
                 control={form.control}
                 name="remember"
@@ -143,7 +143,7 @@ const Login = () => {
               >
                 Forgot password?
               </Link>
-            </div>
+            </div> */}
 
             <Button type="submit" className="w-full">
               Sign In
@@ -151,14 +151,14 @@ const Login = () => {
           </form>
         </Form>
 
-        <div className="mt-6 text-center">
+        {/* <div className="mt-6 text-center">
           <p className="text-sm text-muted-foreground">
             Don't have an account?{" "}
             <Link to="/register" className="text-primary hover:underline font-medium">
               Sign up
             </Link>
           </p>
-        </div>
+        </div> */}
       </div>
     </div>
   );

@@ -57,7 +57,7 @@ const Suppliers = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [suppliersData, setSuppliersData] = useState(null);
-  const [totalSuppliers, setTotalSuppliers] = useState(null);
+  const [totalSuppliers, setTotalSuppliers] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
@@ -130,7 +130,7 @@ const Suppliers = () => {
 
       try {
         const res = await getTotalSuppliers(token, searchQuery);
-        if (res) {
+        if (res!==null) {
           setTotalSuppliers(res);
         } else {
           toast.error("Failed to fetch total suppliers.");

@@ -6,8 +6,7 @@ import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
-  formatSearchQuery,
-  transformLocation
+  formatSearchQuery
 } from "../../services/utils";
 import {
   locationsAPIPackage,
@@ -50,7 +49,7 @@ const Locations = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [locationsData, setLocationsData] = useState(null);
-  const [totalLocations, setTotalLocations] = useState(null);
+  const [totalLocations, setTotalLocations] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
@@ -126,7 +125,7 @@ const Locations = () => {
 
       try {
         const res = await getTotalLocations(token);
-        if (res) {
+        if (res!==null) {
           setTotalLocations(res);
         } else {
           toast.error("Failed to fetch total locations.");

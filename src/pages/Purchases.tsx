@@ -116,10 +116,10 @@ const Purchases = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [selectedRows, setSelectedRows] = useState([])
   const [purchasesData, setPurchasesData] = useState(null)
-  const [totalPurchasesMonthly, setTotalPurchasesMonthly] = useState(null)
-  const [totalPurchaseInvoicesMonthly, setTotalPurchaseInvoicesMonthly] = useState(null)
-  const [totalPendingPurchaseInvoices, setTotalPendingPurchaseInvoices] = useState(null)
-  const [totalPendingPayment, setTotalPendingPayment] = useState(null)
+  const [totalPurchasesMonthly, setTotalPurchasesMonthly] = useState(0)
+  const [totalPurchaseInvoicesMonthly, setTotalPurchaseInvoicesMonthly] = useState(0)
+  const [totalPendingPurchaseInvoices, setTotalPendingPurchaseInvoices] = useState(0)
+  const [totalPendingPayment, setTotalPendingPayment] = useState(0)
   const [searchTerm, setSearchTerm] = useState(null)
   const { token } = useAuth() || null
   const [isDeleted, setIsDeleted] = useState(false)
@@ -192,7 +192,7 @@ const Purchases = () => {
 
       try {
         const res = await getTotalPurchasesMonthly(token)
-        if (res) {
+        if (res!== null) {
           setTotalPurchasesMonthly(res)
         } else {
           toast.error("Failed to fetch total purchase data.")
@@ -208,7 +208,7 @@ const Purchases = () => {
 
       try {
         const res = await getTotalPurchaseInvoicesMonthly(token)
-        if (res) {
+        if (res!== null) {
           setTotalPurchaseInvoicesMonthly(res)
         } else {
           toast.error("Failed to fetch total monthly purchase invoices.")
@@ -224,7 +224,7 @@ const Purchases = () => {
 
       try {
         const res = await getTotalPendingPurchaseInvoices(token)
-        if (res) {
+        if (res!== null) {
           setTotalPendingPurchaseInvoices(res)
         } else {
           toast.error("Failed to fetch total pending purchase invoices.")
@@ -240,7 +240,7 @@ const Purchases = () => {
 
       try {
         const res = await getTotalPendingPayment(token)
-        if (res) {
+        if (res!== null) {
           setTotalPendingPayment(res)
         } else {
           toast.error("Failed to fetch total pending payment.")
@@ -303,7 +303,7 @@ const Purchases = () => {
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">Total Purchase Expense this month</div>
               <div className="text-3xl font-bold">PKR {totalPurchasesMonthly}</div>
-              <div className="text-sm text-green-600 mt-1">+12% from last month</div>
+              {/* <div className="text-sm text-green-600 mt-1">+12% from last month</div> */}
             </div>
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">Total Purchase Invoices this month</div>

@@ -136,9 +136,9 @@ const Sales = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [salesData, setSalesData] = useState(null);
-  const [totalSalesDaily, setTotalSalesDaily] = useState(null);
-  const [totalItemsSoldDaily, setTotalItemsSoldDaily] = useState(null);
-  const [totalInvoicesDaily, setTotalInvoicesDaily] = useState(null);
+  const [totalSalesDaily, setTotalSalesDaily] = useState(0);
+  const [totalItemsSoldDaily, setTotalItemsSoldDaily] = useState(0);
+  const [totalInvoicesDaily, setTotalInvoicesDaily] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);

@@ -53,7 +53,7 @@ const Products = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [productsData, setProductsData] = useState(null);
-  const [totalProducts, setTotalProducts] = useState(null);
+  const [totalProducts, setTotalProducts] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
@@ -126,7 +126,7 @@ const Products = () => {
 
       try {
         const res = await getTotalProducts(token);
-        if (res) {
+        if (res !== null) {
           setTotalProducts(res);
         } else {
           toast.error("Failed to fetch total products.");

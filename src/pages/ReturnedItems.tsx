@@ -59,7 +59,7 @@ const ReturnedItems = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [returnedItemsData, setReturnedItemsData] = useState(null);
-  const [totalReturnedItems, setTotalReturnedItems] = useState(null);
+  const [totalReturnedItems, setTotalReturnedItems] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
@@ -135,7 +135,7 @@ const ReturnedItems = () => {
 
       try {
         const res = await getTotalReturnedItems(token);
-        if (res) {
+        if (res!==null) {
           setTotalReturnedItems(res);
         } else {
           toast.error("Failed to fetch total returned items.");

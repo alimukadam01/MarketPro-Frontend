@@ -20,7 +20,6 @@ import {
 } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import {
-  Eye,
   ArrowLeft,
   Plus,
   Filter,
@@ -58,7 +57,7 @@ const Customers = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [customersData, setCustomersData] = useState(null);
-  const [totalCustomers, setTotalCustomers] = useState(null);
+  const [totalCustomers, setTotalCustomers] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const [isDeleted, setIsDeleted] = useState(false);
@@ -131,7 +130,7 @@ const Customers = () => {
 
       try {
         const res = await getTotalCustomers(token);
-        if (res) {
+        if (res!==null) {
           setTotalCustomers(res);
         } else {
           toast.error("Failed to fetch total customers.");
