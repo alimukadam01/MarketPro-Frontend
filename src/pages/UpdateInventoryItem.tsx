@@ -26,6 +26,8 @@ import { set } from "date-fns";
 const UpdateInventoryItem = () => {
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
+    const [products, setProducts] = useState([])
+    const [productVariants, setProductVariants] = useState([])
     const [locations, setLocations] = useState([])
     const { token } = useAuth()
     const businessId = localStorage.getItem("mp-business-id")
@@ -64,7 +66,7 @@ const UpdateInventoryItem = () => {
             quantity: data.quantity || 0,
             track_code: data.track_code || "",
             notes: data.notes || "",
-            product: data.product || 0,
+            product: data.product.id || 0,
             productVariant: data.product_var || null,
             location: data.location || 0,
             quantity_on_hand: data.quantity_on_hand || 0,
@@ -78,6 +80,7 @@ const UpdateInventoryItem = () => {
     const onInventoryItemUpdate = async (data) => {
 
         const ReqData = {
+            product_var: parseInt(data.productVariant),
             location: parseInt(data.location),
             quantity: parseInt(data.quantity),
             unit_cost: parseFloat(data.unit_cost),
@@ -103,6 +106,40 @@ const UpdateInventoryItem = () => {
 
     useEffect(() => {
 
+        const fetchProducts = async () => {
+            if (!token) return;
+
+            try {
+                const products = await getProductsList(token)
+                if (products) {
+                    const productMap = createIdMap(products)
+                    setProducts(productMap)
+                } else {
+                    toast.error("Failed to fetch products")
+                }
+            } catch (error) {
+                console.log("Error fetching products:", error)
+                toast.error("Failed to fetch products")
+            }
+        }
+
+        const fetchProductVariants = async () => {
+            if (!token) return;
+
+            try {
+                const productVariants = await getProductVariantsList(token)
+                if (productVariants) {
+                    const productVariantMap = createIdMap(productVariants)
+                    setProductVariants(productVariantMap)
+                } else {
+                    toast.error("Failed to fetch products")
+                }
+            } catch (error) {
+                console.log("Error fetching products:", error)
+                toast.error("Failed to fetch products")
+            }
+        }
+
         const fetchLocations = async () => {
             try {
                 const locations = await getLocationsList(token)
@@ -118,6 +155,8 @@ const UpdateInventoryItem = () => {
             }
         }
 
+        fetchProductVariants()
+        fetchProducts()
         fetchLocations()
     }, [token])
 
@@ -139,7 +178,12 @@ const UpdateInventoryItem = () => {
         }
 
         fetchInventoryItem()
-    }, [item_id])
+    }, [products, item_id])
+
+    {
+        console.log(watch("product"))
+        console.log(products[watch("product")])
+    }
 
     return (
         <div className="min-h-screen bg-background">
@@ -165,16 +209,29 @@ const UpdateInventoryItem = () => {
                                         <Input
                                             name="product"
                                             disabled={true}
-                                            value={watch("product")?.name || ""}
+                                            value={products[watch("product")]?.name}
                                         />
                                     </div>
 
                                     <div className="w-[50%] space-y-1">
                                         <Label htmlFor="productVariant">Select Product Variant</Label>
-                                        <Input
-                                            name="product"
-                                            disabled={true}
-                                            value={watch("productVariant")? `${watch("productVariant").product.name} (${watch("productVariant").name})`: ""}
+                                        <Controller
+                                            name="productVariant"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select Product Variant" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {productVariants && Object.keys(productVariants).length > 0 && Object.entries(productVariants).map(([key, item]) => (
+                                                            <SelectItem key={key} value={key}>
+                                                                {item.product.name} ({item.name})
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
                                         />
                                     </div>
                                     <div className="w-[50%] space-y-1">
