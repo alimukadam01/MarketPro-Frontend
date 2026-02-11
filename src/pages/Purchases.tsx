@@ -113,7 +113,7 @@ const filter_fields_mapper = {
 };
 
 const Purchases = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [selectedRows, setSelectedRows] = useState([])
   const [purchasesData, setPurchasesData] = useState(null)
   const [totalPurchasesMonthly, setTotalPurchasesMonthly] = useState(0)

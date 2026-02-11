@@ -36,7 +36,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onCollapseChange }: SidebarProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
   const { logout } = useAuth()

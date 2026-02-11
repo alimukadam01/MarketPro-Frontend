@@ -54,7 +54,7 @@ const filter_fields_mapper = {
 };
 
 const Customers = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [customersData, setCustomersData] = useState(null);
   const [totalCustomers, setTotalCustomers] = useState(0);

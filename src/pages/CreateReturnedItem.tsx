@@ -18,7 +18,7 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
 const CreateReturnedItem = () => {
 
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [units, setUnits] = useState([])
     const { token } = useAuth()
     const navigate = useNavigate()

@@ -25,13 +25,12 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
 const CreatePurchaseInvoice = () => {
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [invoiceItems, setInvoiceItems] = useState([])
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const { token } = useAuth()
-  const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
 
   // react-hook-form setup
@@ -58,7 +57,6 @@ const CreatePurchaseInvoice = () => {
   const [taxType, setTaxType] = useState("percentage")
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
   const totalAmount = subtotal + taxAmount
-  const selectedProduct = products[watch("newItemProduct")]
 
   const onSubmit = async (data) => {
 

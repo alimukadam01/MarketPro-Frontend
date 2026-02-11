@@ -133,7 +133,7 @@ const filter_fields_mapper = {
 };
 
 const Sales = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [salesData, setSalesData] = useState(null);
   const [totalSalesDaily, setTotalSalesDaily] = useState(0);

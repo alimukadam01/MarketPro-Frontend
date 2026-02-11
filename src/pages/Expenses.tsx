@@ -60,7 +60,7 @@ const filter_fields_mapper = {
 };
 
 const Expenses = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [expensesData, setExpensesData] = useState(null);
   const [totalExpenses, setTotalExpenses] = useState(0);

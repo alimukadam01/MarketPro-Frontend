@@ -1,7 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import * as DialogUI from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import { toast } from "sonner";
 import { useAuth } from "../../../services/AuthProvider"
 import { returnSalesInvoiceItem } from "../../../services/api";
@@ -13,8 +16,12 @@ function ReturnItem({
   setOpen,
   setItemReturned,
 }) {
+
+  {console.log(invoiceItem)}
+
   const { token } = useAuth();
-  const [quantity, setQuantity] = useState(0);
+  const [quantity, setQuantity] = useState(invoiceItem?.quantity);
+  const [isDamaged, setIsDamaged] = useState(false);
   const [reason, setReason] = useState("");
 
   const onReturnItemClick = async () => {
@@ -23,7 +30,7 @@ function ReturnItem({
         token,
         invoiceId,
         invoiceItem.id,
-        //quantity,
+        quantity,
         reason
       );
 
@@ -41,6 +48,10 @@ function ReturnItem({
     }
   };
 
+  useEffect(()=>{
+    setQuantity(invoiceItem?.quantity)
+  }, invoiceItem)
+
   return (
     <DialogUI.Dialog open={!!open} onOpenChange={setOpen}>
       <DialogUI.DialogContent className="max-w-2xl">
@@ -49,6 +60,21 @@ function ReturnItem({
         </DialogUI.DialogHeader>
 
         <div className="flex flex-wrap gap-4 my-4">
+          <Label>Quantity</Label>
+          <Input
+            id="quantity"
+            type="number"
+            value={quantity}
+            onChange={(e) => setQuantity(e.target.value)}
+            placeholder="Quantity"
+          />
+
+          <Label>Is Product Damaged?</Label>
+          <Checkbox id="is_damaged" value={isDamaged} onChange={(e) => setIsDamaged(e.target.value)} />
+        </div>
+
+        <div className="flex flex-wrap gap-4 my-4">
+          <Label>Description</Label>
           <Textarea
             id="reason"
             value={reason}

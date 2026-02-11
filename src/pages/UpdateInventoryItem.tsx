@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ChartNoAxesColumnDecreasing, Plus, Trash2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
@@ -16,6 +15,7 @@ import {
 import { useAuth } from "../../services/AuthProvider"
 import {
     getProductsList,
+    getProductVariantsList,
     getLocationsList,
     updateInventoryItem,
     getInventoryItemDetail
@@ -25,8 +25,7 @@ import { set } from "date-fns";
 
 const UpdateInventoryItem = () => {
 
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-    const [products, setProducts] = useState([])
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [locations, setLocations] = useState([])
     const { token } = useAuth()
     const businessId = localStorage.getItem("mp-business-id")
@@ -44,9 +43,10 @@ const UpdateInventoryItem = () => {
         defaultValues: {
             quantity: 0,
             track_code: "",
-            product: "0",
+            product: null,
+            productVariant: null,
             notes: "",
-            location: "0",
+            location: null,
             quantity_on_hand: "0",
             quantity_reserved: "0",
             unit_cost: 0.0,
@@ -64,7 +64,8 @@ const UpdateInventoryItem = () => {
             quantity: data.quantity || 0,
             track_code: data.track_code || "",
             notes: data.notes || "",
-            product: data.product.id || 0,
+            product: data.product || 0,
+            productVariant: data.product_var || null,
             location: data.location || 0,
             quantity_on_hand: data.quantity_on_hand || 0,
             quantity_reserved: data.quantity_reserved || 0,
@@ -77,8 +78,7 @@ const UpdateInventoryItem = () => {
     const onInventoryItemUpdate = async (data) => {
 
         const ReqData = {
-            product: parseInt(data.newItemProduct),
-            location: parseInt(data.newItemLocation),
+            location: parseInt(data.location),
             quantity: parseInt(data.quantity),
             unit_cost: parseFloat(data.unit_cost),
             unit_price: parseFloat(data.unit_price),
@@ -86,8 +86,6 @@ const UpdateInventoryItem = () => {
             quantity_on_hand: parseInt(data.quantity_on_hand),
             quantity_reserved: parseInt(data.quantity_reserved)
         }
-
-        console.log("Request data for updating inventory item: ", ReqData)
 
         try {
             const success = await updateInventoryItem(token, businessId, item_id, ReqData)
@@ -105,23 +103,6 @@ const UpdateInventoryItem = () => {
 
     useEffect(() => {
 
-        const fetchProducts = async () => {
-            if (!token) return;
-
-            try {
-                const products = await getProductsList(token)
-                if (products) {
-                    const productMap = createIdMap(products)
-                    setProducts(productMap)
-                } else {
-                    toast.error("Failed to fetch products")
-                }
-            } catch (error) {
-                console.log("Error fetching products:", error)
-                toast.error("Failed to fetch products")
-            }
-        }
-        
         const fetchLocations = async () => {
             try {
                 const locations = await getLocationsList(token)
@@ -137,7 +118,6 @@ const UpdateInventoryItem = () => {
             }
         }
 
-        fetchProducts()
         fetchLocations()
     }, [token])
 
@@ -159,7 +139,7 @@ const UpdateInventoryItem = () => {
         }
 
         fetchInventoryItem()
-    }, [products, item_id])
+    }, [item_id])
 
     return (
         <div className="min-h-screen bg-background">
@@ -182,23 +162,19 @@ const UpdateInventoryItem = () => {
                                 <div className="flex gap-6 mb-6">
                                     <div className="w-[50%] space-y-1">
                                         <Label htmlFor="product">Select Product</Label>
-                                        <Controller
+                                        <Input
                                             name="product"
-                                            control={control}
-                                            render={({ field }) => (
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Select product" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {products && Object.keys(products).length > 0 && Object.entries(products).map(([key, item]) => (
-                                                            <SelectItem key={key} value={key}>
-                                                                {products[key].name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            )}
+                                            disabled={true}
+                                            value={watch("product")?.name || ""}
+                                        />
+                                    </div>
+
+                                    <div className="w-[50%] space-y-1">
+                                        <Label htmlFor="productVariant">Select Product Variant</Label>
+                                        <Input
+                                            name="product"
+                                            disabled={true}
+                                            value={watch("productVariant")? `${watch("productVariant").product.name} (${watch("productVariant").name})`: ""}
                                         />
                                     </div>
                                     <div className="w-[50%] space-y-1">

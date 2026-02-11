@@ -46,7 +46,7 @@ const cols = [
 // };
 
 const Locations = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [locationsData, setLocationsData] = useState(null);
   const [totalLocations, setTotalLocations] = useState(0);

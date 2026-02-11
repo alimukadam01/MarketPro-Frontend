@@ -16,11 +16,12 @@ export function ChartCard({ title, data, color = "#8b5cf6" }: ChartCardProps) {
       <CardContent>
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
+            <LineChart data={data} >
               <XAxis 
                 dataKey="day"
                 tick={false}
                 axisLine={false}
+                allowDataOverflow={false}
               />
               <YAxis hide />
               <Line 
@@ -28,7 +29,8 @@ export function ChartCard({ title, data, color = "#8b5cf6" }: ChartCardProps) {
                 dataKey="value" 
                 stroke={color}
                 strokeWidth={2}
-                dot={false}
+                dot={true}
+                activeDot={true}
               />
             </LineChart>
           </ResponsiveContainer>

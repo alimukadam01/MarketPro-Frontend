@@ -50,7 +50,7 @@ const filter_fields_mapper = {
 };
 
 const Products = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [productsData, setProductsData] = useState(null);
   const [totalProducts, setTotalProducts] = useState(0);
@@ -69,17 +69,18 @@ const Products = () => {
   const handleDeletion = async () => {
     if (selectedRows.length <= 0) return;
 
-    let is_deleted = false;
+    let is_deleted = false
+    let is_multiple = false
     try {
       if (selectedRows.length > 1) {
-        is_deleted = await bulkDeleteProducts(token, selectedRows);
+        is_deleted = await bulkDeleteProducts(token, selectedRows)
+        is_multiple = true
       } else {
-        console.log("Deleting single invoice with ID:", selectedRows[0]);
-        is_deleted = await deleteProduct(token, selectedRows[0]);
+        is_deleted = await deleteProduct(token, selectedRows[0])
       }
 
       if (is_deleted) {
-        toast.success("Products deleted successfully.");
+        toast.success(`Product${is_multiple?'s': ''} deleted successfully.`);
         setIsDeleted(!isDeleted);
         setSelectedRows([]);
       } else {

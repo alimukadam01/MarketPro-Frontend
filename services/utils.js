@@ -115,7 +115,7 @@ export function transformInventoryItem(data) {
 
   return {
     id: data.id,
-    product: data.product.name,
+    product: data.product_var? `${data.product_var.product.name} (${data.product_var.name})` :data.product.name,
     quantity: data.quantity,
     quantity_on_hand: data.quantity_on_hand,
     quantity_reserved: data.quantity_reserved,

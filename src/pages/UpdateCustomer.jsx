@@ -22,7 +22,7 @@ import { getCitiesList, getCustomerDetail, updateCustomer } from "../../services
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
 const UpdateCustomer = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [cities, setCities] = useState([]);
   const { token } = useAuth();
   const navigate = useNavigate();

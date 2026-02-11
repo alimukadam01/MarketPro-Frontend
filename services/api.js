@@ -8,8 +8,8 @@ import {
     formatSearchQuery
 } from "./utils";
 
-// const BASE_URL = "http://localhost:8000/"
-const BASE_URL = "https://backend.market-pro.pk/"
+const BASE_URL = "http://localhost:8000/"
+// const BASE_URL = "https://backend.market-pro.pk/"
 
 const apiClient = axios.create({
     baseURL: BASE_URL,
@@ -408,6 +408,26 @@ export const getAvailableProductsList = async (token, businessId) => {
     }
 }
 
+export const getProductVariantTypesList = async (token) => {
+    try {
+        const res = await apiClient.get(`/product-variant-types/`, {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status === 200) {
+            return res.data
+        }
+
+        console.log("There was an error fetching the product variants list.")
+        return []
+    } catch (error) {
+        console.log("There was an error fetching the product variants list: ", error)
+        return []
+    }
+}
+
 export const getProductDetail = async (token, productId) => {
     try{
         const res = await apiClient.get(`/products/${productId}/`, {
@@ -501,6 +521,60 @@ export const bulkDeleteProducts = async (token, productIds) => {
         return false
     } catch (error) {
         console.log("There was an error deleting products: ", error)
+        return false
+    }
+}
+
+export const getProductVariantsList = async (token) => {
+    try {
+        const res = await apiClient.get("/product-variants/", {
+            headers: {
+                Authorization: token
+            }
+        })
+
+        if (res.status === 200) {
+            return res.data
+        }
+
+        console.log("There was an error fetching the product list.")
+        return []
+    } catch (error) {
+        console.log("There was an error fetching the product list: ", error)
+        return []
+    }
+}
+
+export const postProductAndVariants = async (token, productData) => {
+    try {
+        const res = await apiClient.post("/products/create-with-variants/", productData, {
+            headers: {
+                Authorization: token
+            }
+        })
+        if (res.status === 201) {
+            return true
+        }
+        return false
+    } catch (error) {
+        console.log(error)
+        return false
+    }
+}
+
+export const updateProductAndVariants = async (token, productId, productData) => {
+    try {
+        const res = await apiClient.post(`/products/${productId}/update-with-variants/`, productData, {
+            headers: {
+                Authorization: token
+            }
+        })
+        if (res.status === 201) {
+            return true
+        }
+        return false
+    } catch (error) {
+        console.log(error)
         return false
     }
 }
@@ -775,9 +849,10 @@ export const bulkDeleteSalesInvoice = async (token, invoiceIds) => {
 }
 
 // quantity removed for now
-export const returnSalesInvoiceItem = async (token, invoiceId, itemId, reason) => {
+export const returnSalesInvoiceItem = async (token, invoiceId, itemId, quantity, reason) => {
     try{
         const res = await apiClient.post(`sales-invoices/${invoiceId}/items/${itemId}/return/`, {
+            quantity: quantity,
             reason: reason
         }, {
             headers: {

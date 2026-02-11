@@ -11,8 +11,10 @@ import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { createIdMap } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
+import { Plus, RotateCcwIcon, X } from "lucide-react";
 import {
     getProductsList,
+    getProductVariantsList,
     getUnitsList,
     getLocationsList,
     postProduct,
@@ -23,11 +25,13 @@ import { set } from "date-fns";
 
 const CreateInventoryItem = () => {
 
-    const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [productCreated, setProductCreated] = useState(false)
-    const [invoiceItems, setInvoiceItems] = useState([])
-    const [selectedRows, setSelectedRows] = useState([])
     const [products, setProducts] = useState([])
+    const [productVariants, setProductVariants] = useState([])
+    const [productVariantTypes, setProductVariantTypes] = useState([])
+    const [newProductVariants, setNewProductVariants] = useState([])
+    const [currentAttributes, setCurrentAttributes] = useState({})
     const [units, setUnits] = useState([])
     const [locations, setLocations] = useState([])
     const { token } = useAuth()
@@ -50,16 +54,14 @@ const CreateInventoryItem = () => {
             unit_price: "0.0",
             reorder_level: "0",
             newItemProduct: "",
+            newItemProductVariant: "",
             newItemQuantity: 0,
             newItemLocation: "",
-            newItemCost: 0
+            newItemCost: 0,
+            productVariantAttr: "",
+            productVariantVal: ""
         },
     })
-
-    const tax = parseFloat(watch("tax") || 0)
-
-    const [taxType, setTaxType] = useState("percentage")
-    const selectedProduct = products[watch("newItemProduct")]
 
     const onProductCreate = async (data) => {
 
@@ -83,11 +85,12 @@ const CreateInventoryItem = () => {
             console.log("Error creating product:", error)
         }
     }
-    
+
     const onInventoryItemCreate = async (data) => {
 
         const ReqData = {
             product: parseInt(data.newItemProduct),
+            product_var: parseInt(data.newItemProductVariant),
             location: parseInt(data.newItemLocation),
             quantity: parseInt(data.newItemQuantity),
             unit_cost: parseFloat(data.unit_cost),
@@ -113,24 +116,27 @@ const CreateInventoryItem = () => {
         }
     }
 
-    const addItem = (product, quantity, unit_cost) => {
-        if (product && quantity > 0) {
-            const selectedProduct = products[product]
-            const newInvoiceItem = {
-                id: invoiceItems.length + 1,
-                product: selectedProduct,
-                quantity,
-                unit_cost,
-                total: quantity * unit_cost,
-            }
-            setInvoiceItems([...invoiceItems, newInvoiceItem])
-            reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true })
-        }
+    const addProductVariantAttr = (productVariantAttr, productVariantVal) => {
+        if (!productVariantAttr || !productVariantVal) return;
+
+        const selectedVariantType = productVariantTypes[productVariantAttr]
+        setCurrentAttributes(prevAttributes => ({
+            ...prevAttributes,
+            [selectedVariantType.name]: productVariantVal, // add or update
+        }))
+        reset({ productVariantAttr: "", productVariantVal: "" }, { keepValues: true })
     }
 
-    const toggleRowSelection = (id) => {
-        setSelectedRows((prev) =>
-            prev.includes(id) ? prev.filter((rowId) => rowId !== id) : [...prev, id]
+    const addProductVariant = () => {
+        setProductVariants([...productVariants, {
+            "attributes": currentAttributes
+        }])
+
+        setCurrentAttributes(() =>
+            Object.keys(currentAttributes).reduce((acc, key) => {
+                acc[key] = ""
+                return acc
+            }, {})
         )
     }
 
@@ -148,6 +154,23 @@ const CreateInventoryItem = () => {
         } catch (error) {
             console.log("Error fetching products:", error)
             toast.error("Failed to fetch products")
+        }
+    }
+
+    const fetchProductVariants = async () => {
+        if (!token) return;
+
+        try {
+            const products = await getProductVariantsList(token)
+            if (products) {
+                const productMap = createIdMap(products)
+                setProductVariants(productMap)
+            } else {
+                toast.error("Failed to fetch product variants.")
+            }
+        } catch (error) {
+            console.log("Error fetching product variants:", error)
+            toast.error("Failed to fetch product  variants.")
         }
     }
 
@@ -183,6 +206,7 @@ const CreateInventoryItem = () => {
             }
         }
 
+        fetchProductVariants()
         fetchProducts()
         fetchUnits()
         fetchLocations()
@@ -190,11 +214,12 @@ const CreateInventoryItem = () => {
 
     useEffect(() => {
         if (productCreated) {
+            fetchProductVariants()
             fetchProducts()
             setProductCreated(false)
         }
     }, [productCreated])
-        
+
 
     return (
         <div className="min-h-screen bg-background">
@@ -207,136 +232,321 @@ const CreateInventoryItem = () => {
                     <DynamicBreadCrumb />
 
                     <div className="flex items-center justify-between">
-                    <form onSubmit={handleSubmit(onProductCreate)} className="flex flex-row w-[48%] gap-12">
-                        {/* First Column */}
-                        <div className="flex flex-col flex-wrap flex-1">
-                            <h2 className="text-lg font-semibold mb-6">Add New Product (Optional)</h2>
+                        {/*<form onSubmit={handleSubmit(onProductCreate)} className="flex flex-row w-[48%] gap-12">
+                            First Column
+                             <div className="flex flex-col flex-wrap flex-1">
+                                <h2 className="text-lg font-semibold mb-6">Add New Product (Optional)</h2>
 
-                            <div className="flex gap-6 mb-6">
-                                <div className="flex-1 space-y-1">
-                                    <Label htmlFor="product_name">Name</Label>
-                                    <Input id="product_name" type="text" {...register("product_name")} />
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="product_name">Name</Label>
+                                        <Input id="product_name" type="text" {...register("product_name")} />
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="unit">Unit</Label>
+                                        <Controller
+                                            name="unit"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select Unit"></SelectValue>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {units && Object.keys(units).length > 0 && Object.entries(units).map(([key, unit]) => (
+                                                            <SelectItem value={key} key={key}>
+                                                                {unit.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="flex-1 space-y-1">
-                                    <Label htmlFor="unit">Unit</Label>
-                                    <Controller
-                                        name="unit"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select Unit"></SelectValue>
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {units && Object.keys(units).length > 0 && Object.entries(units).map(([key, unit]) => (
-                                                        <SelectItem value={key} key={key}>
-                                                            {unit.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        )}
-                                    />
+
+                                <div className="mb-2 space-y-1">
+                                    <Label htmlFor="desc">Description</Label>
+                                    <Textarea id="desc" {...register("desc")} placeholder="Add product description here..." rows={6} />
+                                </div>
+
+                                <div className="flex flex-col flex-wrap flex-1">
+                                    {currentAttributes && Object.keys(currentAttributes).length > 0 && <div className="flex flex-col mb-2 gap-2">
+                                        {Object.entries(currentAttributes).map(([key, value], entryIndex) => (
+                                            <div
+                                                key={`${entryIndex}`}
+                                                className="flex w-full gap-4"
+                                            >
+                                                <div className="w-[50%] space-y-1">
+                                                    <Input
+                                                        id="productVariantKey"
+                                                        type="text"
+                                                        disabled={true}
+                                                        value={key}
+                                                    />
+                                                </div>
+
+                                                <div className="w-[50%] space-y-1">
+                                                    <Input
+                                                        id="productVariantVal"
+                                                        type="text"
+                                                        value={currentAttributes[key]}
+                                                        onChange={(e) => setCurrentAttributes((prev) => ({
+                                                            ...prev,
+                                                            [key]: e.target.value,   // update only this key
+                                                        }))
+                                                        }
+                                                    />
+                                                </div>
+
+                                                <div className="w-[5%] space-y-1">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        onClick={() =>
+                                                            setCurrentAttributes((prev) => Object.fromEntries(
+                                                                Object.entries(prev).filter(([attrKey]) => attrKey !== key)
+                                                            ))
+                                                        }
+                                                        className="w-full"
+                                                    >
+                                                        <X />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>}
+
+                                    {
+                                        Object.keys(currentAttributes).length < 3 &&
+                                        <div className="flex gap-4 mb-2 items-end">
+                                            <div className="w-[50%] space-y-1">
+                                                <Label htmlFor="productVariantAttr">Select Attribute</Label>
+                                                <Controller
+                                                    name="productVariantAttr"
+                                                    control={control}
+                                                    render={({ field }) => (
+                                                        <Select onValueChange={field.onChange} value={field.value}>
+                                                            <SelectTrigger><SelectValue placeholder="Select Attribute" /></SelectTrigger>
+                                                            <SelectContent>
+                                                                {productVariantTypes && Object.keys(productVariantTypes).length > 0 && Object.entries(productVariantTypes).map(([key, item]) => (
+                                                                    <SelectItem key={key} value={key}>
+                                                                        {item.name}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                />
+                                            </div>
+
+                                            <div className="w-[50%] space-y-1">
+                                                <Label htmlFor="productVariantVal">Value</Label>
+                                                <Input id="productVariantVal" type="text" {...register("productVariantVal")} />
+                                            </div>
+
+                                            {
+                                                Object.keys(currentAttributes).length != 0 &&
+                                                <div className="w-[5%]">
+
+                                                </div>
+                                            }
+
+
+                                        </div>
+                                    }
+
+                                    <div className="flex gap-4 mb-1">
+
+                                        <div className="w-[50%] flex items-end">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() =>
+                                                    addProductVariantAttr(watch("productVariantAttr"), watch("productVariantVal") || "")
+                                                }
+                                                className="w-full"
+                                                disabled={Object.keys(currentAttributes).length == 3 ? true : false}
+                                            >
+                                                {Object.keys(currentAttributes).length == 3 ? "Max. 3 attributes allowed" :
+                                                    <>
+                                                        <Plus className="h-4 w-4 mr-2" />
+                                                        Add Attribute
+                                                    </>}
+                                            </Button>
+                                        </div>
+
+                                        <div className="w-[50%] flex items-end">
+                                            <Button
+                                                type="button"
+                                                onClick={addProductVariant}
+                                                className="w-full"
+                                            >
+                                                <Plus className="h-4 w-4 mr-2" />
+                                                Create Variant
+                                            </Button>
+                                        </div>
+
+                                        {Object.keys(currentAttributes).length != 0 &&
+                                            <div className="w-[5%] space-y-1">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        setCurrentAttributes({})
+                                                    }
+                                                    className="w-full"
+                                                >
+                                                    <RotateCcwIcon />
+                                                </Button>
+                                            </div>
+                                        }
+                                    </div> */}
+
+                                    {/* Product Variants */}
+                                    {/* {productVariants && productVariants.length > 0 &&
+                                        <div className="mb-6">
+                                            <div className="space-y-[10px] flex flex-col-reverse gap-[2px] h-[250px] overflow-y-auto">
+
+                                                {productVariants.map((item, idx) => (
+                                                    <div
+                                                        key={`${item.id}-${idx}`}
+                                                        className="bg-card rounded-lg h-[35px] flex items-center px-4 gap-4 border border-border scrollbar-none"
+                                                    >
+                                                        <div>{idx + 1}.</div>
+                                                        {<div className="font-sm flex flex-1">
+                                                            {Object.values(item.attributes).join(" / ")}
+                                                        </div>}
+                                                        <Button
+                                                            type="button"
+                                                            variant="unstyled"
+                                                            className="p-[0] hover:"
+                                                            onClick={() => {
+                                                                setProductVariants(prev => prev.filter((_, i) => i !== idx))
+                                                            }}>
+                                                            <X cursor={'pointer'} />
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                                <h2 className="text-sm font-semibold mb-6">Product Variants</h2>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-auto">
+                                    <Button type="submit">Create Product And Variants</Button>
                                 </div>
                             </div>
+                                
+                        </form> */}
 
-                            <div className="mb-6 space-y-1">
-                                <Label htmlFor="desc">Description</Label>
-                                <Textarea id="desc" {...register("desc")} placeholder="Add product description here..." rows={6} />
+                        <form onSubmit={handleSubmit(onInventoryItemCreate)} className="flex flex-row w-[48%] gap-12">
+
+                            {/* Second Column */}
+                            <div className="flex flex-col flex-wrap flex-1">
+                                <h2 className="text-lg font-semibold mb-6">Add Inventory Item</h2>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="w-[50%] space-y-1">
+                                        <Label htmlFor="newItemProduct">Select Product</Label>
+                                        <Controller
+                                            name="newItemProduct"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select product" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {products && Object.keys(products).length > 0 && Object.entries(products).map(([key, item]) => (
+                                                            <SelectItem key={key} value={key}>
+                                                                {item.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="w-[50%] space-y-1">
+                                        <Label htmlFor="newItemProductVariant">Select Product Variant</Label>
+                                        <Controller
+                                            name="newItemProductVariant"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select product variant" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {productVariants && Object.keys(productVariants).length > 0 && Object.entries(productVariants).map(([key, item]) => (
+                                                            <SelectItem key={key} value={key}>
+                                                                {item.product.name} ({item.name})
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                    </div>
+                                    <div className="w-[50%] space-y-1">
+                                        <Label htmlFor="newItemLocation">Location</Label>
+                                        <Controller
+                                            name="newItemLocation"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {locations && Object.keys(locations).length > 0 && Object.entries(locations).map(([key, item]) => (
+                                                            <SelectItem key={key} value={key}>
+                                                                {item.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                    </div>
+
+                                </div>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="space-y-1">
+                                        <Label htmlFor="newItemQuantity">Quantity</Label>
+                                        <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="unit_cost">Unit Cost</Label>
+                                        <Input id="unit_cost" type="number" {...register("unit_cost")} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="unit_price">Unit Price</Label>
+                                        <Input id="unit_price" type="number" {...register("unit_price")} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label htmlFor="reorder_level">Reorder Level</Label>
+                                        <Input id="reorder_level" type="number" {...register("reorder_level")} />
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="w-[50%] space-y-1">
+                                        <Label htmlFor="quantity_on_hand">On Hand Quantity</Label>
+                                        <Input id="quantity_on_hand" type="number" {...register("quantity_on_hand")} />
+                                    </div>
+                                    <div className="w-[50%] space-y-1">
+                                        <Label htmlFor="quantity_reserved">Reserved Quantity</Label>
+                                        <Input id="quantity_reserved" type="number" {...register("quantity_reserved")} />
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-auto">
+                                    <Button type="submit">Create Inventory Item</Button>
+                                </div>
                             </div>
-
-                            <div className="flex justify-end gap-3 mt-auto">
-                                <Button type="submit">Create Product</Button>
-                            </div>
-                        </div>
-
-                    </form>
-
-                    <form onSubmit={handleSubmit(onInventoryItemCreate)} className="flex flex-row w-[48%] gap-12">
-
-                        {/* Second Column */}
-                        <div className="flex flex-col flex-wrap flex-1">
-                            <h2 className="text-lg font-semibold mb-6">Add Inventory Item</h2>
-
-                            <div className="flex gap-6 mb-6">
-                                <div className="w-[50%] space-y-1">
-                                    <Label htmlFor="newItemProduct">Select Product</Label>
-                                    <Controller
-                                        name="newItemProduct"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select product" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {products && Object.keys(products).length > 0 && Object.entries(products).map(([key, item]) => (
-                                                        <SelectItem key={key} value={key}>
-                                                            {item.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        )}
-                                    />
-                                </div>
-                                <div className="w-[50%] space-y-1">
-                                    <Label htmlFor="newItemLocation">Location</Label>
-                                    <Controller
-                                        name="newItemLocation"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
-                                                <SelectContent>
-                                                    {locations && Object.keys(locations).length > 0 && Object.entries(locations).map(([key, item]) => (
-                                                        <SelectItem key={key} value={key}>
-                                                            {item.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        )}
-                                    />
-                                </div>
-
-                            </div>
-
-                            <div className="flex gap-6 mb-6">
-                                <div className="space-y-1">
-                                    <Label htmlFor="newItemQuantity">Quantity</Label>
-                                    <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="unit_cost">Unit Cost</Label>
-                                    <Input id="unit_cost" type="number" {...register("unit_cost")} />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="unit_price">Unit Price</Label>
-                                    <Input id="unit_price" type="number" {...register("unit_price")} />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label htmlFor="reorder_level">Reorder Level</Label>
-                                    <Input id="reorder_level" type="number" {...register("reorder_level")} />
-                                </div>
-                            </div>
-
-                            <div className="flex gap-6 mb-6">
-                                <div className="w-[50%] space-y-1">
-                                    <Label htmlFor="quantity_on_hand">On Hand Quantity</Label>
-                                    <Input id="quantity_on_hand" type="number" {...register("quantity_on_hand")} />
-                                </div>
-                                <div className="w-[50%] space-y-1">
-                                    <Label htmlFor="quantity_reserved">Reserved Quantity</Label>
-                                    <Input id="quantity_reserved" type="number" {...register("quantity_reserved")} />
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end gap-3 mt-auto">
-                                <Button type="submit">Create Inventory Item</Button>
-                            </div>
-                        </div>
-                    </form>
+                        </form>
                     </div>
                 </main>
             </div>

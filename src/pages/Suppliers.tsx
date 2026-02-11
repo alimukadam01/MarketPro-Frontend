@@ -54,7 +54,7 @@ const cols = [
 // };
 
 const Suppliers = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [suppliersData, setSuppliersData] = useState(null);
   const [totalSuppliers, setTotalSuppliers] = useState(0);

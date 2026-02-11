@@ -31,7 +31,7 @@ import Invoice from "@/pages/Invoice";
 
 const UpdateSalesInvoice = () => {
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [returnItemWindowOpen, setReturnItemWindowOpen] = useState(false)
   const [itemReturned, setItemReturned] = useState(false)
   const [invoiceItems, setInvoiceItems] = useState([])
@@ -66,7 +66,9 @@ const UpdateSalesInvoice = () => {
   const discount = parseFloat(watch("discount") || 0)
   const tax = parseFloat(watch("tax") || 0)
 
-  const subtotal = invoiceItems.reduce((sum, item) => sum + item.total, 0)
+  const subtotal = invoiceItems
+                          .filter(item => !item.is_returned)
+                          .reduce((sum, item) => sum + item.total, 0)
   const [discountType, setDiscountType] = useState("percentage")
   const [taxType, setTaxType] = useState("percentage")
   const discountAmount = discountType === "percentage" ? (subtotal * discount) / 100 : discount
@@ -176,7 +178,6 @@ const UpdateSalesInvoice = () => {
     try {
       const salesInvoice = await getSalesInvoiceDetail(token, invoice_id)
       if (salesInvoice) {
-        console.log("Fetched sales invoice:", salesInvoice)
         populateInvoiceFields(salesInvoice)
       } else {
         toast.error("Failed to fetch sales invoice")
@@ -211,9 +212,7 @@ const UpdateSalesInvoice = () => {
         const customers = await getCustomersList(token)
         if (customers) {
           const customerMap = createIdMap(customers)
-          console.log("Fetched customers:", customerMap)
           setCustomers(customerMap)
-          console.log(customerMap)
         } else {
           toast.error("Failed to fetch customers")
         }
@@ -518,13 +517,13 @@ const UpdateSalesInvoice = () => {
             </div>
           </form>
 
-          <ReturnItem
+          {selectedRows.length === 1 && <ReturnItem
             invoiceId={invoice_id}
             invoiceItem={invoiceItems.find(item => selectedRows.includes(item.id))}
             open={returnItemWindowOpen}
             setOpen={setReturnItemWindowOpen}
             setItemReturned={setItemReturned}
-          />
+          />}
 
         </main>
       </div>

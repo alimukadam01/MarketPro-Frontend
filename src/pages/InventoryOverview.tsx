@@ -21,14 +21,14 @@ import { useNavigate } from "react-router-dom";
 
 const cols = [
   { key: "id", label: "ID" },
-  { key: "product.id", label: "Product" },
+  { key: "product", label: "Product" },
   { key: "quantity", label: "Quantity" },
   { key: "quantity_on_hand", label: "On Hand" },
   { key: "quantity_reserved", label: "Reserved" },
   { key: "unit_cost", label: "Unit Cost" },
   { key: "unit_price", label: "Unit Price" },
   { key: "reorder_level", label: "Reorder Level" },
-  { key: "updated_at", label: "Last Updated" },
+  { key: "last_updated", label: "Last Updated" },
 ]
 
 const filter_fields_template = {
@@ -56,7 +56,7 @@ const filter_fields_mapper = {
 };
 
 const InventoryOverview = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [selectedRows, setSelectedRows] = useState([])
   const [inventoryData, setInventoryData] = useState(null)
   const [totalInventoryValue, setTotalInventoryValue] = useState(0)
@@ -215,7 +215,7 @@ const InventoryOverview = () => {
             </div>
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">Total Restocks Required</div>
-              <div className="text-3xl font-bold text-red-600">{totalRestocksReq} Item{totalRestocksReq > 1? 's': ''}</div>
+              <div className="text-3xl font-bold text-red-600">{totalRestocksReq} Item{totalRestocksReq > 1 ? 's' : ''}</div>
               <div className="text-sm text-muted-foreground mt-1">Running out of stock</div>
             </div>
           </div>
@@ -264,62 +264,17 @@ const InventoryOverview = () => {
               </div>
             </div>
 
-            {/* Sales Table */}
-            <div className="space-y-[10px]">
-              {/* Table Header */}
-              <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
-                <div className="grid grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
-                  <div className="min-w-0">ID</div>
-                  <div className="min-w-0">Product</div>
-                  <div className="min-w-0">Quantity</div>
-                  <div className="min-w-0">On Hand</div>
-                  <div className="min-w-0">Reserved</div>
-                  <div className="min-w-0">Unit Cost</div>
-                  <div className="min-w-0">Unit Price</div>
-                  <div className="min-w-0">Reorder Level</div>
-                  <div className="min-w-0">Last Updated</div>
-                </div>
-              </div>
+            {/* Inventory Data Table */}
+            {inventoryData && inventoryData.length > 0 ? <DataTable columns={cols} data={inventoryData} selectedRows={selectedRows} onRowClick={toggleRowSelection} colsConfig={"[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"} /> : null}
 
-              {/* Table Rows */}
-              {inventoryData && inventoryData.map((sale) => (
-                <div
-                  key={sale.id}
-                  onClick={() => toggleRowSelection(sale.id)}
-                  className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer transition-colors hover:bg-muted/20 ${selectedRows.includes(sale.id)
-                    ? 'border-2 border-[#4285F4]'
-                    : sale.quantity <= sale.reorder_level
-                      ? 'border-2 border-red-500'
-                      : 'border border-border'
-                    }`}
-                >
-                  <div className="grid grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr] gap-4 w-full text-sm">
-                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.id}</div>
-                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.product}</div>
-                    <div className="font-semibold min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.quantity}</div>
-                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.quantity_on_hand}</div>
-                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.quantity_reserved}</div>
-                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.unit_cost}</div>
-                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.unit_price}</div>
-                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.reorder_level}</div>
-                    <div className="text-muted-foreground min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">{sale.last_updated}</div>
-
-                  </div>
-                </div>
-              ))}
-            </div>
+            <CustomFilter
+              template={filter_fields_template}
+              templateMapper={filter_fields_mapper}
+              dataFetcher={fetchInventoryItems}
+              open={filterWindowOpen}
+              setOpen={setFilterWindowOpen}
+            />
           </div>
-
-          {/* {inventoryData && inventoryData.length > 0 ? <DataTable columns={cols} data={inventoryData} selectedRows={selectedRows} onRowClick={toggleRowSelection} /> : null} */}
-
-          <CustomFilter
-            template={filter_fields_template}
-            templateMapper={filter_fields_mapper}
-            dataFetcher={fetchInventoryItems}
-            open={filterWindowOpen}
-            setOpen={setFilterWindowOpen}
-          />
-
         </main>
       </div>
     </div>

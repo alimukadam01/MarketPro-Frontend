@@ -24,7 +24,7 @@ const Index = () => {
   const { token } = useAuth()
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [recentSales, SetRecentSales] = useState([])
   const [totalInventoryValue, SetTotalInventoryValue] = useState(0)
   const [totalSalesDaily, setTotalSalesDaily] = useState(0)

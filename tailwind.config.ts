@@ -12,6 +12,8 @@ export default {
     // grid column counts you need
     ...Array.from({ length: 12 }, (_, i) => `grid-cols-${i + 1}`),
     // any other dynamic classes you rely on, e.g. custom borders
+	"grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr]",
+	"grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]",
     "border-2",
     "border-border",
     "hover:bg-muted/20",

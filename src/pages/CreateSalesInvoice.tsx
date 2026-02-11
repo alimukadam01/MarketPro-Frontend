@@ -27,7 +27,7 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
 const CreateSalesInvoice = () => {
   
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [invoiceItems, setInvoiceItems] = useState([])
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])

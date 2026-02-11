@@ -15,9 +15,7 @@ import {
   getTotalReturnedItems
 } from "../../services/api";
 import {
-  Eye,
   ArrowLeft,
-  Plus,
   Search,
   Edit,
   Trash2,
@@ -56,7 +54,7 @@ const filter_fields_mapper = {
 };
 
 const ReturnedItems = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [returnedItemsData, setReturnedItemsData] = useState(null);
   const [totalReturnedItems, setTotalReturnedItems] = useState(0);

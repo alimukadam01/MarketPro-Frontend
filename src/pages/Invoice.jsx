@@ -120,9 +120,6 @@ const Invoice = ({ token, invoice_id }) => {
 
   const business = invoice?.business || null
   const customer = invoice?.customer || null
-
-  invoice  && console.log(invoice.discount)
-  invoice && console.log(invoice.tax)
   
   if (invoice){
   return (
