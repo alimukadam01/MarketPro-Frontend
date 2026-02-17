@@ -83,7 +83,6 @@ const UpdateProduct = () => {
             ...selectedVariant,
             attributes: currentAttributes
         }
-        console.log("Updated variant: ", updatedVariant)
         
         // 3. add updated variant back
         setProductVariants([...filteredVariants, updatedVariant]);
@@ -198,11 +197,6 @@ const UpdateProduct = () => {
         fetchUnits()
         fetchProduct()
     }, [token, product_id])
-
-    {
-        console.log("Selected Variant: ", selectedVariant)
-        console.log("Product Variants: ", productVariants)
-    }
 
     return (
         <div className="min-h-screen bg-background">
@@ -428,7 +422,7 @@ const UpdateProduct = () => {
                                                 <Button
                                                     type="button"
                                                     variant="unstyled"
-                                                    className="p-[0] hover:"
+                                                    className="p-[0]"
                                                     onClick={(e) => {
                                                         e.stopPropagation()
                                                         setProductVariants(prev => prev.filter((_, i) => i !== idx))

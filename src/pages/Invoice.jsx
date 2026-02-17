@@ -164,7 +164,7 @@ const Invoice = ({ token, invoice_id }) => {
           {invoice.invoice_items.map((item, index) => (
             <View style={styles.tableRow} key={index} wrap>
               <Text style={styles.colSno}>{index + 1}</Text>
-              <Text style={styles.colParticular}>{item.product.name}</Text>
+              <Text style={styles.colParticular}>{item.product.base.name} ({item.product.name})</Text>
               <Text style={styles.colQty}>{item.quantity}</Text>
               <Text style={styles.colRate}>{item.unit_price}</Text>
               <Text style={styles.colAmount}>

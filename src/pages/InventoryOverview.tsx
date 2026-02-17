@@ -168,7 +168,7 @@ const InventoryOverview = () => {
 
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
-      if (searchTerm.trim() !== "") {
+      if (searchTerm && searchTerm.trim() !== "") {
         const query = formatSearchQuery(searchTerm)
         await fetchInventoryItems(query)
       } else {
@@ -178,6 +178,10 @@ const InventoryOverview = () => {
 
     return () => clearTimeout(delayDebounce);
   }, [searchTerm]);
+
+  {
+    console.log(selectedRows)
+  }
 
   return (
     <div className="min-h-screen bg-background">

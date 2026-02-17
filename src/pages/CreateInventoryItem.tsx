@@ -220,7 +220,6 @@ const CreateInventoryItem = () => {
         }
     }, [productCreated])
 
-
     return (
         <div className="min-h-screen bg-background">
             <Sidebar onCollapseChange={setSidebarCollapsed} />
@@ -459,30 +458,9 @@ const CreateInventoryItem = () => {
                                                         <SelectValue placeholder="Select product" />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        {products && Object.keys(products).length > 0 && Object.entries(products).map(([key, item]) => (
-                                                            <SelectItem key={key} value={key}>
-                                                                {item.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            )}
-                                        />
-                                    </div>
-                                    <div className="w-[50%] space-y-1">
-                                        <Label htmlFor="newItemProductVariant">Select Product Variant</Label>
-                                        <Controller
-                                            name="newItemProductVariant"
-                                            control={control}
-                                            render={({ field }) => (
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Select product variant" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
                                                         {productVariants && Object.keys(productVariants).length > 0 && Object.entries(productVariants).map(([key, item]) => (
                                                             <SelectItem key={key} value={key}>
-                                                                {item.product.name} ({item.name})
+                                                                {item.name}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>

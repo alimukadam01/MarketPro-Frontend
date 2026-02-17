@@ -80,7 +80,7 @@ const CreateSalesInvoice = () => {
     }
 
     const items = invoiceItems.map(item => ({
-      product_id: item.product.product.id,
+      product_id: item.product.id,
       quantity: item.quantity,
       unit_price: item.unit_price,
     }))
@@ -107,11 +107,14 @@ const CreateSalesInvoice = () => {
   }
 
   const addItem = (product, quantity, unit_price) => {
+
+    console.log("from addItem: ", product)
+
     if (product && quantity > 0) {
       const selectedProduct = products[product]
       const newInvoiceItem = {
         id: invoiceItems.length + 1,
-        product: selectedProduct,
+        product: selectedProduct.product,
         quantity,
         unit_price,
         total: quantity * unit_price,
@@ -134,7 +137,9 @@ const CreateSalesInvoice = () => {
       try {
         const products = await getAvailableProductsList(token, businessId)
         if (products){
-          const productMap = createNestedIdMap(products, "product.id")
+          console.log("fetched products: ", products)
+          const productMap = createNestedIdMap(products, 'product.id')
+          console.log("product Map: ", productMap)
           setProducts(productMap)
         }else{
           toast.error("Failed to fetch products")
@@ -150,9 +155,7 @@ const CreateSalesInvoice = () => {
         const customers = await getCustomersList(token)
         if (customers){
           const customerMap = createIdMap(customers)
-          console.log("Fetched customers:", customerMap)
           setCustomers(customerMap)
-          console.log(customerMap)
         }else{
           toast.error("Failed to fetch customers")
         }
@@ -312,7 +315,7 @@ const CreateSalesInvoice = () => {
                         <SelectContent>
                           {products && Object.keys(products).length > 0 && Object.entries(products).map(([key, item]) => (
                             <SelectItem key={key} value={key}>
-                              {item.product.name} (available: {item.available_quantity})
+                              {item.product.base.name} ({item.product.name}) (available: {item.available_quantity})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -372,7 +375,7 @@ const CreateSalesInvoice = () => {
                     </div>
                   </div>
 
-                  {invoiceItems.map((item) => (
+                  {invoiceItems && invoiceItems.map((item, idx) => (
                     <div
                       key={item.id}
                       onClick={() => toggleRowSelection(item.id)}
@@ -381,8 +384,8 @@ const CreateSalesInvoice = () => {
                       }`}
                     >
                       <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
-                        <div>{item.id}</div>
-                        <div className="font-medium">{item.product.product.name}</div>
+                        <div>{idx + 1}</div>
+                        <div className="font-medium">{item.product.base.name} ({item.product.name})</div>
                         <div>{item.quantity}</div>
                         <div>{item.unit_price}</div>
                         <div className="font-semibold">{item.total}</div>

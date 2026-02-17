@@ -115,7 +115,7 @@ export function transformInventoryItem(data) {
 
   return {
     id: data.id,
-    product: data.product_var? `${data.product_var.product.name} (${data.product_var.name})` :data.product.name,
+    product: data.product && `${data.product.base.name} (${data.product.name})`,
     quantity: data.quantity,
     quantity_on_hand: data.quantity_on_hand,
     quantity_reserved: data.quantity_reserved,
@@ -132,6 +132,15 @@ export function transformProduct(data) {
     name: data.name,
     unit: `${data.unit.name} (${data.unit.abv})`,
     desc: data.desc || ""
+  }
+}
+
+export function transformProductVariant(data) {
+  return {
+    id: data.id,
+    name: `${data.base.name} (${data.name})`,
+    unit: `${data.base.unit.name} (${data.base.unit.abv})`,
+    desc: data.base.desc || ""
   }
 }
 
@@ -168,11 +177,13 @@ export function createIdMap(arr, field = null) {
 }
 
 export function createNestedIdMap(arr, keyPath, valueField = null) {
-  const keys = keyPath.split(".");
+  const keyParts = keyPath.split(".");
+  const valueParts = valueField ? valueField.split(".") : null;
+  
   return arr.reduce((acc, item) => {
     // Walk down the path to get the key
     let keyValue = item;
-    for (const k of keys) {
+    for (const k of keyParts) {
       if (keyValue == null) break;
       keyValue = keyValue[k];
     }
@@ -180,7 +191,20 @@ export function createNestedIdMap(arr, keyPath, valueField = null) {
       throw new Error(`Could not find ${keyPath} on item`);
     }
 
-    acc[keyValue] = valueField ? item[valueField] : item;
+    // Walk down the path to get the value (if valueField is specified)
+    let value = item;
+    if (valueField) {
+      value = item;
+      for (const v of valueParts) {
+        if (value == null) break;
+        value = value[v];
+      }
+      if (value == null) {
+        throw new Error(`Could not find ${valueField} on item`);
+      }
+    }
+
+    acc[keyValue] = value;
     return acc;
   }, {});
 }

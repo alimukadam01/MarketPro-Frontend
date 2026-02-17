@@ -67,8 +67,8 @@ const UpdateSalesInvoice = () => {
   const tax = parseFloat(watch("tax") || 0)
 
   const subtotal = invoiceItems
-                          .filter(item => !item.is_returned)
-                          .reduce((sum, item) => sum + item.total, 0)
+    .filter(item => !item.is_returned)
+    .reduce((sum, item) => sum + item.total, 0)
   const [discountType, setDiscountType] = useState("percentage")
   const [taxType, setTaxType] = useState("percentage")
   const discountAmount = discountType === "percentage" ? (subtotal * discount) / 100 : discount
@@ -390,7 +390,7 @@ const UpdateSalesInvoice = () => {
                         <SelectContent>
                           {products && Object.keys(products).length > 0 && Object.entries(products).map(([key, item]) => (
                             <SelectItem key={key} value={key}>
-                              {item.product.name} (available: {item.available_quantity})
+                              {item.product.base.name} ({item.product.name}) (available: {item.available_quantity})
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -463,7 +463,7 @@ const UpdateSalesInvoice = () => {
                     </div>
                   </div>
 
-                  {invoiceItems.map((item) => {
+                  {invoiceItems && invoiceItems.map((item, idx) => {
                     const isDisabled = item.is_returned; // disable if is_returned is false
                     return (
                       <div
@@ -475,9 +475,9 @@ const UpdateSalesInvoice = () => {
                           } ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`}
                       >
                         <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
-                          <div>{item.id}</div>
+                          <div>{idx+1}</div>
                           <div className="font-medium">
-                            {item.product.name ? item.product.name : item.product.product.name}
+                            {item.product.base.name} ({item.product.name})
                           </div>
                           <div>{item.quantity}</div>
                           <div>{item.unit_price}</div>
@@ -503,12 +503,12 @@ const UpdateSalesInvoice = () => {
               <div className="flex justify-end gap-3 mt-auto">
                 {
                   pdfData &&
-                    <PDFDownloadLink
-                      document={<Invoice token = {token} invoice_id = {invoice_id}  />}
-                      fileName={`invoice.pdf`}
-                    >
-                        <Button type="button">Download PDF</Button>
-                    </PDFDownloadLink>
+                  <PDFDownloadLink
+                    document={<Invoice token={token} invoice_id={invoice_id} />}
+                    fileName={`invoice.pdf`}
+                  >
+                    <Button type="button">Download PDF</Button>
+                  </PDFDownloadLink>
                 }
                 <div className="flex justify-end gap-3 mt-auto">
                   <Button type="submit">Update Invoice</Button>

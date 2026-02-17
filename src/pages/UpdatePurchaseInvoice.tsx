@@ -14,11 +14,11 @@ import {
   PaymentStatusMap,
   PurchaseInvoiceStatusMap,
   createIdMap,
-  createNestedIdMap
+  transformProductVariant
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
-  getProductsList,
+  getProductVariantsList,
   getSuppliersList,
   updatePurchaseInvoiceAndItems,
   getPurchaseInvoiceDetail
@@ -26,7 +26,7 @@ import {
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
 const UpdatePurchaseInvoice = () => {
-  
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [invoiceItems, setInvoiceItems] = useState([])
   const [selectedRows, setSelectedRows] = useState([])
@@ -65,7 +65,7 @@ const UpdatePurchaseInvoice = () => {
 
   const onSubmit = async (data) => {
 
-    const {newItemCost, newItemProduct, newItemQuantity, ...rest} = data
+    const { newItemCost, newItemProduct, newItemQuantity, ...rest } = data
 
     const tax = {
       "value": parseFloat(data.tax),
@@ -73,37 +73,40 @@ const UpdatePurchaseInvoice = () => {
     }
 
     const items = invoiceItems.map(item => ({
-      id: item.id,
+      id: item.id? item.id: null,
       product_id: item.product.id,
       quantity: item.quantity,
       unit_cost: item.unit_cost,
     }))
 
+    console.log({
+      ...rest,
+      tax: tax,
+      items: items
+    })
+
     try {
-        const success = await updatePurchaseInvoiceAndItems(token, invoice_id, {
-          ...rest,
-          tax: tax,
-          items: items
-        })
+      const success = await updatePurchaseInvoiceAndItems(token, invoice_id, {
+        ...rest,
+        tax: tax,
+        items: items
+      })
 
-        if (success) {
-          toast.success("Purchase invoice updated successfully!")
-          navigate("/purchases");
-        } else {
-          toast.error("Failed to update purchase invoice.")
-        }
+      if (success) {
+        toast.success("Purchase invoice updated successfully!")
+        navigate("/purchases");
+      } else {
+        toast.error("Failed to update purchase invoice.")
+      }
     } catch (error) {
-        console.log("Error creating purchase invoice:", error)
+      console.log("Error creating purchase invoice:", error)
     }
-
-    console.log("Form Submitted:", { ...rest, tax: tax, "items": items });
   }
 
   const addItem = (product, quantity, unit_cost) => {
     if (product && quantity > 0) {
       const selectedProduct = products[product]
       const newInvoiceItem = {
-        id: invoiceItems.length + 1,
         product: selectedProduct,
         quantity,
         unit_cost,
@@ -114,14 +117,18 @@ const UpdatePurchaseInvoice = () => {
     }
   }
 
-  const toggleRowSelection = (id) => {
+  const updateItem = (id, product, quantity, unit_cost) => {
+    return
+  }
+
+  const toggleRowSelection = (item) => {
     setSelectedRows((prev) =>
-      prev.includes(id) ? prev.filter((rowId) => rowId !== id) : [...prev, id]
+      prev.includes(item) ? prev.filter((prevItem) => prevItem !== item) : [...prev, item]
     )
   }
 
   const populateInvoiceFields = (data) => {
-  // fill the main form fields
+    // fill the main form fields
     reset({
       invoice_number: data.invoice_number || "",
       supplier: data.supplier,
@@ -130,8 +137,8 @@ const UpdatePurchaseInvoice = () => {
       date_due: data.date_due || "",
       amount_paid: data.amount_paid ? data.amount_paid : "0.0",
       tax: data.tax?.value ?? "0.0",
-      payment_status: data.payment_status || "Pending",
-      status: data.status || "Pending",
+      payment_status: data.payment_status,
+      status: data.status,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemCost: 0,
@@ -139,28 +146,28 @@ const UpdatePurchaseInvoice = () => {
 
     // build your items array for state
     const items = (data.invoice_items || []).map((item) => ({
-      id: item?.id,
-      product: item?.product,
-      quantity: item?.quantity,
-      unit_cost: item?.unit_cost,
-      total: (item?.quantity * item?.unit_cost) || 0,
+      id: item.id,
+      product: transformProductVariant(item.product),
+      quantity: item.quantity,
+      unit_cost: item.unit_cost,
+      total: (item.quantity * item.unit_cost),
     }))
     setInvoiceItems(items)
     setTaxType(data.tax?.type)
   }
 
   useEffect(() => {
-    
+
     const fetchPurchaseInvoice = async () => {
       if (!token) return
-      try{
+      try {
         const purchaseInvoice = await getPurchaseInvoiceDetail(token, invoice_id)
-        if (purchaseInvoice){
+        if (purchaseInvoice) {
           populateInvoiceFields(purchaseInvoice)
-        }else{
+        } else {
           toast.error("Failed to fetch purchase invoice")
         }
-      }catch(error){
+      } catch (error) {
         console.log(error)
         toast.error("Failed to fetch purchase invoice")
       }
@@ -170,11 +177,11 @@ const UpdatePurchaseInvoice = () => {
       if (!token) return;
 
       try {
-        const products = await getProductsList(token)
-        if (products){
+        const products = await getProductVariantsList(token)
+        if (products) {
           const productMap = createIdMap(products)
           setProducts(productMap)
-        }else{
+        } else {
           toast.error("Failed to fetch products")
         }
       } catch (error) {
@@ -197,17 +204,22 @@ const UpdatePurchaseInvoice = () => {
         toast.error("Failed to fetch suppliers")
       }
     }
-    
-    fetchPurchaseInvoice()
+
     fetchProducts()
     fetchSuppliers()
+    fetchPurchaseInvoice()
   }, [token, invoice_id])
 
   useEffect(() => {
-    if (selectedProduct){
+    if (selectedProduct) {
       setValue("newItemCost", selectedProduct.unit_Cost, { shouldDirty: false });
     }
   }, [selectedProduct])
+
+  {
+    console.log(invoiceItems)
+    console.log(selectedRows)
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -237,7 +249,7 @@ const UpdatePurchaseInvoice = () => {
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select supplier"></SelectValue> 
+                          <SelectValue placeholder="Select supplier"></SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, supplier]) => (
@@ -377,17 +389,17 @@ const UpdatePurchaseInvoice = () => {
               {/* Invoice Items Header */}
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-lg font-semibold">Invoice Items</h3>
-                <Button 
-                  variant="destructive" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={() => {
-                    setInvoiceItems(invoiceItems.filter(item => !selectedRows.includes(item.id)));
+                    setInvoiceItems(invoiceItems.filter(item => !selectedRows.includes(item)));
                     setSelectedRows([]);
                   }}
                   disabled={selectedRows.length === 0}
                 >
                   <Trash2 className="w-4 mr-2" />
-                  Delete Selected
+                  Delete Item
                 </Button>
               </div>
 
@@ -396,7 +408,7 @@ const UpdatePurchaseInvoice = () => {
                 <div className="space-y-[10px] h-[174px] overflow-y-auto">
                   <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
                     <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
-                      <div>id</div>
+                      <div>#</div>
                       <div>product</div>
                       <div>quantity</div>
                       <div>unit cost</div>
@@ -404,18 +416,19 @@ const UpdatePurchaseInvoice = () => {
                     </div>
                   </div>
 
-                  {invoiceItems.map((item) => (
+                  {invoiceItems.map((item, idx) => (
                     <div
-                      key={item.id}
-                      onClick={() => toggleRowSelection(item.id)}
-                      className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${
-                        selectedRows.includes(item.id) ? "border-2 border-[#4285F4]" : "border border-border"
-                      }`}
+                      key={`${item.id}-${idx}`}
+                      onClick={() => toggleRowSelection(item)}
+                      className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${selectedRows.includes(item) ? "border-2 border-[#4285F4]" : "border border-border"
+                        }`}
                     >
                       <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
-                        <div>{item.id}</div>
+                        <div>{idx + 1}</div>
                         <div className="font-medium">{
-                          item.product.name? item.product.name : item.product.name
+                          item.product.base ?
+                            `${item.product.base.name} (${item.product.name})` :
+                            item.product.name
                         }</div>
                         <div>{item.quantity}</div>
                         <div>{item.unit_cost}</div>

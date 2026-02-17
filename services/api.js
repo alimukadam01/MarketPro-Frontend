@@ -5,11 +5,12 @@ import {
     transformPurchaseInvoice,
     transformInventoryItem,
     transformProduct,
-    formatSearchQuery
+    formatSearchQuery,
+    transformProductVariant
 } from "./utils";
 
-// const BASE_URL = "http://localhost:8000/"
-const BASE_URL = "https://backend.market-pro.pk/"
+const BASE_URL = "http://localhost:8000/"
+// const BASE_URL = "https://backend.market-pro.pk/"
 
 const apiClient = axios.create({
     baseURL: BASE_URL,
@@ -534,7 +535,7 @@ export const getProductVariantsList = async (token) => {
         })
 
         if (res.status === 200) {
-            return res.data
+            return res.data.map(transformProductVariant)
         }
 
         console.log("There was an error fetching the product list.")

@@ -322,12 +322,12 @@ const CreateProduct = () => {
                             {/* Product Variants */}
                             {productVariants && productVariants.length > 0 &&
                                 <div className="mb-6">
-                                    <div className="space-y-[10px] flex flex-col-reverse gap-[2px] h-[250px] overflow-y-auto">
+                                    <div className="flex flex-col-reverse gap-[2px] h-[250px] overflow-y-auto">
 
                                         {productVariants.map((item, idx) => (
                                             <div
                                                 key={`${item.id}-${idx}`}
-                                                className="bg-card rounded-lg h-[35px] flex items-center px-4 gap-4 border border-border scrollbar-none"
+                                                className="bg-card rounded-lg h-[35px] flex cursor-pointer items-center px-4 gap-4 border border-border scrollbar-none"
                                             >
                                                 <div>{idx + 1}.</div>
                                                 {<div className="font-sm flex flex-1">
@@ -344,7 +344,7 @@ const CreateProduct = () => {
                                                 </Button>
                                             </div>
                                         ))}
-                                        <h2 className="text-sm font-semibold mb-6">Product Variants</h2>
+                                        <h2 className="text-sm font-semibold mb-1">Product Variants</h2>
                                     </div>
                                 </div>
                             }

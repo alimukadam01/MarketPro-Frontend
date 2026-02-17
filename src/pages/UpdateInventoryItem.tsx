@@ -46,11 +46,10 @@ const UpdateInventoryItem = () => {
             quantity: 0,
             track_code: "",
             product: null,
-            productVariant: null,
             notes: "",
             location: null,
-            quantity_on_hand: "0",
-            quantity_reserved: "0",
+            quantity_on_hand: 0,
+            quantity_reserved: 0,
             unit_cost: 0.0,
             unit_price: 0.0,
             reorder_level: 0,
@@ -58,16 +57,11 @@ const UpdateInventoryItem = () => {
     })
 
     const populateFields = (data) => {
-        // fill the main form fields
-
-        console.log("Product from populateFields: ", data)
-
         reset({
             quantity: data.quantity || 0,
             track_code: data.track_code || "",
             notes: data.notes || "",
             product: data.product.id || 0,
-            productVariant: data.product_var || null,
             location: data.location || 0,
             quantity_on_hand: data.quantity_on_hand || 0,
             quantity_reserved: data.quantity_reserved || 0,
@@ -80,14 +74,14 @@ const UpdateInventoryItem = () => {
     const onInventoryItemUpdate = async (data) => {
 
         const ReqData = {
-            product_var: parseInt(data.productVariant),
             location: parseInt(data.location),
             quantity: parseInt(data.quantity),
             unit_cost: parseFloat(data.unit_cost),
             unit_price: parseFloat(data.unit_price),
             reorder_level: parseInt(data.reorder_level),
             quantity_on_hand: parseInt(data.quantity_on_hand),
-            quantity_reserved: parseInt(data.quantity_reserved)
+            quantity_reserved: parseInt(data.quantity_reserved),
+            notes: data.notes
         }
 
         try {
@@ -209,31 +203,10 @@ const UpdateInventoryItem = () => {
                                         <Input
                                             name="product"
                                             disabled={true}
-                                            value={products[watch("product")]?.name}
+                                            value={productVariants[watch("product")]?.name}
                                         />
                                     </div>
 
-                                    <div className="w-[50%] space-y-1">
-                                        <Label htmlFor="productVariant">Select Product Variant</Label>
-                                        <Controller
-                                            name="productVariant"
-                                            control={control}
-                                            render={({ field }) => (
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Select Product Variant" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {productVariants && Object.keys(productVariants).length > 0 && Object.entries(productVariants).map(([key, item]) => (
-                                                            <SelectItem key={key} value={key}>
-                                                                {item.product.name} ({item.name})
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            )}
-                                        />
-                                    </div>
                                     <div className="w-[50%] space-y-1">
                                         <Label htmlFor="location">Location</Label>
                                         <Controller
@@ -283,6 +256,13 @@ const UpdateInventoryItem = () => {
                                     <div className="w-[50%] space-y-1">
                                         <Label htmlFor="quantity_reserved">Reserved Quantity</Label>
                                         <Input id="quantity_reserved" type="number" {...register("quantity_reserved")} />
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="notes">Notes</Label>
+                                        <Textarea id="notes" {...register("notes")} placeholder="Add notes here." rows={6} />
                                     </div>
                                 </div>
 

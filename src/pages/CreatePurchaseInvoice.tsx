@@ -17,7 +17,7 @@ import {
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
-  getProductsList,
+  getProductVariantsList,
   getSuppliersList,
   postPurchaseInvoiceAndItems
 } from "../../services/api"
@@ -73,12 +73,6 @@ const CreatePurchaseInvoice = () => {
       unit_cost: item.unit_cost
     }))
 
-    console.log("Form Data without item fields:", {
-      ...rest,
-      tax: tax,
-      items: items
-    })
-
     try {
       const success = await postPurchaseInvoiceAndItems(token, {
         ...rest,
@@ -123,7 +117,7 @@ const CreatePurchaseInvoice = () => {
       if (!token) return;
 
       try {
-        const products = await getProductsList(token)
+        const products = await getProductVariantsList(token)
         if (products) {
           const productMap = createIdMap(products)
           setProducts(productMap)
