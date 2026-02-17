@@ -9,8 +9,8 @@ import {
     transformProductVariant
 } from "./utils";
 
-const BASE_URL = "http://localhost:8000/"
-// const BASE_URL = "https://backend.market-pro.pk/"
+// const BASE_URL = "http://localhost:8000/"
+const BASE_URL = "https://backend.market-pro.pk/"
 
 const apiClient = axios.create({
     baseURL: BASE_URL,
