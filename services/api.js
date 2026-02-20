@@ -849,7 +849,6 @@ export const bulkDeleteSalesInvoice = async (token, invoiceIds) => {
     }
 }
 
-// quantity removed for now
 export const returnSalesInvoiceItem = async (token, invoiceId, itemId, quantity, reason) => {
     try{
         const res = await apiClient.post(`sales-invoices/${invoiceId}/items/${itemId}/return/`, {
@@ -1094,7 +1093,47 @@ export const bulkDeleteInventoryItems = async (token, businessId, itemIds) => {
     }
 }
 
+// Returned Items Endpoints
+
 export const returnedItemsAPIPackage = new APIPackage("returned-items")
+
+export const returnReturnedItemToSalesInvoice = async (token, itemId) => {
+    try{
+        const res = await apiClient.post(`/returned-items/${itemId}/sales-invoice-return/`, null, {
+            headers: {
+                Authorization: token
+            }
+        })
+        if (res.status === 200) {
+            return true
+        }
+        console.log(res.data.detail)
+        return false
+    }catch(error){
+        console.log(error)
+        return false
+    }
+}
+
+export const returnReturnedItemToInventory = async (token, itemId) => {
+    try{
+        const res = await apiClient.post(`/returned-items/${itemId}/inventory-return/`, null, {
+            headers: {
+                Authorization: token
+            }
+        })
+        if (res.status === 200) {
+            return true
+        }
+        console.log(res.data.detail)
+        return false
+    }catch(error){
+        console.log(error)
+        return false
+    }
+}
+
+// General Endpoints
 
 export const globalSearch = async (token, searchQuery) => {
     try{

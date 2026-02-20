@@ -11,6 +11,7 @@ import { useForm, Controller } from "react-hook-form";
 import { returnedItemsAPIPackage } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const UpdateReturnedItem = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -25,13 +26,15 @@ const UpdateReturnedItem = () => {
             sales_invoice_id: "",
             invoice_item_id: "",
             quantity: "",
-            reason: ""
+            reason: "",
+            is_damaged: false
         },
     });
 
     const onReturnedItemUpdate = async (data) => {
 
         try {
+            console.log(data)
             const success = await returnedItemsAPIPackage.update(token, returned_item_id, data);
 
             if (success) {
@@ -46,11 +49,13 @@ const UpdateReturnedItem = () => {
     };
 
     const populateReturnedItemFields = (data) => {
+        console.log("from populateReturnedItems: ", data.is_damaged)
         reset({
             sales_invoice_id: data.invoice_item.sales_invoice.id,
             invoice_item_id: data.invoice_item.id || "",
             quantity: data.quantity || "",
-            reason: data.reason || ""
+            reason: data.reason || "",
+            is_damaged: data.is_damaged
         });
     };
 
@@ -80,7 +85,7 @@ const UpdateReturnedItem = () => {
 
 
     {
-        console.log(watch("sales_invoice_id"))
+        console.log(typeof (watch("is_damaged")))
     }
 
     return (
@@ -108,7 +113,7 @@ const UpdateReturnedItem = () => {
                                 <div className="flex gap-6 mb-6">
                                     <div className="flex-1 space-y-1">
                                         <Label htmlFor="sales_invoice_id">Sales Invoice</Label>
-                                        <Input id="sales_invoice_id" type="text" value={`Sales Invoice (${watch("sales_invoice_id")})`} disabled={true}/>
+                                        <Input id="sales_invoice_id" type="text" value={`Sales Invoice (${watch("sales_invoice_id")})`} disabled={true} />
                                     </div>
                                     <div className="flex-1 space-y-1">
                                         <Label htmlFor="invoice_item_id">Invoice Item</Label>
@@ -121,6 +126,17 @@ const UpdateReturnedItem = () => {
                                 </div>
 
                                 <div className="flex gap-6 mb-6">
+                                    <Label htmlFor="is_damaged">Is Product Damaged?</Label>
+                                    <Controller
+                                        name="is_damaged"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Checkbox
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                            />
+                                        )}
+                                    />
                                 </div>
 
                                 <div className="mb-6 space-y-1">

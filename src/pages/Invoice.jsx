@@ -165,10 +165,10 @@ const Invoice = ({ token, invoice_id }) => {
             <View style={styles.tableRow} key={index} wrap>
               <Text style={styles.colSno}>{index + 1}</Text>
               <Text style={styles.colParticular}>{item.product.base.name} ({item.product.name})</Text>
-              <Text style={styles.colQty}>{item.quantity}</Text>
+              <Text style={styles.colQty}>{item.net_quantity}</Text>
               <Text style={styles.colRate}>{item.unit_price}</Text>
               <Text style={styles.colAmount}>
-                {item.unit_price * item.quantity}
+                {item.unit_price * item.net_quantity}
               </Text>
             </View>
           ))}
@@ -177,7 +177,7 @@ const Invoice = ({ token, invoice_id }) => {
           <View style={styles.totals} wrap={false}>
             <View style={styles.totalRow}>
               <Text style={styles.totalLabel}>SUBTOTAL</Text>
-              <Text style={styles.totalValue}>{invoice.sub_total}</Text>
+              <Text style={styles.totalValue}>PKR {invoice.sub_total}</Text>
             </View>
 
             {invoice.discount && (

@@ -50,11 +50,6 @@ const CreateReturnedItem = () => {
         }
     }
 
-    useEffect(() => {
-        // fetch sales invoices here
-        // fetch sales invoice items here
-    }, [token])
-
     return (
         <div className="min-h-screen bg-background">
             <Sidebar onCollapseChange={setSidebarCollapsed} />

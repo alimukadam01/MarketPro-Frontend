@@ -97,6 +97,13 @@ const UpdateSalesInvoice = () => {
       unit_price: item.unit_price,
     }))
 
+    console.log({
+      ...rest,
+      tax: tax,
+      discount: discount,
+      items: items
+    })
+
     try {
       const success = await updateSalesInvoiceAndItems(token, invoice_id, {
         ...rest,
@@ -155,12 +162,12 @@ const UpdateSalesInvoice = () => {
 
     // build your items array for state
     const items = (data.invoice_items || []).map((item) => ({
-      id: item?.id,
-      product: item?.product,
-      quantity: item?.quantity,
-      unit_price: item?.unit_price,
-      total: (item?.quantity * item?.unit_price) || 0,
-      is_returned: item?.is_returned
+      id: item.id,
+      product: item.product,
+      quantity: item.net_quantity,
+      unit_price: item.unit_price,
+      total: (item.net_quantity * item.unit_price) || 0,
+      is_returned: item.is_returned
     }))
     setInvoiceItems(items)
 
@@ -171,7 +178,7 @@ const UpdateSalesInvoice = () => {
   const handleFilterClick = (e) => {
     e.preventDefault();
     setReturnItemWindowOpen(!returnItemWindowOpen);
-  };
+  }
 
   const fetchSalesInvoice = async () => {
     if (!token) return
@@ -475,7 +482,7 @@ const UpdateSalesInvoice = () => {
                           } ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`}
                       >
                         <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
-                          <div>{idx+1}</div>
+                          <div>{idx + 1}</div>
                           <div className="font-medium">
                             {item.product.base.name} ({item.product.name})
                           </div>

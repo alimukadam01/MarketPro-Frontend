@@ -9,7 +9,10 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
         <div
           className={`grid grid-cols-${colsConfig? colsConfig : columns.length} gap-4 w-full text-sm font-medium text-muted-foreground`}
         >
-          {columns.map((col) => (
+            <div key={-1} className="min-w-0">
+              S.no
+            </div>
+          {columns.filter((col)=>col.key !== 'id').map((col) => (
             <div key={col.key} className="min-w-0">
               {col.label}
             </div>
@@ -18,7 +21,7 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
       </div>
 
       {/* Table Rows */}
-      {data.map((row) => (
+      {data.map((row, idx) => (
         <div
           key={row.id}
           onClick={() => onRowClick && onRowClick(row.id)}
@@ -28,8 +31,14 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
               : "border border-border"
           }`}
         >
-          <div className={`grid grid-cols-${colsConfig? colsConfig : columns.length} gap-4 w-full text-sm`}>
-            {columns.map((col) => (
+          <div className={`grid grid-cols-${colsConfig? colsConfig : columns.length } gap-4 w-full text-sm`}>
+              <div
+                key={`${row.id}-${idx}`}
+                className="font-medium min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent"
+              >
+                {idx+1}
+              </div>
+            {columns.filter((col)=>col.key !== 'id').map((col) => (
               <div
                 key={col.key}
                 className="font-medium min-w-0 overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent"

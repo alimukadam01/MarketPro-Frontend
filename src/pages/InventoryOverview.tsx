@@ -269,7 +269,7 @@ const InventoryOverview = () => {
             </div>
 
             {/* Inventory Data Table */}
-            {inventoryData && inventoryData.length > 0 ? <DataTable columns={cols} data={inventoryData} selectedRows={selectedRows} onRowClick={toggleRowSelection} colsConfig={"[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"} /> : null}
+            {inventoryData && inventoryData.length > 0 ? <DataTable columns={cols} data={inventoryData} selectedRows={selectedRows} onRowClick={toggleRowSelection} colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"} /> : null}
 
             <CustomFilter
               template={filter_fields_template}

@@ -25,9 +25,18 @@ export const PaymentStatusMap = {
   "RF": "Refunded"
 }
 
+export const ReturnTypeMap = {
+  "to_invoice": "To Invoice",
+  "to_inventory": "To Inventory",
+}
+
 export const getStatusColor = (status) => {
+
+  console.log(status)
+
   switch (status) {
     case "C":
+    case "R":
       return "bg-green-100 text-green-700"
     case "D":
     case "PC":
@@ -160,9 +169,10 @@ export function transformReturnedItem(data){
     id: data.id,
     sales_invoice: data.invoice_item.sales_invoice.id,
     invoice_date: formatDate(data.invoice_item.sales_invoice.date_issued),
-    product: data.invoice_item.product.name,
+    product: `${data.invoice_item.product.base.name} (${data.invoice_item.product.name})`,
     quantity: data.quantity,
-    returned_at: formatDate(data.created_at)
+    returned_at: formatDate(data.created_at),
+    return_type: data.return_type? ReturnTypeMap[data.return_type]: "None",
   }
 }
 

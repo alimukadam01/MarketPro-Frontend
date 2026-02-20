@@ -14,9 +14,15 @@ export default {
     // any other dynamic classes you rely on, e.g. custom borders
 	"grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr]",
 	"grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]",
+	"grid-cols-[48px_120px_512px_1fr_1fr_1fr_1fr]",
+	"grid-cols-[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]",
     "border-2",
     "border-border",
     "hover:bg-muted/20",
+	"bg-green-100 text-green-700",
+	"bg-yellow-100 text-yellow-700",
+	"bg-red-100 text-red-700",
+	"bg-gray-100 text-gray-700"
   ],
 	prefix: "",
 	theme: {

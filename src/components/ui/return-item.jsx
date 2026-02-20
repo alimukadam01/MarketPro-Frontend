@@ -17,8 +17,6 @@ function ReturnItem({
   setItemReturned,
 }) {
 
-  {console.log(invoiceItem)}
-
   const { token } = useAuth();
   const [quantity, setQuantity] = useState(invoiceItem?.quantity);
   const [isDamaged, setIsDamaged] = useState(false);
@@ -59,7 +57,7 @@ function ReturnItem({
           <DialogUI.DialogTitle>Return Item</DialogUI.DialogTitle>
         </DialogUI.DialogHeader>
 
-        <div className="flex flex-wrap gap-4 my-4">
+        <div className="flex flex-wrap gap-4">
           <Label>Quantity</Label>
           <Input
             id="quantity"
@@ -68,12 +66,14 @@ function ReturnItem({
             onChange={(e) => setQuantity(e.target.value)}
             placeholder="Quantity"
           />
+        </div>
 
+        <div className="flex flex-wrap gap-4">
           <Label>Is Product Damaged?</Label>
           <Checkbox id="is_damaged" value={isDamaged} onChange={(e) => setIsDamaged(e.target.value)} />
         </div>
 
-        <div className="flex flex-wrap gap-4 my-4">
+        <div className="flex flex-wrap gap-4">
           <Label>Description</Label>
           <Textarea
             id="reason"

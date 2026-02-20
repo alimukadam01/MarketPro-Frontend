@@ -7,19 +7,23 @@ import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   formatSearchQuery,
-  transformReturnedItem
+  transformReturnedItem,
+  createIdMap
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
   returnedItemsAPIPackage,
-  getTotalReturnedItems
+  getTotalReturnedItems,
+  returnReturnedItemToSalesInvoice,
+  returnReturnedItemToInventory
 } from "../../services/api";
 import {
   ArrowLeft,
   Search,
   Edit,
   Trash2,
-  Filter
+  Filter,
+  Undo2
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
@@ -31,8 +35,10 @@ const cols = [
   { key: "id", label: "ID" },
   { key: "sales_invoice", label: "Sales Invoice ID" },
   { key: "product", label: "Product" },
+  { key: "quantity", label: "Quantity" },
   { key: "invoice_date", label: "Invoice Dated At" },
   { key: "returned_at", label: "Returned At" },
+  { key: "return_type", label: "Added Back To" },
 ];
 
 const filter_fields_template = {
@@ -54,15 +60,16 @@ const filter_fields_mapper = {
 };
 
 const ReturnedItems = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [selectedRows, setSelectedRows] = useState([]);
-  const [returnedItemsData, setReturnedItemsData] = useState(null);
-  const [totalReturnedItems, setTotalReturnedItems] = useState(0);
-  const [searchTerm, setSearchTerm] = useState("");
-  const { token } = useAuth() || null;
-  const [isDeleted, setIsDeleted] = useState(false);
-  const [filterWindowOpen, setFilterWindowOpen] = useState(false);
-  const navigate = useNavigate();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
+  const [selectedRows, setSelectedRows] = useState([])
+  const [returnedItemsData, setReturnedItemsData] = useState(null)
+  const [returnedItemsIdMap, setReturnedItemsIdMap] = useState([])
+  const [totalReturnedItems, setTotalReturnedItems] = useState(0)
+  const [searchTerm, setSearchTerm] = useState("")
+  const { token } = useAuth() || null
+  const [isDeleted, setIsDeleted] = useState(false)
+  const [filterWindowOpen, setFilterWindowOpen] = useState(false)
+  const navigate = useNavigate()
 
   const toggleRowSelection = (id: string) => {
     setSelectedRows((prev) =>
@@ -93,7 +100,36 @@ const ReturnedItems = () => {
       toast.error("Failed to delete returned items.");
       console.error(error);
     }
-  };
+  }
+
+  const handleReturnToSalesInvoice = async () => {
+    try {
+      const is_returned = await returnReturnedItemToSalesInvoice(token, selectedRows[0]);
+      if (is_returned) {
+        toast.success("Item added back to sales invoice.")
+        return
+      }
+      
+      toast.error("Failed to add back item.");
+    } catch (error) {
+      toast.error("Failed to add back item.");
+      console.error(error);
+    }
+  }
+
+  const handleReturnToInventory = async () => {
+    try {
+      const is_returned = await returnReturnedItemToInventory(token, selectedRows[0]);
+      if (is_returned) {
+        toast.success("Item restocked")
+        return
+      }
+      toast.error("Failed to restock item.");
+    } catch (error) {
+      toast.error("Failed to restock item.");
+      console.error(error);
+    }
+  }
 
   const handleUpdateClick = () => {
     if (selectedRows.length !== 1) return
@@ -111,7 +147,8 @@ const ReturnedItems = () => {
         console.log(res)
       }
       if (res) {
-        setReturnedItemsData(res.map(transformReturnedItem));
+        setReturnedItemsData(res.map(transformReturnedItem))
+        setReturnedItemsIdMap(createIdMap(res))
       } else {
         toast.error("Failed to fetch returned items.");
       }
@@ -160,6 +197,10 @@ const ReturnedItems = () => {
 
     return () => clearTimeout(delayDebounce);
   }, [searchTerm])
+
+  {
+    console.log(token)
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -236,6 +277,28 @@ const ReturnedItems = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
+                  disabled={selectedRows.length !== 1 || (selectedRows.length > 0 && returnedItemsIdMap[selectedRows[0]]?.is_returned)}
+                  onClick={handleReturnToInventory}
+                >
+                  <Undo2 className="w-4 h-4" />
+                  <span>Restock</span>
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-2"
+                  disabled={selectedRows.length !== 1 || (selectedRows.length > 0 && returnedItemsIdMap[selectedRows[0]]?.is_returned)}
+                  onClick={handleReturnToSalesInvoice}
+                >
+                  <Undo2 className="w-4 h-4" />
+                  <span>Add Back to Sales Invoice</span>
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-2"
                   disabled={selectedRows.length !== 1}
                   onClick={handleUpdateClick}
                 >
@@ -263,6 +326,7 @@ const ReturnedItems = () => {
               data={returnedItemsData}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
+              colsConfig={"[48px_120px_512px_1fr_1fr_1fr_1fr]"}
             />
           ) : null}
 

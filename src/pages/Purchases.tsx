@@ -260,7 +260,7 @@ const Purchases = () => {
 
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
-      if (searchTerm.trim() !== "") {
+      if (searchTerm && searchTerm.trim() !== "") {
         const query = formatSearchQuery(searchTerm)
         await fetchPurchaseInvoices(query)
       } else {
