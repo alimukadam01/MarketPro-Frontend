@@ -33,15 +33,21 @@ const cols = [
 
 const filter_fields_template = {
   product__name: "",
+  product__base__name: "",
   location__name: "",
   track_code: "",
 };
 
 const filter_fields_mapper = {
-  product__name: {
+  product__base__name: {
     label: "Product Name",
     type: "text",
     placeholder: "Enter Product name",
+  },
+  product__name: {
+    label: "Product Variant Name",
+    type: "text",
+    placeholder: "Enter Product Variant name",
   },
   location__name: {
     label: "Location Name",

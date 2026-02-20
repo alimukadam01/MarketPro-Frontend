@@ -43,7 +43,8 @@ const cols = [
 
 const filter_fields_template = {
   invoice_item__sales_invoice__id: "",
-  invoice_item__product__name: ""
+  invoice_item__product__base__name: "",
+  invoice_item__product__name: "",
 };
 
 const filter_fields_mapper = {
@@ -52,10 +53,15 @@ const filter_fields_mapper = {
     type: "number",
     placeholder: "Enter invoice id",
   },
-  invoice_item__product__name: {
+  invoice_item__product__base__name: {
     label: "Product",
     type: "text",
     placeholder: "Enter product name",
+  },
+  invoice_item__product__name: {
+    label: "Product Variant",
+    type: "text",
+    placeholder: "Enter product variant name",
   },
 };
 
