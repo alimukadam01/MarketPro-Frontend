@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
-import { updateSupplier, getSupplierDetail } from "../../services/api";
+import { suppliersAPIPackage } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
@@ -33,7 +33,7 @@ const UpdateSupplier = () => {
     const onSupplierUpdate = async (data) => {
 
         try {
-            const success = await updateSupplier(token, supplier_id, data);
+            const success = await suppliersAPIPackage.update(token, supplier_id, data);
 
             if (success) {
                 toast.success("Supplier updated successfully!");
@@ -63,7 +63,7 @@ const UpdateSupplier = () => {
           if (!supplier_id) return;
     
           try {
-            const supplier = await getSupplierDetail(token, supplier_id);
+            const supplier = await suppliersAPIPackage.detail(token, supplier_id);
             if (supplier) {
               populateSupplierFields(supplier);
             } else {

@@ -25,6 +25,8 @@ const UpdateReturnedItem = () => {
         defaultValues: {
             sales_invoice_id: "",
             invoice_item_id: "",
+            product: null,
+            invoice_no: "",
             quantity: "",
             reason: "",
             is_damaged: false
@@ -33,9 +35,10 @@ const UpdateReturnedItem = () => {
 
     const onReturnedItemUpdate = async (data) => {
 
+        const {invoice_no, product, ...rest} = data
+
         try {
-            console.log(data)
-            const success = await returnedItemsAPIPackage.update(token, returned_item_id, data);
+            const success = await returnedItemsAPIPackage.update(token, returned_item_id, ...rest);
 
             if (success) {
                 toast.success("Returned Item updated successfully!");
@@ -49,10 +52,14 @@ const UpdateReturnedItem = () => {
     };
 
     const populateReturnedItemFields = (data) => {
-        console.log("from populateReturnedItems: ", data.is_damaged)
+        const product = data.invoice_item.product
+        const invoice_no = data.invoice_item.sales_invoice.invoice_number
+        const invoice_id = data.invoice_item.sales_invoice.id
         reset({
-            sales_invoice_id: data.invoice_item.sales_invoice.id,
-            invoice_item_id: data.invoice_item.id || "",
+            sales_invoice_id: invoice_id,
+            invoice_no: invoice_no? invoice_no: `Sales Invoice (${invoice_id})`,
+            product: `${product.base.name} (${product.name})`,
+            invoice_item_id: data.invoice_item.id,
             quantity: data.quantity || "",
             reason: data.reason || "",
             is_damaged: data.is_damaged
@@ -83,11 +90,6 @@ const UpdateReturnedItem = () => {
         fetchReturnedItem();
     }, [token, returned_item_id]);
 
-
-    {
-        console.log(typeof (watch("is_damaged")))
-    }
-
     return (
         <div className="min-h-screen bg-background">
             <Sidebar onCollapseChange={setSidebarCollapsed} />
@@ -113,11 +115,11 @@ const UpdateReturnedItem = () => {
                                 <div className="flex gap-6 mb-6">
                                     <div className="flex-1 space-y-1">
                                         <Label htmlFor="sales_invoice_id">Sales Invoice</Label>
-                                        <Input id="sales_invoice_id" type="text" value={`Sales Invoice (${watch("sales_invoice_id")})`} disabled={true} />
+                                        <Input id="sales_invoice_id" type="text" value={watch("invoice_no")} disabled={true} />
                                     </div>
                                     <div className="flex-1 space-y-1">
                                         <Label htmlFor="invoice_item_id">Invoice Item</Label>
-                                        <Input id="invoice_item_id" type="text" value={watch("invoice_item_id")} disabled={true} />
+                                        <Input id="invoice_item_id" type="text" value={watch("product")} disabled={true} />
                                     </div>
                                     <div className="flex-1 space-y-1">
                                         <Label htmlFor="quantity">Quantity</Label>

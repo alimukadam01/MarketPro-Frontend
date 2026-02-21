@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
-import { postSupplier } from "../../services/api";
+import { postSupplier, suppliersAPIPackage } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
@@ -31,7 +31,7 @@ const CreateSupplier = () => {
     const onSupplierCreate = async (data) => {
 
         try {
-            const success = await postSupplier(token, data);
+            const success = await suppliersAPIPackage.create(token, data);
 
             if (success) {
                 toast.success("Supplier created successfully!");

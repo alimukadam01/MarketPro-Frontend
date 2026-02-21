@@ -165,9 +165,14 @@ export function transformCustomer(data) {
 }
 
 export function transformReturnedItem(data){
+  
+  const invoice_no = data.invoice_item.sales_invoice.invoice_number
+  const sales_invoice = data.invoice_item.sales_invoice.id
+
   return {
     id: data.id,
-    sales_invoice: data.invoice_item.sales_invoice.id,
+    sales_invoice: invoice_no? invoice_no: `Sales Invoice (${sales_invoice})`,
+    invoice_no: data.invoice_item.sales_invoice.invoice_no,
     invoice_date: formatDate(data.invoice_item.sales_invoice.date_issued),
     product: `${data.invoice_item.product.base.name} (${data.invoice_item.product.name})`,
     quantity: data.quantity,

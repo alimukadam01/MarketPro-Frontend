@@ -13,9 +13,7 @@ import {
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
-  getSuppliersList,
-  bulkDeleteSuppliers,
-  deleteSupplier,
+  suppliersAPIPackage,
   getTotalSuppliers
 } from "../../services/api";
 import {
@@ -76,10 +74,10 @@ const Suppliers = () => {
     let is_deleted = false;
     try {
       if (selectedRows.length > 1) {
-        is_deleted = await bulkDeleteSuppliers(token, selectedRows);
+        is_deleted = await suppliersAPIPackage.bulkDelete(token, selectedRows);
       } else {
         console.log("Deleting single invoice with ID:", selectedRows[0]);
-        is_deleted = await deleteSupplier(token, selectedRows[0]);
+        is_deleted = await suppliersAPIPackage.delete(token, selectedRows[0]);
       }
 
       if (is_deleted) {
@@ -106,7 +104,7 @@ const Suppliers = () => {
     if (!token) return;
 
     try {
-      const res = await getSuppliersList(token, searchQuery);
+      const res = await suppliersAPIPackage.list(token, searchQuery);
       if (res) {
         setSuppliersData(res);
       } else {
@@ -209,7 +207,7 @@ const Suppliers = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
-                    placeholder="Search supplier by name, ID or Unit."
+                    placeholder="Search Suppliers"
                     className="pl-10 w-80"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -232,16 +230,6 @@ const Suppliers = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1}
-                  onClick={() => navigate("/suppliers/view-supplier")}
-                >
-                  <Eye className="h-4 w-4" />
-                  <span>View Supplier</span>
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center space-x-2"
                   onClick={() => navigate("/suppliers/create-supplier")}
                 >
                   <Plus className="w-4 h-4" />
@@ -255,7 +243,7 @@ const Suppliers = () => {
                   onClick={handleUpdateClick}
                 >
                   <Edit className="w-4 h-4" />
-                  <span>Update</span>
+                  <span>View/Update</span>
                 </Button>
                 <Button
                   variant="outline"

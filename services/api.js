@@ -9,9 +9,9 @@ import {
     transformProductVariant
 } from "./utils";
 
-// const BASE_URL = "http://localhost:8000/"
-const BASE_URL = "https://backend.market-pro.pk/"
+const DEBUG = false
 
+const BASE_URL = DEBUG? "http://localhost:8000/": "https://backend.market-pro.pk/"
 const apiClient = axios.create({
     baseURL: BASE_URL,
     headers: {
@@ -117,6 +117,7 @@ export default class APIPackage {
 
 export const locationsAPIPackage = new APIPackage("locations")
 export const expensesAPIPackage = new APIPackage("expenses")
+export const suppliersAPIPackage = new APIPackage("suppliers")
 
 export const getUnitsList = async (token) => {
     try {

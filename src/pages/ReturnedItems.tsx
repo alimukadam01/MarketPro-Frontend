@@ -33,7 +33,7 @@ import { useNavigate } from "react-router-dom";
 
 const cols = [
   { key: "id", label: "ID" },
-  { key: "sales_invoice", label: "Sales Invoice ID" },
+  { key: "sales_invoice", label: "Sales Invoice" },
   { key: "product", label: "Product" },
   { key: "quantity", label: "Quantity" },
   { key: "invoice_date", label: "Invoice Dated At" },
@@ -204,10 +204,6 @@ const ReturnedItems = () => {
     return () => clearTimeout(delayDebounce);
   }, [searchTerm])
 
-  {
-    console.log(token)
-  }
-
   return (
     <div className="min-h-screen bg-background">
       <Sidebar onCollapseChange={setSidebarCollapsed} />
@@ -260,7 +256,7 @@ const ReturnedItems = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
-                    placeholder="Search returned item by name, ID or Unit."
+                    placeholder="Search Returned Items"
                     className="pl-10 w-80"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}

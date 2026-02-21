@@ -204,7 +204,7 @@ const Locations = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
-                    placeholder="Search location by name, ID or Unit."
+                    placeholder="Search Locations"
                     className="pl-10 w-80"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -262,6 +262,7 @@ const Locations = () => {
               data={locationsData}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
+              colsConfig="[48px_512px_1fr]"
             />
           ) : null}
 
