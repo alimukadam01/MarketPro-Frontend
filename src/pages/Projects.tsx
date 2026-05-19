@@ -1,6 +1,3 @@
-
-// Create a mapper fucntion that maps Supplier.city to string value to parse into a string.
-
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import CustomFilter from "@/components/layout/CustomFilter";
@@ -10,20 +7,22 @@ import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   formatSearchQuery,
+  transformProject,
+  createIdMap
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
-  suppliersAPIPackage,
-  getTotalSuppliers
+  projectsAPIPackage,
+  getTotalProjects
 } from "../../services/api";
 import {
-  Eye,
   ArrowLeft,
-  Plus,
-  Filter,
   Search,
   Edit,
   Trash2,
+  Filter,
+  Undo2,
+  Plus,
   Lock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -35,35 +34,38 @@ import { useNavigate } from "react-router-dom";
 const cols = [
   { key: "id", label: "ID" },
   { key: "name", label: "Name" },
-  { key: "business_name", label: "Business" },
-  { key: "phone", label: "Contact No." },
-  { key: "email", label: "Email" },
+  { key: "customer", label: "Customer" },
+  { key: "status", label: "Status" },
+  { key: "purchase_invoices", label: "Purchase Invoices" },
+  { key: "sales_invoices", label: "Sales Invoices" },
+  { key: "tasks", label: "Tasks" },
 ];
 
-// const filter_fields_template = {
-//   unit__name: ""
-// };
+const filter_fields_template = {
+  customer: ""
+};
 
-// const filter_fields_mapper = {
-//   unit__name: {
-//     label: "Unit",
-//     type: "text",
-//     placeholder: "Enter unit",
-//   },
-// };
+const filter_fields_mapper = {
+  customer: {
+    label: "Customer",
+    type: "text",
+    placeholder: "Enter customer name",
+  },
+};
 
-const Suppliers = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [selectedRows, setSelectedRows] = useState([]);
-  const [suppliersData, setSuppliersData] = useState(null);
-  const [totalSuppliers, setTotalSuppliers] = useState(0);
-  const [searchTerm, setSearchTerm] = useState("");
-  const { token } = useAuth() || null;
+const Projects = () => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
+  const [selectedRows, setSelectedRows] = useState([])
+  const [projectsData, setProjectsData] = useState(null)
+  const [projectsIdMap, setProjectsIdMap] = useState([])
+  const [totalProjects, setTotalProjects] = useState(0)
+  const [searchTerm, setSearchTerm] = useState("")
+  const { token } = useAuth() || null
   const { getPermissions } = useAuth()
-  const permissions = getPermissions("suppliers")
-  const [isDeleted, setIsDeleted] = useState(false);
-  //   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
-  const navigate = useNavigate();
+  const permissions = getPermissions("projects")
+  const [isDeleted, setIsDeleted] = useState(false)
+  const [filterWindowOpen, setFilterWindowOpen] = useState(false)
+  const navigate = useNavigate()
 
   const toggleRowSelection = (id: string) => {
     setSelectedRows((prev) =>
@@ -77,82 +79,87 @@ const Suppliers = () => {
     let is_deleted = false;
     try {
       if (selectedRows.length > 1) {
-        is_deleted = await suppliersAPIPackage.bulkDelete(token, selectedRows);
+        is_deleted = await projectsAPIPackage.bulkDelete(token, selectedRows);
       } else {
-        console.log("Deleting single invoice with ID:", selectedRows[0]);
-        is_deleted = await suppliersAPIPackage.delete(token, selectedRows[0]);
+        console.log("Deleting project with ID:", selectedRows[0]);
+        is_deleted = await projectsAPIPackage.delete(token, selectedRows[0]);
       }
 
       if (is_deleted) {
-        toast.success("Suppliers deleted successfully.");
+        toast.success("Projects deleted successfully.");
         setIsDeleted(!isDeleted);
         setSelectedRows([]);
       } else {
-        toast.error("Failed to delete suppliers.");
+        toast.error("Failed to delete projects.");
       }
     } catch (error) {
-      toast.error("Failed to delete suppliers.");
+      toast.error("Failed to delete projects.");
       console.error(error);
     }
-  };
+  }
 
   const handleUpdateClick = () => {
     if (selectedRows.length !== 1) return
-    navigate("/suppliers/update-supplier", {
-      state: { supplier_id: selectedRows[0] },
+    navigate("/projects/view-project", {
+      state: { project_id: selectedRows[0] },
     });
   };
 
-  const fetchSuppliers = async (searchQuery = null) => {
+  const fetchProjects = async (searchQuery = null) => {
     if (!token) return;
 
     try {
-      const res = await suppliersAPIPackage.list(token, searchQuery);
+      const res = await projectsAPIPackage.list(token, searchQuery);
+      if (searchQuery){
+        console.log(res)
+      }
       if (res) {
-        setSuppliersData(res);
+        setProjectsData(res.map(transformProject))
+        setProjectsIdMap(createIdMap(res))
       } else {
-        toast.error("Failed to fetch suppliers.");
+        toast.error("Failed to fetch projects.");
       }
     } catch (error) {
-      toast.error("Failed to fetch suppliers.");
-      console.error("Error fetching suppliers:", error);
+      toast.error("Failed to fetch projects.");
+      console.error("Error fetching projects:", error);
     }
   };
 
-  //   const handleFilterClick = (e) => {
-  //     e.preventDefault();
-  //     setFilterWindowOpen(!filterWindowOpen);
-  //   };
+  const handleFilterClick = (e) => {
+    e.preventDefault();
+    setFilterWindowOpen(!filterWindowOpen);
+  };
 
   useEffect(() => {
 
-    const fetchTotalSuppliers = async (searchQuery = null) => {
+    const fetchTotalProjects = async () => {
       if (!token) return;
-
-      try {
-        const res = await getTotalSuppliers(token, searchQuery);
-        if (res!==null) {
-          setTotalSuppliers(res);
-        } else {
-          toast.error("Failed to fetch total suppliers.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total suppliers.");
-        console.error("Error fetching total suppliers:", error);
-      }
+        
+      return 0
+    //   try {
+    //     const res = await getTotalProjects(token);
+    //     if (res!==null) {
+    //       setTotalProjects(res);
+    //     } else {
+    //       toast.error("Failed to fetch total projects.");
+    //     }
+    //   } catch (error) {
+    //     toast.error("Failed to fetch total projects.");
+    //     console.error("Error fetching total projects:", error);
+    //   }
     }
 
-    fetchTotalSuppliers()
-    fetchSuppliers()
+    fetchTotalProjects()
+    fetchProjects();
   }, [token, isDeleted])
 
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
       if (searchTerm.trim() !== "") {
         const query = formatSearchQuery(searchTerm);
-        await fetchSuppliers(query);
+        await fetchProjects(query);
       } else {
-        await fetchSuppliers();
+        await fetchProjects();
       }
     }, 400); // wait 400ms after user stops typing
 
@@ -164,8 +171,9 @@ const Suppliers = () => {
       <Sidebar onCollapseChange={setSidebarCollapsed} />
 
       <div
-        className={`${sidebarCollapsed ? "ml-16" : "ml-64"
-          } transition-all duration-300 flex flex-col`}
+        className={`${
+          sidebarCollapsed ? "ml-16" : "ml-64"
+        } transition-all duration-300 flex flex-col`}
       >
         <Header />
 
@@ -181,9 +189,9 @@ const Suppliers = () => {
                   onClick={() => navigate("/")}
                 />
                 <div className="flex-1 items-center justify-between">
-                  <h1 className="text-2xl font-semibold">Suppliers Overview</h1>
+                  <h1 className="text-2xl font-semibold">Projects Overview</h1>
                   <p className="text-sm text-muted-foreground">
-                    View and manage suppliers.
+                    View and manage projects.
                   </p>
                 </div>
               </div>
@@ -194,15 +202,15 @@ const Suppliers = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">
-                Total Suppliers
+                Total Projects
               </div>
-              <div className="text-3xl font-bold">{totalSuppliers}</div>
+              <div className="text-3xl font-bold">{totalProjects}</div>
             </div>
           </div>
 
           {/* Sales Records Section */}
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Supplier Listing</h2>
+            <h2 className="text-xl font-semibold">Project Listing</h2>
 
             {/* Search and Filter */}
             <div className="flex items-center justify-between mb-4">
@@ -210,13 +218,13 @@ const Suppliers = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
-                    placeholder="Search Suppliers"
+                    placeholder="Search Projects"
                     className="pl-10 w-80"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
-                {/* <Button
+                <Button
                   variant="outline"
                   className="flex items-center space-x-2"
                   onClick={handleFilterClick}
@@ -224,7 +232,7 @@ const Suppliers = () => {
                 >
                   <Filter className="w-4 h-4" />
                   <span>Filter</span>
-                </Button> */}
+                </Button>
               </div>
 
               {/* Action Icons */}
@@ -234,11 +242,12 @@ const Suppliers = () => {
                   size="sm"
                   className="flex items-center space-x-2"
                   disabled={!permissions["create"]}
-                  onClick={() => navigate("/suppliers/create-supplier")}
+                  onClick={() => navigate("/projects/create-project")}
                 >
                   {permissions["create"] ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                  <span>Create Supplier</span>
+                  <span>Create Project</span>
                 </Button>
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -247,8 +256,9 @@ const Suppliers = () => {
                   onClick={handleUpdateClick}
                 >
                   {permissions["edit"] ? <Edit className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                  <span>View/Update</span>
+                  <span>View/Update Item</span>
                 </Button>
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -263,26 +273,26 @@ const Suppliers = () => {
             </div>
           </div>
 
-          {suppliersData && suppliersData.length > 0 ? (
+          {projectsData && projectsData.length > 0 ? (
             <DataTable
               columns={cols}
-              data={permissions["view"] ? suppliersData : null}
+              data={permissions["view"] ? projectsData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
             />
           ) : null}
 
-          {/* <CustomFilter
+          <CustomFilter
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
-            dataFetcher={fetchSuppliers}
+            dataFetcher={fetchProjects}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
-          /> */}
+          />
         </main>
       </div>
     </div>
   );
 };
 
-export default Suppliers;
+export default Projects;

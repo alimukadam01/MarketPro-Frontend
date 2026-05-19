@@ -23,7 +23,8 @@ import {
   Edit,
   Trash2,
   Filter,
-  Undo2
+  Undo2,
+  Lock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
@@ -73,6 +74,8 @@ const ReturnedItems = () => {
   const [totalReturnedItems, setTotalReturnedItems] = useState(0)
   const [searchTerm, setSearchTerm] = useState("")
   const { token } = useAuth() || null
+  const { getPermissions } = useAuth()
+  const permissions = getPermissions("returned_items")
   const [isDeleted, setIsDeleted] = useState(false)
   const [filterWindowOpen, setFilterWindowOpen] = useState(false)
   const navigate = useNavigate()
@@ -279,18 +282,18 @@ const ReturnedItems = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1 || (selectedRows.length > 0 && returnedItemsIdMap[selectedRows[0]]?.is_returned)}
+                  disabled={selectedRows.length !== 1 || (selectedRows.length > 0 && returnedItemsIdMap[selectedRows[0]]?.is_returned) || !permissions["edit"]}
                   onClick={handleReturnToInventory}
                 >
                   <Undo2 className="w-4 h-4" />
                   <span>Restock</span>
                 </Button>
-                
+
                 <Button
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1 || (selectedRows.length > 0 && returnedItemsIdMap[selectedRows[0]]?.is_returned)}
+                  disabled={selectedRows.length !== 1 || (selectedRows.length > 0 && returnedItemsIdMap[selectedRows[0]]?.is_returned) || !permissions["edit"]}
                   onClick={handleReturnToSalesInvoice}
                 >
                   <Undo2 className="w-4 h-4" />
@@ -301,10 +304,10 @@ const ReturnedItems = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1}
+                  disabled={selectedRows.length !== 1 || !permissions["edit"]}
                   onClick={handleUpdateClick}
                 >
-                  <Edit className="w-4 h-4" />
+                  {permissions["edit"] ? <Edit className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>View/Update Item</span>
                 </Button>
 
@@ -313,9 +316,9 @@ const ReturnedItems = () => {
                   size="sm"
                   className="flex items-center space-x-2"
                   onClick={handleDeletion}
-                  disabled={selectedRows.length === 0}
+                  disabled={selectedRows.length === 0 || !permissions["delete"]}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  {permissions["delete"] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>Delete</span>
                 </Button>
               </div>
@@ -325,7 +328,7 @@ const ReturnedItems = () => {
           {returnedItemsData && returnedItemsData.length > 0 ? (
             <DataTable
               columns={cols}
-              data={returnedItemsData}
+              data={permissions["view"] ? returnedItemsData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               colsConfig={"[48px_120px_512px_1fr_1fr_1fr_1fr]"}

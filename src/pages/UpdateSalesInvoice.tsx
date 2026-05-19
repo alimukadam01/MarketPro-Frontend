@@ -22,7 +22,8 @@ import {
   getCustomersList,
   updateSalesInvoiceAndItems,
   getSalesInvoiceDetail,
-  getInvoicePDFData
+  getInvoicePDFData,
+  projectsAPIPackage
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import ReturnItem from "@/components/ui/return-item";
@@ -38,6 +39,7 @@ const UpdateSalesInvoice = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
+  const [projects, setProjects] = useState([])
   const [pdfData, setPdfData] = useState(null)
   const { token } = useAuth()
   const businessId = localStorage.getItem("mp-business-id")
@@ -57,6 +59,7 @@ const UpdateSalesInvoice = () => {
       tax: "0.0",
       payment_status: "Pending",
       status: "Pending",
+      project: null,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemPrice: 0
@@ -114,7 +117,7 @@ const UpdateSalesInvoice = () => {
 
       if (success) {
         toast.success("Sales invoice updated successfully!")
-        navigate("/sales");
+        navigate(-1);
       } else {
         toast.error("Failed to update sales invoice.")
       }
@@ -155,6 +158,7 @@ const UpdateSalesInvoice = () => {
       tax: data.tax?.value ?? "0.0",
       payment_status: data.payment_status || "Pending",
       status: data.status || "Pending",
+      project: data.projects?.length > 0 ? String(data.projects[0].project) : null,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemPrice: 0,
@@ -241,10 +245,30 @@ const UpdateSalesInvoice = () => {
       }
     }
 
-    fetchSalesInvoice()
-    fetchProducts()
-    fetchCustomers()
-    fetchSalesInvoicePDFData()
+    const fetchProjects = async () => {
+      try {
+        const data = await projectsAPIPackage.list(token)
+        if (data) {
+          setProjects(createIdMap(data))
+        } else {
+          toast.error("Failed to fetch projects")
+        }
+      } catch (error) {
+        console.log("Error fetching projects:", error)
+        toast.error("Failed to fetch projects")
+      }
+    }
+
+    const init = async () => {
+      await Promise.all([
+        fetchProducts(),
+        fetchCustomers(),
+        fetchSalesInvoicePDFData(),
+        fetchProjects(),
+      ])
+      fetchSalesInvoice()
+    }
+    init()
   }, [token, invoice_id])
 
   useEffect(() => {
@@ -258,6 +282,10 @@ const UpdateSalesInvoice = () => {
     setItemReturned(false)
     setSelectedRows([])
   }, [itemReturned == true])
+
+  {
+    console.log(watch("project"))
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -508,18 +536,38 @@ const UpdateSalesInvoice = () => {
               </div>
 
               <div className="flex justify-end gap-3 mt-auto">
-                {
-                  pdfData &&
-                  <PDFDownloadLink
-                    document={<Invoice token={token} invoice_id={invoice_id} />}
-                    fileName={`invoice.pdf`}
-                  >
-                    <Button type="button">Download PDF</Button>
-                  </PDFDownloadLink>
-                }
                 <div className="flex justify-end gap-3 mt-auto">
+                  <Controller
+                    name="project"
+                    control={control}
+                    render={({ field }) => (
+                      <Select onValueChange={(val) => field.onChange(val === "none" ? null : val)} value={field.value ?? "none"}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Add to project" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No project</SelectItem>
+                          {projects && Object.keys(projects).length > 0 && Object.entries(projects).map(([key, project]) => (
+                            <SelectItem value={key} key={key}>
+                              {project.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  {
+                    pdfData &&
+                    <PDFDownloadLink
+                      document={<Invoice token={token} invoice_id={invoice_id} />}
+                      fileName={`invoice.pdf`}
+                    >
+                      <Button type="button">Download PDF</Button>
+                    </PDFDownloadLink>
+                  }
                   <Button type="submit">Update Invoice</Button>
                 </div>
+
               </div>
             </div>
           </form>

@@ -14,7 +14,7 @@ import {
   getTotalInventoryValue,
   getTotalRestocksReq
 } from "../../services/api";
-import { Eye, ArrowLeft, Plus, Filter, Search, Edit, Trash2 } from "lucide-react";
+import { Eye, ArrowLeft, Plus, Filter, Search, Edit, Trash2, Lock } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -69,6 +69,8 @@ const InventoryOverview = () => {
   const [totalRestocksReq, setTotalRestocksReq] = useState(0)
   const [searchTerm, setSearchTerm] = useState(null);
   const { token } = useAuth() || null
+  const { getPermissions } = useAuth()
+  const permissions = getPermissions("inventory")
   const businessId = localStorage.getItem("mp-business-id") || null
   const [isDeleted, setIsDeleted] = useState(false)
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
@@ -259,23 +261,23 @@ const InventoryOverview = () => {
 
               {/* Action Icons */}
               <div className="flex items-center space-x-3">
-                <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={() => navigate("/inventory/create-item")}>
-                  <Plus className="w-4 h-4" />
+                <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={!permissions["create"]} onClick={() => navigate("/inventory/create-item")}>
+                  {permissions["create"] ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>Create Item</span>
                 </Button>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1} onClick={handleUpdateClick}>
-                  <Edit className="w-4 h-4" />
+                <Button variant="outline" size="sm" className="flex items-center space-x-2" disabled={selectedRows.length !== 1 || !permissions["edit"]} onClick={handleUpdateClick}>
+                  {permissions["edit"] ? <Edit className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>View/Update</span>
                 </Button>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={handleDeletion} disabled={selectedRows.length === 0}>
-                  <Trash2 className="w-4 h-4" />
+                <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={handleDeletion} disabled={selectedRows.length === 0 || !permissions["delete"]}>
+                  {permissions["delete"] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>Delete</span>
                 </Button>
               </div>
             </div>
 
             {/* Inventory Data Table */}
-            {inventoryData && inventoryData.length > 0 ? <DataTable columns={cols} data={inventoryData} selectedRows={selectedRows} onRowClick={toggleRowSelection} colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"} /> : null}
+            {inventoryData && inventoryData.length > 0 ? <DataTable columns={cols} data={permissions["view"] ? inventoryData : null} selectedRows={selectedRows} onRowClick={toggleRowSelection} colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"} /> : null}
 
             <CustomFilter
               template={filter_fields_template}

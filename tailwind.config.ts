@@ -17,6 +17,7 @@ export default {
 	"grid-cols-[48px_120px_512px_1fr_1fr_1fr_1fr]",
 	"grid-cols-[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]",
 	"grid-cols-[48px_512px_1fr]",
+	"grid-cols-[48px_1fr_1fr_1fr_1fr_512px]",
     "border-2",
     "border-2",
     "border-border",

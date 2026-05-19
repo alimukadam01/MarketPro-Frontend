@@ -11,7 +11,10 @@ import {
   Truck,
   MapPin,
   Undo2,
-  LogOut
+  LogOut,
+  FileText,
+  UserCog,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -19,16 +22,17 @@ import { useAuth } from "../../../services/AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const sidebarItems = [
-  { name: "Sales", icon: ShoppingCart, href: "/sales" },
-  { name: "Purchases", icon: Package, href: "/purchases" },
-  { name: "Inventory", icon: Archive, href: "/inventory" },
-  { name: "Expenses", icon: Wallet2, href: "/expenses" },
-  // { name: "Projects", icon: FolderOpen, href: "/projects" },
-  { name: "Products", icon: PackageOpen, href: "/products" },
-  { name: "Customers", icon: Users, href: "/customers" },
-  { name: "Suppliers", icon: Truck, href: "/suppliers" },
-  { name: "Locations", icon: MapPin, href: "/locations" },
-  { name: "Returned Items", icon: Undo2, href: "/returned-items" },
+  { name: "Sales",               icon: ShoppingCart, href: "/sales",               module: "sales" },
+  { name: "Purchases",           icon: Package,      href: "/purchases",            module: "purchases" },
+  { name: "Inventory",           icon: Archive,      href: "/inventory",            module: "inventory" },
+  { name: "Expenses",            icon: Wallet2,      href: "/expenses",             module: "expenses" },
+  { name: "Projects",            icon: FolderOpen,   href: "/projects",             module: "projects" },
+  { name: "Purchase Quotations", icon: FileText,     href: "/purchase-quotations",  module: "quotations" },
+  { name: "Products",            icon: PackageOpen,  href: "/products",             module: "products" },
+  { name: "Customers",           icon: Users,        href: "/customers",            module: "customers" },
+  { name: "Suppliers",           icon: Truck,        href: "/suppliers",            module: "suppliers" },
+  { name: "Locations",           icon: MapPin,       href: "/locations",            module: "locations" },
+  { name: "Returned Items",      icon: Undo2,        href: "/returned-items",       module: "returned_items" },
 ];
 
 interface SidebarProps {
@@ -39,7 +43,13 @@ export function Sidebar({ onCollapseChange }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth()
+  const { logout, config, user } = useAuth()
+
+  const isLocked = (module: string) => {
+    return config !== null && config[module] === false 
+  }
+
+  const isAdmin = user.role === 'admin'
 
   const handleToggle = () => {
     const newCollapsed = !isCollapsed;
@@ -80,26 +90,51 @@ export function Sidebar({ onCollapseChange }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
         {sidebarItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.href;
+          const locked = isLocked(item.module);
+
           return (
             <Button
               key={item.name}
               variant="ghost"
+              disabled={locked}
               onClick={() => navigate(item.href)}
               className={cn(
                 "w-full justify-start text-primary-foreground hover:bg-primary-foreground/20",
                 isCollapsed ? "px-2" : "px-4",
-                isActive && "bg-primary-foreground/20"
+                isActive && "bg-primary-foreground/20",
+                locked && "opacity-60 cursor-not-allowed"
               )}
             >
               <Icon className={cn("w-5 h-5", !isCollapsed && "mr-3")} />
-              {!isCollapsed && <span>{item.name}</span>}
+              {!isCollapsed && (
+                <span className="flex flex-1 items-center justify-between gap-1">
+                  {item.name}
+                  {locked && <Lock className="w-3 h-3" />}
+                </span>
+              )}
             </Button>
           );
         })}
+
+        {/* Employees link — admin only */}
+        {isAdmin && (
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/employees")}
+            className={cn(
+              "w-full justify-start text-primary-foreground hover:bg-primary-foreground/20",
+              isCollapsed ? "px-2" : "px-4",
+              location.pathname === "/employees" && "bg-primary-foreground/20"
+            )}
+          >
+            <UserCog className={cn("w-5 h-5", !isCollapsed && "mr-3")} />
+            {!isCollapsed && <span>Employees</span>}
+          </Button>
+        )}
       </nav>
 
       {/* Logout Button */}

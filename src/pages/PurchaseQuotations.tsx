@@ -1,6 +1,3 @@
-
-// Create a mapper fucntion that maps Supplier.city to string value to parse into a string.
-
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import CustomFilter from "@/components/layout/CustomFilter";
@@ -10,20 +7,22 @@ import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   formatSearchQuery,
+  transformPurchaseQuotation,
+  createIdMap
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
-  suppliersAPIPackage,
-  getTotalSuppliers
+  purchaseQuotationsAPIPackage,
+  getTotalPurchaseQuotations
 } from "../../services/api";
 import {
-  Eye,
   ArrowLeft,
-  Plus,
-  Filter,
   Search,
   Edit,
   Trash2,
+  Filter,
+  Undo2,
+  Plus,
   Lock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -34,36 +33,38 @@ import { useNavigate } from "react-router-dom";
 
 const cols = [
   { key: "id", label: "ID" },
-  { key: "name", label: "Name" },
-  { key: "business_name", label: "Business" },
-  { key: "phone", label: "Contact No." },
-  { key: "email", label: "Email" },
+  { key: "quotation_no", label: "Quotation No." },
+  { key: "status", label: "Status" },
+  { key: "items", label: "Total Items" },
+  { key: "created_at", label: "Created At" },
+  { key: "notes", label: "Notes" }
 ];
 
 // const filter_fields_template = {
-//   unit__name: ""
+//   customer: ""
 // };
 
 // const filter_fields_mapper = {
-//   unit__name: {
-//     label: "Unit",
+//   customer: {
+//     label: "Customer",
 //     type: "text",
-//     placeholder: "Enter unit",
+//     placeholder: "Enter customer name",
 //   },
 // };
 
-const Suppliers = () => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [selectedRows, setSelectedRows] = useState([]);
-  const [suppliersData, setSuppliersData] = useState(null);
-  const [totalSuppliers, setTotalSuppliers] = useState(0);
-  const [searchTerm, setSearchTerm] = useState("");
-  const { token } = useAuth() || null;
+const PurchaseQuotations = () => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
+  const [selectedRows, setSelectedRows] = useState([])
+  const [purchaseQuotationsData, setPurchaseQuotationsData] = useState(null)
+  const [purchaseQuotationsIdMap, setPurchaseQuotationsIdMap] = useState([])
+  const [totalPurchaseQuotations, setTotalPurchaseQuotations] = useState(0)
+  const [searchTerm, setSearchTerm] = useState("")
+  const { token } = useAuth() || null
   const { getPermissions } = useAuth()
-  const permissions = getPermissions("suppliers")
-  const [isDeleted, setIsDeleted] = useState(false);
-  //   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
-  const navigate = useNavigate();
+  const permissions = getPermissions("quotations")
+  const [isDeleted, setIsDeleted] = useState(false)
+  const [filterWindowOpen, setFilterWindowOpen] = useState(false)
+  const navigate = useNavigate()
 
   const toggleRowSelection = (id: string) => {
     setSelectedRows((prev) =>
@@ -77,82 +78,84 @@ const Suppliers = () => {
     let is_deleted = false;
     try {
       if (selectedRows.length > 1) {
-        is_deleted = await suppliersAPIPackage.bulkDelete(token, selectedRows);
+        is_deleted = await purchaseQuotationsAPIPackage.bulkDelete(token, selectedRows, "purchase_quotation");
       } else {
-        console.log("Deleting single invoice with ID:", selectedRows[0]);
-        is_deleted = await suppliersAPIPackage.delete(token, selectedRows[0]);
+        console.log("Deleting purchase quotation with ID:", selectedRows[0]);
+        is_deleted = await purchaseQuotationsAPIPackage.delete(token, selectedRows[0]);
       }
 
       if (is_deleted) {
-        toast.success("Suppliers deleted successfully.");
+        toast.success("Purchase Quotations deleted successfully.");
         setIsDeleted(!isDeleted);
         setSelectedRows([]);
       } else {
-        toast.error("Failed to delete suppliers.");
+        toast.error("Failed to delete purchase quotations.");
       }
     } catch (error) {
-      toast.error("Failed to delete suppliers.");
+      toast.error("Failed to delete purchase quotations.");
       console.error(error);
     }
-  };
+  }
 
   const handleUpdateClick = () => {
     if (selectedRows.length !== 1) return
-    navigate("/suppliers/update-supplier", {
-      state: { supplier_id: selectedRows[0] },
+    navigate("/purchase-quotations/update-purchase-quotation", {
+      state: { purchase_quotation_id: selectedRows[0] },
     });
   };
 
-  const fetchSuppliers = async (searchQuery = null) => {
+  const fetchPurchaseQuotations = async (searchQuery = null) => {
     if (!token) return;
 
     try {
-      const res = await suppliersAPIPackage.list(token, searchQuery);
+      const res = await purchaseQuotationsAPIPackage.list(token, searchQuery);
       if (res) {
-        setSuppliersData(res);
+        setPurchaseQuotationsData(res.map(transformPurchaseQuotation))
+        setPurchaseQuotationsIdMap(createIdMap(res))
       } else {
-        toast.error("Failed to fetch suppliers.");
+        toast.error("Failed to fetch purchase quotations.");
       }
     } catch (error) {
-      toast.error("Failed to fetch suppliers.");
-      console.error("Error fetching suppliers:", error);
+      toast.error("Failed to fetch purchase quotations.");
+      console.error("Error fetching purchase quotations:", error);
     }
   };
 
-  //   const handleFilterClick = (e) => {
-  //     e.preventDefault();
-  //     setFilterWindowOpen(!filterWindowOpen);
-  //   };
+  const handleFilterClick = (e) => {
+    e.preventDefault();
+    setFilterWindowOpen(!filterWindowOpen);
+  }
 
   useEffect(() => {
 
-    const fetchTotalSuppliers = async (searchQuery = null) => {
+    const fetchTotalPurchaseQuotations = async () => {
       if (!token) return;
-
-      try {
-        const res = await getTotalSuppliers(token, searchQuery);
-        if (res!==null) {
-          setTotalSuppliers(res);
-        } else {
-          toast.error("Failed to fetch total suppliers.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total suppliers.");
-        console.error("Error fetching total suppliers:", error);
-      }
+        
+      return 0
+    //   try {
+    //     const res = await getTotalPurchaseQuotations(token);
+    //     if (res!==null) {
+    //       setTotalPurchaseQuotations(res);
+    //     } else {
+    //       toast.error("Failed to fetch total purchase quotations.");
+    //     }
+    //   } catch (error) {
+    //     toast.error("Failed to fetch total purchase quotations.");
+    //     console.error("Error fetching total purchase quotations:", error);
+    //   }
     }
 
-    fetchTotalSuppliers()
-    fetchSuppliers()
+    fetchTotalPurchaseQuotations()
+    fetchPurchaseQuotations();
   }, [token, isDeleted])
 
   useEffect(() => {
     const delayDebounce = setTimeout(async () => {
       if (searchTerm.trim() !== "") {
         const query = formatSearchQuery(searchTerm);
-        await fetchSuppliers(query);
+        await fetchPurchaseQuotations(query);
       } else {
-        await fetchSuppliers();
+        await fetchPurchaseQuotations();
       }
     }, 400); // wait 400ms after user stops typing
 
@@ -164,8 +167,9 @@ const Suppliers = () => {
       <Sidebar onCollapseChange={setSidebarCollapsed} />
 
       <div
-        className={`${sidebarCollapsed ? "ml-16" : "ml-64"
-          } transition-all duration-300 flex flex-col`}
+        className={`${
+          sidebarCollapsed ? "ml-16" : "ml-64"
+        } transition-all duration-300 flex flex-col`}
       >
         <Header />
 
@@ -181,9 +185,9 @@ const Suppliers = () => {
                   onClick={() => navigate("/")}
                 />
                 <div className="flex-1 items-center justify-between">
-                  <h1 className="text-2xl font-semibold">Suppliers Overview</h1>
+                  <h1 className="text-2xl font-semibold">Purchase Quotations Overview</h1>
                   <p className="text-sm text-muted-foreground">
-                    View and manage suppliers.
+                    View and manage purchase quotations.
                   </p>
                 </div>
               </div>
@@ -194,15 +198,15 @@ const Suppliers = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="bg-card rounded-lg p-6 border">
               <div className="text-sm text-muted-foreground mb-2">
-                Total Suppliers
+                Total Purchase Quotations
               </div>
-              <div className="text-3xl font-bold">{totalSuppliers}</div>
+              <div className="text-3xl font-bold">{totalPurchaseQuotations}</div>
             </div>
           </div>
 
           {/* Sales Records Section */}
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Supplier Listing</h2>
+            <h2 className="text-xl font-semibold">Purchase Quotation Listing</h2>
 
             {/* Search and Filter */}
             <div className="flex items-center justify-between mb-4">
@@ -210,7 +214,7 @@ const Suppliers = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
                   <Input
-                    placeholder="Search Suppliers"
+                    placeholder="Search Purchase Quotations"
                     className="pl-10 w-80"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -234,11 +238,12 @@ const Suppliers = () => {
                   size="sm"
                   className="flex items-center space-x-2"
                   disabled={!permissions["create"]}
-                  onClick={() => navigate("/suppliers/create-supplier")}
+                  onClick={() => navigate("/purchase-quotations/create-purchase-quotation")}
                 >
                   {permissions["create"] ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                  <span>Create Supplier</span>
+                  <span>Create Purchase Quotation</span>
                 </Button>
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -247,8 +252,9 @@ const Suppliers = () => {
                   onClick={handleUpdateClick}
                 >
                   {permissions["edit"] ? <Edit className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                  <span>View/Update</span>
+                  <span>View/Update Item</span>
                 </Button>
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -263,19 +269,20 @@ const Suppliers = () => {
             </div>
           </div>
 
-          {suppliersData && suppliersData.length > 0 ? (
+          {purchaseQuotationsData && purchaseQuotationsData.length > 0 ? (
             <DataTable
               columns={cols}
-              data={permissions["view"] ? suppliersData : null}
+              data={permissions["view"] ? purchaseQuotationsData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
+              colsConfig={"[48px_1fr_1fr_1fr_1fr_512px]"}
             />
           ) : null}
 
           {/* <CustomFilter
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
-            dataFetcher={fetchSuppliers}
+            dataFetcher={fetchPurchaseQuotations}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
           /> */}
@@ -285,4 +292,4 @@ const Suppliers = () => {
   );
 };
 
-export default Suppliers;
+export default PurchaseQuotations;

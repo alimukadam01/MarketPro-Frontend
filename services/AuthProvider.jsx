@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from 'react-router-dom'
+import { getBusinessConfig } from './api'
 
 // Create the context
 const AuthContext = createContext();
@@ -10,7 +11,6 @@ export const AuthProvider = ({ children }) => {
   const navigate = useNavigate()
 
   const [token, setToken] = useState(() => {
-    // Read token from localStorage on initial load
     return localStorage.getItem("mp-access-token") || null;
   });
 
@@ -19,24 +19,52 @@ export const AuthProvider = ({ children }) => {
     return storedUser ? JSON.parse(storedUser) : null;
   })
 
-  // Login: store token in both state and localStorage
-  const login = (newToken, userData) => {
-    localStorage.setItem("mp-access-token", newToken);
-    localStorage.setItem("mp-user", JSON.stringify(userData));
+  const [config, setConfig] = useState(() => {
+    const storedConfig = localStorage.getItem("mp-access-config");
+    return storedConfig ? JSON.parse(storedConfig) : null;
+  });
+
+  const [permissions, setPermissions] = useState(() => {
+    const storedPermissions = localStorage.getItem("mp-user-permissions");
+    return storedPermissions ? JSON.parse(storedPermissions) : null;
+  });
+  
+
+  // Login: store token, user, and access config
+  const login = (newToken, userData, businessId, accessConfig) => {
+
+    localStorage.setItem("mp-access-token", newToken)
+    localStorage.setItem("mp-business-id", businessId)
+    localStorage.setItem("mp-access-config", JSON.stringify(accessConfig));
     
+    const {permissions, ...userInfo} = userData
+    localStorage.setItem("mp-user-permissions", JSON.stringify(permissions))
+    console.log(userInfo)
+    localStorage.setItem("mp-user", JSON.stringify(userInfo))
+    
+
     setToken(newToken);
     setUser(userData);
+    setConfig(accessConfig);
+    setPermissions(permissions);
   };
 
-  // Logout: clear both
+  // Logout: clear everything
   const logout = () => {
     localStorage.removeItem("mp-access-token");
-    localStorage.removeItem("mp-user")
+    localStorage.removeItem("mp-user");
+    localStorage.removeItem("mp-access-config");
+    localStorage.removeItem("mp-business-id");
     setToken(null);
     setUser(null);
+    setConfig(null);
 
     navigate('/login')
   };
+
+  const getPermissions = (module) => {
+    return (permissions?.[module])
+  }
 
   // Optional: derived state
   const isAuthenticated = !!token;
@@ -47,7 +75,10 @@ export const AuthProvider = ({ children }) => {
     logout,
     isAuthenticated,
     user,
-    setUser
+    setUser,
+    config,
+    setConfig,
+    getPermissions
   };
 
   return (

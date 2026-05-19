@@ -23,6 +23,7 @@ import {
   Search,
   Edit,
   Trash2,
+  Lock,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
@@ -56,6 +57,8 @@ const Products = () => {
   const [totalProducts, setTotalProducts] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
+  const { getPermissions } = useAuth()
+  const permissions = getPermissions("products")
   const [isDeleted, setIsDeleted] = useState(false);
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();
@@ -230,19 +233,20 @@ const Products = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
+                  disabled={!permissions["create"]}
                   onClick={() => navigate("/products/create-product")}
                 >
-                  <Plus className="w-4 h-4" />
+                  {permissions["create"] ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>Create Product</span>
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1}
+                  disabled={selectedRows.length !== 1 || !permissions["edit"]}
                   onClick={handleUpdateClick}
                 >
-                  <Edit className="w-4 h-4" />
+                  {permissions["edit"] ? <Edit className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>View/Update</span>
                 </Button>
                 <Button
@@ -250,9 +254,9 @@ const Products = () => {
                   size="sm"
                   className="flex items-center space-x-2"
                   onClick={handleDeletion}
-                  disabled={selectedRows.length === 0}
+                  disabled={selectedRows.length === 0 || !permissions["delete"]}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  {permissions["delete"] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>Delete</span>
                 </Button>
               </div>
@@ -262,7 +266,7 @@ const Products = () => {
           {productsData && productsData.length > 0 ? (
             <DataTable
               columns={cols}
-              data={productsData}
+              data={permissions["view"] ? productsData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
             />

@@ -1,4 +1,5 @@
 import { React, useState } from "react";
+import {Lock} from "lucide-react";
 
 function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = null }){
 
@@ -21,7 +22,7 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
       </div>
 
       {/* Table Rows */}
-      {data.map((row, idx) => (
+      {data? data.map((row, idx) => (
         <div
           key={row.id}
           onClick={() => onRowClick && onRowClick(row.id)}
@@ -48,7 +49,12 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
             ))}
           </div>
         </div>
-      ))}
+      )): 
+        <div className="flex items-center gap-2 justify-center flex-1 mt-4">
+          <Lock className="w-4 h-4" />
+          <p>Access not granted. Please contact Admin.</p>
+        </div>
+      }
     </div>
   );
 };

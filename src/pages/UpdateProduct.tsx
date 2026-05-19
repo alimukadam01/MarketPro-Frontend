@@ -126,8 +126,6 @@ const UpdateProduct = () => {
             variants: productVariants
         }
 
-        console.log(productData)
-
         try {
             const success = await updateProductAndVariants(token, product_id, productData)
 
@@ -193,9 +191,14 @@ const UpdateProduct = () => {
             }
         }
 
-        fetchProductVariantTypes()
-        fetchUnits()
-        fetchProduct()
+        const init = async () => {
+            await Promise.all([
+                fetchProductVariantTypes(),
+                fetchUnits(),
+            ])
+            fetchProduct()
+        }
+        init()
     }, [token, product_id])
 
     return (
@@ -211,7 +214,7 @@ const UpdateProduct = () => {
                     <form onSubmit={handleSubmit(onProductUpdate)} className="flex flex-row gap-12">
                         {/* First Column */}
                         <div className="flex flex-col flex-wrap flex-1">
-                            <h2 className="text-lg font-semibold mb-6">Add New Product (Optional)</h2>
+                            <h2 className="text-lg font-semibold mb-6">Update Product</h2>
 
                             <div className="flex gap-6 mb-6">
                                 <div className="flex-1 space-y-1">
@@ -249,7 +252,7 @@ const UpdateProduct = () => {
 
                         {/* Second Column */}
                         <div className="flex flex-col flex-wrap flex-1">
-                            <h2 className="text-lg font-semibold mb-6">Add Product Variants (Optional)</h2>
+                            <h2 className="text-lg font-semibold mb-6">Update Product Variants</h2>
                             {currentAttributes && Object.keys(currentAttributes).length > 0 && <div className="flex flex-col mb-2 gap-2">
                                 {Object.entries(currentAttributes).map(([key, value], entryIndex) => (
                                     <div

@@ -4,7 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from '../services/AuthProvider'
+import ProtectedRoute from './components/ProtectedRoute'
 import Index from "./pages/Index";
+import Employees from "./pages/Employees";
 
 import Sales from "./pages/Sales";
 import CreateSalesInvoice from "./pages/CreateSalesInvoice";
@@ -41,6 +43,14 @@ import UpdateReturnedItem from "./pages/UpdateReturnedItem";
 import Expenses from "./pages/Expenses";
 import CreateExpense from "./pages/CreateExpense";
 import UpdateExpense from "./pages/UpdateExpense";
+import Projects from "./pages/Projects";
+import CreateProject from "./pages/CreateProject";
+import PurchaseQuotations from "./pages/PurchaseQuotations";
+import CreatePurchaseQuotation from "./pages/CreatePurchaseQuotation";
+import UpdatePurchaseQuotation from "./pages/UpdatePurchaseQuotation";
+import ViewProject from "./pages/ViewProject";
+import CreateProjectTask from "./pages/CreateProjectTask";
+import UpdateProjectTask from "./pages/UpdateProjectTask";
 
 const queryClient = new QueryClient();
 
@@ -53,43 +63,69 @@ const App = () => {
       <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<Index />} />
-          
-          <Route path="/sales" element={<Sales />} />
-          <Route path="/sales/create-invoice" element={<CreateSalesInvoice />} />
-          <Route path="/sales/update-invoice" element={<UpdateSalesInvoice />} />
-          
-          <Route path="/purchases" element={<Purchases />} />
-          <Route path="/purchases/create-invoice" element={<CreatePurchaseInvoice />} />
-          <Route path="/purchases/update-invoice" element={<UpdatePurchaseInvoice />} />
-          
-          <Route path="/inventory" element={<InventoryOverview />} />
-          <Route path="/inventory/create-item" element={<CreateInventoryItem />} />
-          <Route path="/inventory/update-item" element={<UpdateInventoryItem />} />
-          
-          <Route path="/products" element={<Products />} />
-          <Route path="/products/create-product" element={<CreateProduct />} />
-          <Route path="/products/update-product" element={<UpdateProduct />} />
-          
-          <Route path="/customers" element={<Customers />} />
-          <Route path="/customers/create-customer" element={<CreateCustomer />} />
-          <Route path="/customers/update-customer" element={<UpdateCustomer />} />
+          {/* Dashboard — token-only guard, no module check */}
+          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
 
-          <Route path="/suppliers" element={<Suppliers />} />
-          <Route path="/suppliers/create-supplier" element={<CreateSupplier />} />
-          <Route path="/suppliers/update-supplier" element={<UpdateSupplier />} />
+          {/* Sales */}
+          <Route path="/sales" element={<ProtectedRoute module="sales"><Sales /></ProtectedRoute>} />
+          <Route path="/sales/create-invoice" element={<ProtectedRoute module="sales" action="create"><CreateSalesInvoice /></ProtectedRoute>} />
+          <Route path="/sales/update-invoice" element={<ProtectedRoute module="sales" action="edit"><UpdateSalesInvoice /></ProtectedRoute>} />
 
-          <Route path="/locations" element={<Locations />} />
-          <Route path="/locations/create-location" element={<CreateLocation />} />
-          <Route path="/locations/update-location" element={<UpdateLocation />} />
-          
-          <Route path="/expenses" element={<Expenses/>} />
-          <Route path="/expenses/create-expense" element={<CreateExpense />} />
-          <Route path="/expenses/update-expense" element={<UpdateExpense />} />
-          
-          <Route path="/returned-items" element={<ReturnedItems />} />
-          <Route path="/returned-items/update-returned-item" element={<UpdateReturnedItem />} />
-          
+          {/* Purchases */}
+          <Route path="/purchases" element={<ProtectedRoute module="purchases"><Purchases /></ProtectedRoute>} />
+          <Route path="/purchases/create-invoice" element={<ProtectedRoute module="purchases" action="create"><CreatePurchaseInvoice /></ProtectedRoute>} />
+          <Route path="/purchases/update-invoice" element={<ProtectedRoute module="purchases" action="edit"><UpdatePurchaseInvoice /></ProtectedRoute>} />
+
+          {/* Inventory */}
+          <Route path="/inventory" element={<ProtectedRoute module="inventory"><InventoryOverview /></ProtectedRoute>} />
+          <Route path="/inventory/create-item" element={<ProtectedRoute module="inventory" action="create"><CreateInventoryItem /></ProtectedRoute>} />
+          <Route path="/inventory/update-item" element={<ProtectedRoute module="inventory" action="edit"><UpdateInventoryItem /></ProtectedRoute>} />
+
+          {/* Products */}
+          <Route path="/products" element={<ProtectedRoute module="products"><Products /></ProtectedRoute>} />
+          <Route path="/products/create-product" element={<ProtectedRoute module="products" action="create"><CreateProduct /></ProtectedRoute>} />
+          <Route path="/products/update-product" element={<ProtectedRoute module="products" action="edit"><UpdateProduct /></ProtectedRoute>} />
+
+          {/* Customers */}
+          <Route path="/customers" element={<ProtectedRoute module="customers"><Customers /></ProtectedRoute>} />
+          <Route path="/customers/create-customer" element={<ProtectedRoute module="customers" action="create"><CreateCustomer /></ProtectedRoute>} />
+          <Route path="/customers/update-customer" element={<ProtectedRoute module="customers" action="edit"><UpdateCustomer /></ProtectedRoute>} />
+
+          {/* Suppliers */}
+          <Route path="/suppliers" element={<ProtectedRoute module="suppliers"><Suppliers /></ProtectedRoute>} />
+          <Route path="/suppliers/create-supplier" element={<ProtectedRoute module="suppliers" action="create"><CreateSupplier /></ProtectedRoute>} />
+          <Route path="/suppliers/update-supplier" element={<ProtectedRoute module="suppliers" action="edit"><UpdateSupplier /></ProtectedRoute>} />
+
+          {/* Locations */}
+          <Route path="/locations" element={<ProtectedRoute module="locations"><Locations /></ProtectedRoute>} />
+          <Route path="/locations/create-location" element={<ProtectedRoute module="locations" action="create"><CreateLocation /></ProtectedRoute>} />
+          <Route path="/locations/update-location" element={<ProtectedRoute module="locations" action="edit"><UpdateLocation /></ProtectedRoute>} />
+
+          {/* Expenses */}
+          <Route path="/expenses" element={<ProtectedRoute module="expenses"><Expenses /></ProtectedRoute>} />
+          <Route path="/expenses/create-expense" element={<ProtectedRoute module="expenses" action="create"><CreateExpense /></ProtectedRoute>} />
+          <Route path="/expenses/update-expense" element={<ProtectedRoute module="expenses" action="edit"><UpdateExpense /></ProtectedRoute>} />
+
+          {/* Purchase Quotations */}
+          <Route path="/purchase-quotations" element={<ProtectedRoute module="quotations"><PurchaseQuotations /></ProtectedRoute>} />
+          <Route path="/purchase-quotations/create-purchase-quotation" element={<ProtectedRoute module="quotations" action="create"><CreatePurchaseQuotation /></ProtectedRoute>} />
+          <Route path="/purchase-quotations/update-purchase-quotation" element={<ProtectedRoute module="quotations" action="edit"><UpdatePurchaseQuotation /></ProtectedRoute>} />
+
+          {/* Returned Items */}
+          <Route path="/returned-items" element={<ProtectedRoute module="returned_items"><ReturnedItems /></ProtectedRoute>} />
+          <Route path="/returned-items/update-returned-item" element={<ProtectedRoute module="returned_items" action="edit"><UpdateReturnedItem /></ProtectedRoute>} />
+
+          {/* Projects */}
+          <Route path="/projects" element={<ProtectedRoute module="projects"><Projects /></ProtectedRoute>} />
+          <Route path="/projects/create-project" element={<ProtectedRoute module="projects" action="create"><CreateProject /></ProtectedRoute>} />
+          <Route path="/projects/view-project" element={<ProtectedRoute module="projects" ><ViewProject /></ProtectedRoute>} />
+          <Route path="/projects/create-task" element={<ProtectedRoute module="projects" action="create"><CreateProjectTask /></ProtectedRoute>} />
+          <Route path="/projects/update-task" element={<ProtectedRoute module="projects" action="edit"><UpdateProjectTask /></ProtectedRoute>} />
+
+          {/* Employees — admin only (ProtectedRoute token check; page itself guards role) */}
+          <Route path="/employees" element={<ProtectedRoute module="employees" action="create"><Employees /></ProtectedRoute>} />
+
+          {/* Public */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
 

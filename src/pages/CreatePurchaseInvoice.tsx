@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChartNoAxesColumnDecreasing, Plus, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
   PaymentStatusMap,
@@ -18,8 +18,9 @@ import {
 import { useAuth } from "../../services/AuthProvider"
 import {
   getProductVariantsList,
-  getSuppliersList,
-  postPurchaseInvoiceAndItems
+  suppliersAPIPackage,
+  postPurchaseInvoiceAndItems,
+  projectsAPIPackage
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
@@ -30,8 +31,11 @@ const CreatePurchaseInvoice = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState([])
+  const [projects, setProjects] = useState([])
   const { token } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const project_id = location.state?.project_id || null
 
   // react-hook-form setup
   const { register, handleSubmit, control, watch, reset, setValue } = useForm({
@@ -42,9 +46,10 @@ const CreatePurchaseInvoice = () => {
       notes: "",
       delivery: new Date().toISOString().split("T")[0],
       date_due: new Date().toISOString().split("T")[0],
-      tax: "0.0",
+      tax: 0.0,
       payment_status: "P",
       status: "R",
+      project: project_id ? String(project_id) : null,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemCost: 0
@@ -132,7 +137,7 @@ const CreatePurchaseInvoice = () => {
 
     const fetchSuppliers = async () => {
       try {
-        const suppliers = await getSuppliersList(token)
+        const suppliers = await suppliersAPIPackage.list(token)
         if (suppliers) {
           const supplierMap = createIdMap(suppliers)
           setSuppliers(supplierMap)
@@ -145,8 +150,23 @@ const CreatePurchaseInvoice = () => {
       }
     }
 
+    const fetchProjects = async () => {
+      try {
+        const data = await projectsAPIPackage.list(token)
+        if (data) {
+          setProjects(createIdMap(data))
+        } else {
+          toast.error("Failed to fetch projects")
+        }
+      } catch (error) {
+        console.log("Error fetching projects:", error)
+        toast.error("Failed to fetch projects")
+      }
+    }
+
     fetchProducts()
     fetchSuppliers()
+    fetchProjects()
   }, [token])
 
   return (
@@ -375,6 +395,25 @@ const CreatePurchaseInvoice = () => {
               </div>
 
               <div className="flex justify-end gap-3 mt-auto">
+                <Controller
+                  name="project"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={(val) => field.onChange(val === "none" ? null : val)} value={field.value ?? "none"}>
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Add to project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No project</SelectItem>
+                        {projects && Object.keys(projects).length > 0 && Object.entries(projects).map(([key, project]) => (
+                          <SelectItem value={key} key={key}>
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 <Button type="submit">Create Invoice</Button>
               </div>
             </div>

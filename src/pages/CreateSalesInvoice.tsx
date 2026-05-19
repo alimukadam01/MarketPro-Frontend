@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import CustomFilter from "../components/layout/CustomFilter"
 import {
@@ -21,20 +21,24 @@ import { useAuth } from "../../services/AuthProvider"
 import {
   getAvailableProductsList,
   getCustomersList,
-  postSalesInvoiceAndItems
+  postSalesInvoiceAndItems,
+  projectsAPIPackage
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 
 const CreateSalesInvoice = () => {
-  
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [invoiceItems, setInvoiceItems] = useState([])
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
+  const [projects, setProjects] = useState([])
   const { token } = useAuth()
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
+  const location = useLocation()
+  const project_id = location.state?.project_id || null
 
   // react-hook-form setup
   const { register, handleSubmit, control, watch, reset, setValue } = useForm({
@@ -48,6 +52,7 @@ const CreateSalesInvoice = () => {
       tax: "0.0",
       payment_status: "P",
       status: "C",
+      project: project_id ? String(project_id) : null,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemPrice: 0
@@ -67,7 +72,7 @@ const CreateSalesInvoice = () => {
 
   const onSubmit = async (data) => {
 
-    const {newItemPrice, newItemProduct, newItemQuantity, ...rest} = data
+    const { newItemPrice, newItemProduct, newItemQuantity, ...rest } = data
 
     const tax = {
       "value": parseFloat(data.tax),
@@ -86,29 +91,25 @@ const CreateSalesInvoice = () => {
     }))
 
     try {
-        const success = await postSalesInvoiceAndItems(token, {
-            ...rest,
-            tax: tax,
-            discount: discount,
-            items: items
-        })
+      const success = await postSalesInvoiceAndItems(token, {
+        ...rest,
+        tax: tax,
+        discount: discount,
+        items: items
+      })
 
-        if (success) {
-            toast.success("Sales invoice created successfully!")
-            navigate("/sales");
-        } else {
-            toast.error("Failed to create sales invoice.")
-        }
+      if (success) {
+        toast.success("Sales invoice created successfully!")
+        navigate(-1);
+      } else {
+        toast.error("Failed to create sales invoice.")
+      }
     } catch (error) {
-        console.log("Error creating sales invoice:", error)
+      console.log("Error creating sales invoice:", error)
     }
-
-    console.log("Form Submitted:", { ...rest, tax: tax, discount: discount, "items": items });
   }
 
   const addItem = (product, quantity, unit_price) => {
-
-    console.log("from addItem: ", product)
 
     if (product && quantity > 0) {
       const selectedProduct = products[product]
@@ -136,12 +137,10 @@ const CreateSalesInvoice = () => {
 
       try {
         const products = await getAvailableProductsList(token, businessId)
-        if (products){
-          console.log("fetched products: ", products)
+        if (products) {
           const productMap = createNestedIdMap(products, 'product.id')
-          console.log("product Map: ", productMap)
           setProducts(productMap)
-        }else{
+        } else {
           toast.error("Failed to fetch products")
         }
       } catch (error) {
@@ -151,26 +150,41 @@ const CreateSalesInvoice = () => {
     }
 
     const fetchCustomers = async () => {
-      try{
+      try {
         const customers = await getCustomersList(token)
-        if (customers){
+        if (customers) {
           const customerMap = createIdMap(customers)
           setCustomers(customerMap)
-        }else{
+        } else {
           toast.error("Failed to fetch customers")
         }
-      }catch(error){
+      } catch (error) {
         console.log("Error fetching customers:", error)
         toast.error("Failed to fetch customers")
       }
     }
 
+    const fetchProjects = async () => {
+      try {
+        const data = await projectsAPIPackage.list(token)
+        if (data) {
+          setProjects(createIdMap(data))
+        } else {
+          toast.error("Failed to fetch projects")
+        }
+      } catch (error) {
+        console.log("Error fetching projects:", error)
+        toast.error("Failed to fetch projects")
+      }
+    }
+
     fetchProducts()
     fetchCustomers()
+    fetchProjects()
   }, [token])
 
   useEffect(() => {
-    if (selectedProduct){
+    if (selectedProduct) {
       setValue("newItemPrice", selectedProduct.unit_price, { shouldDirty: false });
     }
   }, [selectedProduct])
@@ -203,7 +217,7 @@ const CreateSalesInvoice = () => {
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger>
-                          <SelectValue placeholder="Select customer"></SelectValue> 
+                          <SelectValue placeholder="Select customer"></SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {customers && Object.keys(customers).length > 0 && Object.entries(customers).map(([key, customer]) => (
@@ -348,8 +362,8 @@ const CreateSalesInvoice = () => {
               {/* Invoice Items Header */}
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-lg font-semibold">Invoice Items</h3>
-                <Button 
-                  variant="destructive" 
+                <Button
+                  variant="destructive"
                   size="sm"
                   onClick={() => {
                     setInvoiceItems(invoiceItems.filter(item => !selectedRows.includes(item.id)));
@@ -379,9 +393,8 @@ const CreateSalesInvoice = () => {
                     <div
                       key={item.id}
                       onClick={() => toggleRowSelection(item.id)}
-                      className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${
-                        selectedRows.includes(item.id) ? "border-2 border-[#4285F4]" : "border border-border"
-                      }`}
+                      className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${selectedRows.includes(item.id) ? "border-2 border-[#4285F4]" : "border border-border"
+                        }`}
                     >
                       <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
                         <div>{idx + 1}</div>
@@ -407,6 +420,25 @@ const CreateSalesInvoice = () => {
               </div>
 
               <div className="flex justify-end gap-3 mt-auto">
+                <Controller
+                  name="project"
+                  control={control}
+                  render={({ field }) => (
+                    <Select onValueChange={(val) => field.onChange(val === "none" ? null : val)} value={field.value ?? "none"}>
+                      <SelectTrigger className="w-48">
+                        <SelectValue placeholder="Add to project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Select Project</SelectItem>
+                        {projects && Object.keys(projects).length > 0 && Object.entries(projects).map(([key, project]) => (
+                          <SelectItem value={key} key={key}>
+                            {project.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 <Button type="submit">Create Invoice</Button>
               </div>
             </div>

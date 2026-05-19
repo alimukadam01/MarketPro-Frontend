@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
-import { login, getActiveBusinessId, getUserInfo } from "../../services/api"
+import { login, getActiveBusiness, getUserInfo, getAccessConfig } from "../../services/api"
 import { useAuth } from '../../services/AuthProvider'
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner"
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
+import { formatConfig } from "../../services/utils";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -34,14 +35,16 @@ const Login = () => {
 
   const onSubmit = async (data) => {
     try{
-      const accessToken =  await login(data)
+      const accessToken = await login(data)
       if (accessToken){
+        const userData   = await getUserInfo(accessToken)
+        const business = await getActiveBusiness(accessToken)
+        const config = formatConfig(business.config, userData.role)
+        
+        authLogIn(accessToken, userData, business.id, config)
+        
         setIsLoading(false)
-        await getActiveBusinessId(accessToken)
-        const userData = await getUserInfo(accessToken)
-        authLogIn(accessToken, userData)
         navigate('/')
-
       }else{
         setIsLoading(false)
         toast.error("Please provide correct credentials.")

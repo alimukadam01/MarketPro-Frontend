@@ -14,20 +14,16 @@ import {
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
-    getProductsList,
-    getProductVariantsList,
     getLocationsList,
     updateInventoryItem,
     getInventoryItemDetail
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
-import { set } from "date-fns";
 
 const UpdateInventoryItem = () => {
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
-    const [products, setProducts] = useState([])
-    const [productVariants, setProductVariants] = useState([])
+    const [productName, setProductName] = useState("")
     const [locations, setLocations] = useState([])
     const { token } = useAuth()
     const businessId = localStorage.getItem("mp-business-id")
@@ -41,13 +37,12 @@ const UpdateInventoryItem = () => {
     }
 
     // react-hook-form setup
-    const { register, handleSubmit, control, watch, reset, setValue } = useForm({
+    const { register, handleSubmit, control, reset } = useForm({
         defaultValues: {
-            quantity: 0,
             track_code: "",
-            product: null,
             notes: "",
             location: null,
+            quantity: 0,
             quantity_on_hand: 0,
             quantity_reserved: 0,
             unit_cost: 0.0,
@@ -57,12 +52,13 @@ const UpdateInventoryItem = () => {
     })
 
     const populateFields = (data) => {
+        const product = data.product
+        setProductName(`${product.base.name} (${product.name})`)
         reset({
-            quantity: data.quantity || 0,
             track_code: data.track_code || "",
             notes: data.notes || "",
-            product: data.product.id || 0,
             location: data.location || 0,
+            quantity: data.quantity || 0,
             quantity_on_hand: data.quantity_on_hand || 0,
             quantity_reserved: data.quantity_reserved || 0,
             unit_cost: data.unit_cost || 0.0,
@@ -100,40 +96,6 @@ const UpdateInventoryItem = () => {
 
     useEffect(() => {
 
-        const fetchProducts = async () => {
-            if (!token) return;
-
-            try {
-                const products = await getProductsList(token)
-                if (products) {
-                    const productMap = createIdMap(products)
-                    setProducts(productMap)
-                } else {
-                    toast.error("Failed to fetch products")
-                }
-            } catch (error) {
-                console.log("Error fetching products:", error)
-                toast.error("Failed to fetch products")
-            }
-        }
-
-        const fetchProductVariants = async () => {
-            if (!token) return;
-
-            try {
-                const productVariants = await getProductVariantsList(token)
-                if (productVariants) {
-                    const productVariantMap = createIdMap(productVariants)
-                    setProductVariants(productVariantMap)
-                } else {
-                    toast.error("Failed to fetch products")
-                }
-            } catch (error) {
-                console.log("Error fetching products:", error)
-                toast.error("Failed to fetch products")
-            }
-        }
-
         const fetchLocations = async () => {
             try {
                 const locations = await getLocationsList(token)
@@ -149,17 +111,10 @@ const UpdateInventoryItem = () => {
             }
         }
 
-        fetchProductVariants()
-        fetchProducts()
-        fetchLocations()
-    }, [token])
-
-    useEffect(() => {
         const fetchInventoryItem = async () => {
             if (!token) return
             try {
                 const inventoryItem = await getInventoryItemDetail(token, businessId, item_id)
-                console.log(inventoryItem)
                 if (inventoryItem) {
                     populateFields(inventoryItem)
                 } else {
@@ -171,13 +126,12 @@ const UpdateInventoryItem = () => {
             }
         }
 
-        fetchInventoryItem()
-    }, [products, item_id])
-
-    {
-        console.log(watch("product"))
-        console.log(products[watch("product")])
-    }
+        const init = async () => {
+            await fetchLocations()
+            fetchInventoryItem()
+        }
+        init()
+    }, [token, item_id])
 
     return (
         <div className="min-h-screen bg-background">
@@ -199,11 +153,11 @@ const UpdateInventoryItem = () => {
 
                                 <div className="flex gap-6 mb-6">
                                     <div className="w-[50%] space-y-1">
-                                        <Label htmlFor="product">Select Product</Label>
+                                        <Label htmlFor="product">Product</Label>
                                         <Input
-                                            name="product"
+                                            id="product"
                                             disabled={true}
-                                            value={productVariants[watch("product")]?.name}
+                                            value={productName}
                                         />
                                     </div>
 
@@ -218,7 +172,7 @@ const UpdateInventoryItem = () => {
                                                     <SelectContent>
                                                         {locations && Object.keys(locations).length > 0 && Object.entries(locations).map(([key, item]) => (
                                                             <SelectItem key={key} value={key}>
-                                                                {locations[key].name}
+                                                                {item.name}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
@@ -230,19 +184,19 @@ const UpdateInventoryItem = () => {
                                 </div>
 
                                 <div className="flex gap-6 mb-6">
-                                    <div className="space-y-1">
+                                    <div className="flex-1 space-y-1">
                                         <Label htmlFor="quantity">Quantity</Label>
                                         <Input id="quantity" type="number" {...register("quantity")} />
                                     </div>
-                                    <div className="space-y-1">
+                                    <div className="flex-1 space-y-1">
                                         <Label htmlFor="unit_cost">Unit Cost</Label>
                                         <Input id="unit_cost" type="number" {...register("unit_cost")} />
                                     </div>
-                                    <div className="space-y-1">
+                                    <div className="flex-1 space-y-1">
                                         <Label htmlFor="unit_price">Unit Price</Label>
                                         <Input id="unit_price" type="number" {...register("unit_price")} />
                                     </div>
-                                    <div className="space-y-1">
+                                    <div className="flex-1 space-y-1">
                                         <Label htmlFor="reorder_level">Reorder Level</Label>
                                         <Input id="reorder_level" type="number" {...register("reorder_level")} />
                                     </div>
