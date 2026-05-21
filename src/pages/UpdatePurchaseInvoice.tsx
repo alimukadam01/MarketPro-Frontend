@@ -25,10 +25,12 @@ import {
   projectsAPIPackage
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import Payments from "@/components/ui/payments";
 
 const UpdatePurchaseInvoice = () => {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
+  const [paymentsOpen, setPaymentsOpen] = useState(false)
   const [invoiceItems, setInvoiceItems] = useState([])
   const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
@@ -473,30 +475,36 @@ const UpdatePurchaseInvoice = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-auto">
-                <Controller
-                  name="project"
-                  control={control}
-                  render={({ field }) => (
-                    <Select onValueChange={(val) => field.onChange(val === "none" ? null : val)} value={field.value ?? "none"}>
-                      <SelectTrigger className="w-48">
-                        <SelectValue placeholder="Add to project" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No project</SelectItem>
-                        {projects && Object.keys(projects).length > 0 && Object.entries(projects).map(([key, project]) => (
-                          <SelectItem value={key} key={key}>
-                            {project.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                <Button type="submit">Update Invoice</Button>
+              <div className="flex flex-col gap-3 mt-auto">
+                <div className="flex justify-end gap-3">
+                  <Controller
+                    name="project"
+                    control={control}
+                    render={({ field }) => (
+                      <Select onValueChange={(val) => field.onChange(val === "none" ? null : val)} value={field.value ?? "none"}>
+                        <SelectTrigger className="w-36">
+                          <SelectValue placeholder="Add to project" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No project</SelectItem>
+                          {projects && Object.keys(projects).length > 0 && Object.entries(projects).map(([key, project]) => (
+                            <SelectItem value={key} key={key}>
+                              {project.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  />
+                  <Button type="button" variant="outline" className="w-36" onClick={() => setPaymentsOpen(true)}>Add Payment</Button>
+                </div>
+                <div className="flex justify-end gap-3">
+                  <Button type="submit" className="w-36">Update Invoice</Button>
+                </div>
               </div>
             </div>
           </form>
+          <Payments invoiceId={invoice_id} invoiceTotal={totalAmount} open={paymentsOpen} setOpen={setPaymentsOpen} isSalesPayment={false} />
         </main>
       </div>
     </div>

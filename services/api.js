@@ -1941,3 +1941,63 @@ export const deleteEmployee = async (token, businessId, employeeId) => {
     return false;
   }
 };
+
+export const getPaymentsList = async (token, invoiceId, is_sales_payment) => {
+  try {
+    const res = await apiClient.get(`${is_sales_payment? 'sales': 'purchase'}-invoices/${invoiceId}/payments/`, {
+      headers: { Authorization: token },
+    })
+
+    if (res.status !== 200){
+      console.log("Error fetching payments")
+      return false
+    }
+
+    return res.data
+  } catch (error) {
+    console.log("Error fetching payments")
+    return false;
+  }
+}
+
+export const createPayment = async (token, invoiceId, is_sales_payment, data) => {
+  try {
+    const res = await apiClient.post(`${is_sales_payment? 'sales': 'purchase'}-invoices/${invoiceId}/payments/`, data, {
+      headers: { Authorization: token },
+    });
+    if (res.status === 201) return true;
+    console.log("Error creating payment.");
+    return false;
+  } catch (error) {
+    console.log("Error creating payment:", error);
+    return false;
+  }
+};
+
+export const updatePayment = async (token, invoiceId, is_sales_payment, paymentId, data) => {
+  try {
+    const res = await apiClient.put(`${is_sales_payment? 'sales': 'purchase'}-invoices/${invoiceId}/payments/${paymentId}/`, data, {
+      headers: { Authorization: token },
+    });
+    if (res.status === 200) return true;
+    console.log("Error updating payment.");
+    return false;
+  } catch (error) {
+    console.log("Error updating payment:", error);
+    return false;
+  }
+};
+
+export const deletePayment = async (token, invoiceId, is_sales_payment, paymentId) => {
+  try {
+    const res = await apiClient.delete(`${is_sales_payment? 'sales': 'purchase'}-invoices/${invoiceId}/payments/${paymentId}/`, {
+      headers: { Authorization: token },
+    });
+    if (res.status === 204) return true;
+    console.log("Error deleting payment.");
+    return false;
+  } catch (error) {
+    console.log("Error deleting payment:", error);
+    return false;
+  }
+};

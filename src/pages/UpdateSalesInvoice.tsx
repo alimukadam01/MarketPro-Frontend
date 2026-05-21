@@ -27,6 +27,7 @@ import {
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import ReturnItem from "@/components/ui/return-item";
+import Payments from "@/components/ui/payments";
 import { PDFDownloadLink } from "@react-pdf/renderer";
 import Invoice from "@/pages/Invoice";
 
@@ -34,6 +35,7 @@ const UpdateSalesInvoice = () => {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [returnItemWindowOpen, setReturnItemWindowOpen] = useState(false)
+  const [paymentsOpen, setPaymentsOpen] = useState(false)
   const [itemReturned, setItemReturned] = useState(false)
   const [invoiceItems, setInvoiceItems] = useState([])
   const [selectedRows, setSelectedRows] = useState([])
@@ -99,13 +101,6 @@ const UpdateSalesInvoice = () => {
       quantity: item.quantity,
       unit_price: item.unit_price,
     }))
-
-    console.log({
-      ...rest,
-      tax: tax,
-      discount: discount,
-      items: items
-    })
 
     try {
       const success = await updateSalesInvoiceAndItems(token, invoice_id, {
@@ -535,14 +530,14 @@ const UpdateSalesInvoice = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-auto">
-                <div className="flex justify-end gap-3 mt-auto">
+              <div className="flex flex-col gap-3 mt-auto">
+                <div className="flex justify-end gap-3">
                   <Controller
                     name="project"
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={(val) => field.onChange(val === "none" ? null : val)} value={field.value ?? "none"}>
-                        <SelectTrigger className="w-48">
+                        <SelectTrigger className="w-36">
                           <SelectValue placeholder="Add to project" />
                         </SelectTrigger>
                         <SelectContent>
@@ -556,21 +551,25 @@ const UpdateSalesInvoice = () => {
                       </Select>
                     )}
                   />
+                  <Button type="button" variant="outline" className="w-36" onClick={() => setPaymentsOpen(true)}>Add Payment</Button>
+                </div>
+                <div className="flex justify-end gap-3">
                   {
                     pdfData &&
                     <PDFDownloadLink
                       document={<Invoice token={token} invoice_id={invoice_id} />}
                       fileName={`invoice.pdf`}
                     >
-                      <Button type="button">Download PDF</Button>
+                      <Button type="button" className="w-36">Download PDF</Button>
                     </PDFDownloadLink>
                   }
-                  <Button type="submit">Update Invoice</Button>
+                  <Button type="submit" className="w-36">Update Invoice</Button>
                 </div>
-
               </div>
             </div>
           </form>
+
+          <Payments invoiceId={invoice_id} invoiceTotal={totalAmount} isSalesPayment={true} open={paymentsOpen} setOpen={setPaymentsOpen} />
 
           {selectedRows.length === 1 && <ReturnItem
             invoiceId={invoice_id}
