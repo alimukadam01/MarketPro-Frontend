@@ -9,11 +9,12 @@ import {
   formatConfig,
 } from "./utils";
 
-const DEBUG = true;
+const DEBUG = false;
 
 const BASE_URL = DEBUG
   ? "http://localhost:8000/"
   : "https://backend.market-pro.pk/";
+
 const apiClient = axios.create({
   baseURL: BASE_URL,
   headers: {
