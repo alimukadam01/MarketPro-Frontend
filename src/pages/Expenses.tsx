@@ -7,6 +7,7 @@ import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   formatSearchQuery,
+  transformExpense
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -34,6 +35,7 @@ const cols = [
   { key: "name", label: "Name" },
   { key: "desc", label: "Description" },
   { key: "amount", label: "Amount" },
+  { key: "created_at", label: "Expense Date" },
 ];
 
 const filter_fields_template = {
@@ -118,7 +120,8 @@ const Expenses = () => {
     try {
       const res = await expensesAPIPackage.list(token, searchQuery, true);
       if (res) {
-        setExpensesData(res);
+        
+        setExpensesData(res.map(transformExpense));
       } else {
         toast.error("Failed to fetch expenses.");
       }

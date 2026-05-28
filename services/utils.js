@@ -97,6 +97,16 @@ export const formatDate = (dateString) => {
   return date.toLocaleDateString("en-GB"); // Format: DD/MM/YYYY
 };
 
+export function transformExpense(data) {
+  return {
+    id: data.id,
+    name: data.name,
+    desc: data.desc,
+    amount: data.amount,
+    created_at: formatDate(data.created_at)
+  }
+}
+
 export function transformSalesInvoice(data) {
   // Helper to format currency as "PKR X,XXX"
   const formatCurrency = (amount) => {
