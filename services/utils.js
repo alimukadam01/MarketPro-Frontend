@@ -1,3 +1,5 @@
+import { BASE_URL } from './api'
+
 export const SalesInvoiceStatusMap = {
   D: "Draft",
   S: "Sent",
@@ -324,3 +326,9 @@ export const formatFilterQuery = (filters = {}) => {
 
   return params ? `?${params}` : "";
 };
+
+export const getImageUrl = (url) => {
+  if (!url) return null;
+  if (url.startsWith("http")) return url;
+  return `${BASE_URL}${url}`;
+}

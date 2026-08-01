@@ -11,9 +11,10 @@ import {
 
 const DEBUG = false;
 
-const BASE_URL = DEBUG
+export const BASE_URL = DEBUG
   ? "http://localhost:8000/"
   : "https://backend.market-pro.pk/";
+
 
 const apiClient = axios.create({
   baseURL: BASE_URL,
@@ -1999,6 +2000,54 @@ export const deletePayment = async (token, invoiceId, is_sales_payment, paymentI
     return false;
   } catch (error) {
     console.log("Error deleting payment:", error);
+    return false;
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Backlog
+// ---------------------------------------------------------------------------
+
+export const backlogEntriesAPIPackage = new APIPackage("backlog-entries");
+
+export const createBacklogEntry = async (token, formData) => {
+  try {
+    const res = await apiClient.post("/backlog-entries/", formData, {
+      headers: {
+        Authorization: token,
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return res.status === 201;
+  } catch (error) {
+    console.log("Error creating backlog entry:", error);
+    return false;
+  }
+};
+
+export const updateBacklogEntry = async (token, id, formData) => {
+  try {
+    const res = await apiClient.put(`/backlog-entries/${id}/`, formData, {
+      headers: {
+        Authorization: token,
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return res.status === 200;
+  } catch (error) {
+    console.log("Error updating backlog entry:", error);
+    return false;
+  }
+};
+
+export const toggleBacklogEntryStatus = async (token, id) => {
+  try {
+    const res = await apiClient.post(`/backlog-entries/${id}/toggle-status/`, {}, {
+      headers: { Authorization: token },
+    });
+    return res.status === 200;
+  } catch (error) {
+    console.log("Error toggling backlog entry status:", error);
     return false;
   }
 };

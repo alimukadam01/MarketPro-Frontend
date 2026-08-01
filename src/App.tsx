@@ -51,6 +51,9 @@ import UpdatePurchaseQuotation from "./pages/UpdatePurchaseQuotation";
 import ViewProject from "./pages/ViewProject";
 import CreateProjectTask from "./pages/CreateProjectTask";
 import UpdateProjectTask from "./pages/UpdateProjectTask";
+import Backlog from "./pages/Backlog";
+import CreateBacklogEntry from "./pages/CreateBacklogEntry";
+import UpdateBacklogEntry from "./pages/UpdateBacklogEntry";
 
 const queryClient = new QueryClient();
 
@@ -121,6 +124,11 @@ const App = () => {
           <Route path="/projects/view-project" element={<ProtectedRoute module="projects" ><ViewProject /></ProtectedRoute>} />
           <Route path="/projects/create-task" element={<ProtectedRoute module="projects" action="create"><CreateProjectTask /></ProtectedRoute>} />
           <Route path="/projects/update-task" element={<ProtectedRoute module="projects" action="edit"><UpdateProjectTask /></ProtectedRoute>} />
+
+          {/* Backlog */}
+          <Route path="/backlog" element={<ProtectedRoute><Backlog /></ProtectedRoute>} />
+          <Route path="/backlog/create-entry" element={<ProtectedRoute><CreateBacklogEntry /></ProtectedRoute>} />
+          <Route path="/backlog/update-entry" element={<ProtectedRoute><UpdateBacklogEntry /></ProtectedRoute>} />
 
           {/* Employees — admin only (ProtectedRoute token check; page itself guards role) */}
           <Route path="/employees" element={<ProtectedRoute module="employees" action="create"><Employees /></ProtectedRoute>} />

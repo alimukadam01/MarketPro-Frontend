@@ -39,6 +39,7 @@ const ALL_MODULES = [
   { key: "projects",       label: "Projects" },
   { key: "quotations",     label: "Purchase Quotations" },
   { key: "returned_items", label: "Returned Items" },
+  { key: "backlog_entries", label: "Backlog" },
 ]
 
 const ACTIONS = ["view", "create", "edit", "delete"] as const
