@@ -13,7 +13,10 @@ import { useForm, Controller } from "react-hook-form";
 import {
   PaymentStatusMap,
   PurchaseInvoiceStatusMap,
-  createIdMap
+  createIdMap,
+  derivePaymentStatus,
+  getPaymentStatusColor,
+  todayForInput,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -28,7 +31,6 @@ const CreatePurchaseInvoice = () => {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [invoiceItems, setInvoiceItems] = useState([])
-  const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [projects, setProjects] = useState([])
@@ -44,10 +46,9 @@ const CreatePurchaseInvoice = () => {
       amount_paid: "0.0",
       supplier: "",
       notes: "",
-      delivery: new Date().toISOString().split("T")[0],
-      date_due: new Date().toISOString().split("T")[0],
+      delivery: todayForInput(),
+      date_due: todayForInput(),
       tax: 0.0,
-      payment_status: "P",
       status: "R",
       project: project_id ? String(project_id) : null,
       newItemProduct: "",
@@ -62,6 +63,7 @@ const CreatePurchaseInvoice = () => {
   const [taxType, setTaxType] = useState("percentage")
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
   const totalAmount = subtotal + taxAmount
+  const paymentStatus = derivePaymentStatus(watch("amount_paid"), totalAmount)
 
   const onSubmit = async (data) => {
 
@@ -111,10 +113,9 @@ const CreatePurchaseInvoice = () => {
     }
   }
 
-  const toggleRowSelection = (id) => {
-    setSelectedRows((prev) =>
-      prev.includes(id) ? prev.filter((rowId) => rowId !== id) : [...prev, id]
-    )
+  const handleDeleteItem = (e, id) => {
+    e.preventDefault();
+    setInvoiceItems(invoiceItems.filter(item => item.id !== id));
   }
 
   useEffect(() => {
@@ -239,34 +240,6 @@ const CreatePurchaseInvoice = () => {
                   </div>
                 </div>
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="amount_paid">Amount Paid</Label>
-                  <div className="relative">
-                    <Input id="amount_paid" {...register("amount_paid")} placeholder="0.0" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="payment_status">Payment Status</Label>
-                  <Controller
-                    name="payment_status"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select payment status" /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(PaymentStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-                <div className="flex-1 space-y-1">
                   <Label htmlFor="status">Status</Label>
                   <Controller
                     name="status"
@@ -335,48 +308,53 @@ const CreatePurchaseInvoice = () => {
               </div>
 
               {/* Invoice Items Header */}
-              <div className="flex justify-between items-center mb-2">
+              <div className="flex justify-between items-center mb-0.5">
                 <h3 className="text-lg font-semibold">Invoice Items</h3>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    setInvoiceItems(invoiceItems.filter(item => !selectedRows.includes(item.id)));
-                    setSelectedRows([]);
-                  }}
-                  disabled={selectedRows.length === 0}
-                >
-                  <Trash2 className="w-4 mr-2" />
-                  Delete Selected
-                </Button>
               </div>
 
               {/* Invoice Items */}
+              {/* Measured in-browser: 188px puts this row exactly level with Discount/Tax
+                  in the left column. */}
               <div className="mb-6">
-                <div className="space-y-[10px] h-[174px] overflow-y-auto">
-                  <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
-                    <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
-                      <div>id</div>
-                      <div>product</div>
-                      <div>quantity</div>
-                      <div>unit cost</div>
-                      <div>total</div>
+                <div className="space-y-[10px] h-[188px] overflow-y-auto">
+                  {/* Sticky rather than lifted out of the scroll box, so the
+                      header can never drift out of step with the rows when a
+                      scrollbar appears. */}
+                  <div className="sticky top-0 z-10 bg-background flex items-center gap-2">
+                    <div className="bg-card rounded-lg border h-[35px] flex flex-1 items-center px-4">
+                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
+                        <div>id</div>
+                        <div>product</div>
+                        <div>quantity</div>
+                        <div>unit cost</div>
+                        <div>total</div>
+                      </div>
                     </div>
+                    {/* Matches the 16px delete button sitting outside each row. */}
+                    <div className="w-4" />
                   </div>
 
                   {invoiceItems.map((item) => (
-                    <div
-                      key={item.id}
-                      onClick={() => toggleRowSelection(item.id)}
-                      className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${selectedRows.includes(item.id) ? "border-2 border-[#4285F4]" : "border border-border"
-                        }`}
-                    >
-                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
-                        <div>{item.id}</div>
-                        <div className="font-medium">{item.product.name}</div>
-                        <div>{item.quantity}</div>
-                        <div>{item.unit_cost}</div>
-                        <div className="font-semibold">{item.total}</div>
+                    <div key={item.id} className="flex items-center gap-2">
+                      <div className="bg-card rounded-lg h-[35px] flex flex-1 items-center px-4 border border-border">
+                        <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
+                          <div>{item.id}</div>
+                          <div className="font-medium">{item.product.name}</div>
+                          <div>{item.quantity}</div>
+                          <div>{item.unit_cost}</div>
+                          <div className="font-semibold">{item.total}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center h-7">
+                        <Button
+                          type="button"
+                          variant="unstyled"
+                          className="p-0 hover:text-red-500"
+                          title="Delete item"
+                          onClick={(e) => handleDeleteItem(e, item.id)}
+                        >
+                          <Trash2 cursor={'pointer'} />
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -394,7 +372,26 @@ const CreatePurchaseInvoice = () => {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 mt-auto">
+              <div className="flex gap-6">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="amount_paid">Amount Paid</Label>
+                  <div className="relative">
+                    <Input id="amount_paid" {...register("amount_paid")} placeholder="0.0" />
+                  </div>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label>Payment Status</Label>
+                  <div className="flex h-10 items-center">
+                    <span
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap ${getPaymentStatusColor(paymentStatus)}`}
+                    >
+                      {PaymentStatusMap[paymentStatus]}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6">
                 <Controller
                   name="project"
                   control={control}

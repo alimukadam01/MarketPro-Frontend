@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useNavigate } from 'react-router-dom'
-import { getBusinessConfig } from './api'
+import { toast } from "sonner"
+import { getBusinessConfig, setUnauthorizedHandler } from './api'
+import { isTokenExpired } from './utils'
 
 // Create the context
 const AuthContext = createContext();
@@ -30,8 +32,48 @@ export const AuthProvider = ({ children }) => {
   });
   
 
+  // A page can fire several requests at once, and each would 401 on a dead
+  // token. This makes sure the session only ends once.
+  const expiryHandledRef = useRef(false)
+
+  const clearSession = () => {
+    localStorage.removeItem("mp-access-token");
+    localStorage.removeItem("mp-user");
+    localStorage.removeItem("mp-access-config");
+    localStorage.removeItem("mp-business-id");
+    localStorage.removeItem("mp-user-permissions");
+    setToken(null);
+    setUser(null);
+    setConfig(null);
+    setPermissions(null);
+  }
+
+  const endExpiredSession = useCallback(() => {
+    if (expiryHandledRef.current) return
+    expiryHandledRef.current = true
+
+    clearSession()
+    toast.error("Your session has expired. Please sign in again.")
+    navigate('/login', { replace: true })
+  }, [navigate])
+
+  // Any 401 from the API means the token is no longer good.
+  useEffect(() => {
+    setUnauthorizedHandler(endExpiredSession)
+  }, [endExpiredSession])
+
+  // Catches a token that lapsed while the app was closed, before any request
+  // has had a chance to fail.
+  useEffect(() => {
+    if (token && isTokenExpired(token)) {
+      endExpiredSession()
+    }
+  }, [token, endExpiredSession])
+
   // Login: store token, user, and access config
   const login = (newToken, userData, businessId, accessConfig) => {
+
+    expiryHandledRef.current = false
 
     localStorage.setItem("mp-access-token", newToken)
     localStorage.setItem("mp-business-id", businessId)
@@ -51,14 +93,7 @@ export const AuthProvider = ({ children }) => {
 
   // Logout: clear everything
   const logout = () => {
-    localStorage.removeItem("mp-access-token");
-    localStorage.removeItem("mp-user");
-    localStorage.removeItem("mp-access-config");
-    localStorage.removeItem("mp-business-id");
-    setToken(null);
-    setUser(null);
-    setConfig(null);
-
+    clearSession()
     navigate('/login')
   };
 

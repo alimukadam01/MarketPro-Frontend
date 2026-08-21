@@ -26,13 +26,15 @@ import UpdateInventoryItem from "./pages/UpdateInventoryItem";
 
 import Customers from "./pages/Customers"
 import CreateCustomer from "./pages/CreateCustomer"
-import UpdateCustomer from "./pages/UpdateCustomer"
+import ViewCustomer from "./pages/ViewCustomer"
 
 import Suppliers from "./pages/Suppliers";
 import CreateSupplier from "./pages/CreateSupplier"
-import UpdateSupplier from "./pages/UpdateSupplier"
+import ViewSupplier from "./pages/ViewSupplier"
 
 import Login from "./pages/Login";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 import Locations from "./pages/Locations";
@@ -54,6 +56,14 @@ import UpdateProjectTask from "./pages/UpdateProjectTask";
 import Backlog from "./pages/Backlog";
 import CreateBacklogEntry from "./pages/CreateBacklogEntry";
 import UpdateBacklogEntry from "./pages/UpdateBacklogEntry";
+import Accounting from "./pages/Accounting";
+import CreateTransaction from "./pages/CreateTransaction";
+import UpdateTransaction from "./pages/UpdateTransaction";
+import DailyBook from "./pages/DailyBook";
+import Ledgers from "./pages/Ledgers";
+import PartyLedger from "./pages/PartyLedger";
+import MoneyAccounts from "./pages/MoneyAccounts";
+import Cheques from "./pages/Cheques";
 
 const queryClient = new QueryClient();
 
@@ -92,12 +102,12 @@ const App = () => {
           {/* Customers */}
           <Route path="/customers" element={<ProtectedRoute module="customers"><Customers /></ProtectedRoute>} />
           <Route path="/customers/create-customer" element={<ProtectedRoute module="customers" action="create"><CreateCustomer /></ProtectedRoute>} />
-          <Route path="/customers/update-customer" element={<ProtectedRoute module="customers" action="edit"><UpdateCustomer /></ProtectedRoute>} />
+          <Route path="/customers/view-customer" element={<ProtectedRoute module="customers"><ViewCustomer /></ProtectedRoute>} />
 
           {/* Suppliers */}
           <Route path="/suppliers" element={<ProtectedRoute module="suppliers"><Suppliers /></ProtectedRoute>} />
           <Route path="/suppliers/create-supplier" element={<ProtectedRoute module="suppliers" action="create"><CreateSupplier /></ProtectedRoute>} />
-          <Route path="/suppliers/update-supplier" element={<ProtectedRoute module="suppliers" action="edit"><UpdateSupplier /></ProtectedRoute>} />
+          <Route path="/suppliers/view-supplier" element={<ProtectedRoute module="suppliers"><ViewSupplier /></ProtectedRoute>} />
 
           {/* Locations */}
           <Route path="/locations" element={<ProtectedRoute module="locations"><Locations /></ProtectedRoute>} />
@@ -130,11 +140,23 @@ const App = () => {
           <Route path="/backlog/create-entry" element={<ProtectedRoute><CreateBacklogEntry /></ProtectedRoute>} />
           <Route path="/backlog/update-entry" element={<ProtectedRoute><UpdateBacklogEntry /></ProtectedRoute>} />
 
+          {/* Accounting */}
+          <Route path="/accounting" element={<ProtectedRoute module="accounting"><Accounting /></ProtectedRoute>} />
+          <Route path="/accounting/create-transaction" element={<ProtectedRoute module="accounting" action="create"><CreateTransaction /></ProtectedRoute>} />
+          <Route path="/accounting/update-transaction" element={<ProtectedRoute module="accounting" action="edit"><UpdateTransaction /></ProtectedRoute>} />
+          <Route path="/accounting/daily-book" element={<ProtectedRoute module="accounting"><DailyBook /></ProtectedRoute>} />
+          <Route path="/accounting/ledgers" element={<ProtectedRoute module="accounting"><Ledgers /></ProtectedRoute>} />
+          <Route path="/accounting/party-ledger" element={<ProtectedRoute module="accounting"><PartyLedger /></ProtectedRoute>} />
+          <Route path="/accounting/accounts" element={<ProtectedRoute module="accounting"><MoneyAccounts /></ProtectedRoute>} />
+          <Route path="/accounting/cheques" element={<ProtectedRoute module="accounting"><Cheques /></ProtectedRoute>} />
+
           {/* Employees — admin only (ProtectedRoute token check; page itself guards role) */}
           <Route path="/employees" element={<ProtectedRoute module="employees" action="create"><Employees /></ProtectedRoute>} />
 
           {/* Public */}
           <Route path="/login" element={<Login />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/register" element={<Register />} />
 
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

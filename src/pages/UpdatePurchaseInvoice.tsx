@@ -14,7 +14,9 @@ import {
   PaymentStatusMap,
   PurchaseInvoiceStatusMap,
   createIdMap,
-  transformProductVariant
+  transformProductVariant,
+  derivePaymentStatus,
+  getPaymentStatusColor
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -32,10 +34,10 @@ const UpdatePurchaseInvoice = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [paymentsOpen, setPaymentsOpen] = useState(false)
   const [invoiceItems, setInvoiceItems] = useState([])
-  const [selectedRows, setSelectedRows] = useState([])
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [projects, setProjects] = useState([])
+  const [amountPaid, setAmountPaid] = useState(0)
   const { token } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
@@ -47,12 +49,10 @@ const UpdatePurchaseInvoice = () => {
       invoice_number: "",
       supplier: "",
       notes: "",
-      delivery: "2025-08-09",
-      date_due: "2025-08-09",
-      amount_paid: "0.0",
+      delivery: "",
+      date_due: "",
       tax: "0.0",
-      payment_status: "Pending",
-      status: "Pending",
+      status: "",
       project: null,
       newItemProduct: "",
       newItemQuantity: 0,
@@ -67,6 +67,7 @@ const UpdatePurchaseInvoice = () => {
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
   const totalAmount = subtotal + taxAmount
   const selectedProduct = products[watch("newItemProduct")]
+  const paymentStatus = derivePaymentStatus(amountPaid, totalAmount)
 
   const onSubmit = async (data) => {
 
@@ -126,10 +127,9 @@ const UpdatePurchaseInvoice = () => {
     return
   }
 
-  const toggleRowSelection = (item) => {
-    setSelectedRows((prev) =>
-      prev.includes(item) ? prev.filter((prevItem) => prevItem !== item) : [...prev, item]
-    )
+  const handleDeleteItem = (e, target) => {
+    e.preventDefault();
+    setInvoiceItems(invoiceItems.filter(item => item !== target));
   }
 
   const populateInvoiceFields = (data) => {
@@ -140,15 +140,15 @@ const UpdatePurchaseInvoice = () => {
       notes: data.notes || "",
       delivery: data.delivery?.split("T")[0] || "",
       date_due: data.date_due || "",
-      amount_paid: data.amount_paid ? data.amount_paid : "0.0",
       tax: data.tax?.value ?? "0.0",
-      payment_status: data.payment_status,
       status: data.status,
       project: data.projects?.length > 0 ? String(data.projects[0].project) : null,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemCost: 0,
     })
+
+    setAmountPaid(data.amount_paid || 0)
 
     // build your items array for state
     const items = (data.invoice_items || []).map((item) => ({
@@ -162,24 +162,22 @@ const UpdatePurchaseInvoice = () => {
     setTaxType(data.tax?.type)
   }
 
-  { console.log(watch("project")) }
-
-  useEffect(() => {
-
-    const fetchPurchaseInvoice = async () => {
-      if (!token) return
-      try {
-        const purchaseInvoice = await getPurchaseInvoiceDetail(token, invoice_id)
-        if (purchaseInvoice) {
-          populateInvoiceFields(purchaseInvoice)
-        } else {
-          toast.error("Failed to fetch purchase invoice")
-        }
-      } catch (error) {
-        console.log(error)
+  const fetchPurchaseInvoice = async () => {
+    if (!token) return
+    try {
+      const purchaseInvoice = await getPurchaseInvoiceDetail(token, invoice_id)
+      if (purchaseInvoice) {
+        populateInvoiceFields(purchaseInvoice)
+      } else {
         toast.error("Failed to fetch purchase invoice")
       }
+    } catch (error) {
+      console.log(error)
+      toast.error("Failed to fetch purchase invoice")
     }
+  }
+
+  useEffect(() => {
 
     const fetchProducts = async () => {
       if (!token) return;
@@ -316,34 +314,6 @@ const UpdatePurchaseInvoice = () => {
                   </div>
                 </div>
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="amount_paid">Amount Paid</Label>
-                  <div className="relative">
-                    <Input id="amount_paid" {...register("amount_paid")} placeholder="0.0" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="payment_status">Payment Status</Label>
-                  <Controller
-                    name="payment_status"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select payment status" /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(PaymentStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-                <div className="flex-1 space-y-1">
                   <Label htmlFor="status">Status</Label>
                   <Controller
                     name="status"
@@ -412,52 +382,57 @@ const UpdatePurchaseInvoice = () => {
               </div>
 
               {/* Invoice Items Header */}
-              <div className="flex justify-between items-center mb-2">
+              <div className="flex justify-between items-center mb-0.5">
                 <h3 className="text-lg font-semibold">Invoice Items</h3>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setInvoiceItems(invoiceItems.filter(item => !selectedRows.includes(item)));
-                    setSelectedRows([]);
-                  }}
-                  disabled={selectedRows.length === 0}
-                >
-                  <Trash2 className="w-4 mr-2" />
-                  Delete Item
-                </Button>
               </div>
 
               {/* Invoice Items */}
+              {/* Measured in-browser: 188px puts this row exactly level with Discount/Tax
+                  in the left column. */}
               <div className="mb-6">
-                <div className="space-y-[10px] h-[174px] overflow-y-auto">
-                  <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
-                    <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
-                      <div>#</div>
-                      <div>product</div>
-                      <div>quantity</div>
-                      <div>unit cost</div>
-                      <div>total</div>
+                <div className="space-y-[10px] h-[188px] overflow-y-auto">
+                  {/* Sticky rather than lifted out of the scroll box, so the
+                      header can never drift out of step with the rows when a
+                      scrollbar appears. */}
+                  <div className="sticky top-0 z-10 bg-background flex items-center gap-2">
+                    <div className="bg-card rounded-lg border h-[35px] flex flex-1 items-center px-4">
+                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
+                        <div>#</div>
+                        <div>product</div>
+                        <div>quantity</div>
+                        <div>unit cost</div>
+                        <div>total</div>
+                      </div>
                     </div>
+                    {/* Matches the 16px delete button sitting outside each row. */}
+                    <div className="w-4" />
                   </div>
 
                   {invoiceItems.map((item, idx) => (
-                    <div
-                      key={`${item.id}-${idx}`}
-                      onClick={() => toggleRowSelection(item)}
-                      className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${selectedRows.includes(item) ? "border-2 border-[#4285F4]" : "border border-border"
-                        }`}
-                    >
-                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
-                        <div>{idx + 1}</div>
-                        <div className="font-medium">{
-                          item.product.base ?
-                            `${item.product.base.name} (${item.product.name})` :
-                            item.product.name
-                        }</div>
-                        <div>{item.quantity}</div>
-                        <div>{item.unit_cost}</div>
-                        <div className="font-semibold">{item.total}</div>
+                    <div key={`${item.id}-${idx}`} className="flex items-center gap-2">
+                      <div className="bg-card rounded-lg h-[35px] flex flex-1 items-center px-4 border border-border">
+                        <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
+                          <div>{idx + 1}</div>
+                          <div className="font-medium">{
+                            item.product.base ?
+                              `${item.product.base.name} (${item.product.name})` :
+                              item.product.name
+                          }</div>
+                          <div>{item.quantity}</div>
+                          <div>{item.unit_cost}</div>
+                          <div className="font-semibold">{item.total}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center h-7">
+                        <Button
+                          type="button"
+                          variant="unstyled"
+                          className="p-0 hover:text-red-500"
+                          title="Delete item"
+                          onClick={(e) => handleDeleteItem(e, item)}
+                        >
+                          <Trash2 cursor={'pointer'} />
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -475,7 +450,32 @@ const UpdatePurchaseInvoice = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 mt-auto">
+              <div className="flex gap-6">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="amount_paid">Amount Paid</Label>
+                  {/* Driven by the payments dialog, never typed into, so it is
+                      disabled rather than readOnly - readOnly still takes focus
+                      and reads as an editable field. */}
+                  <Input
+                    id="amount_paid"
+                    className="disabled:opacity-100 disabled:cursor-default"
+                    value={`PKR ${Number(amountPaid).toLocaleString()}`}
+                    disabled
+                  />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label>Payment Status</Label>
+                  <div className="flex h-10 items-center">
+                    <span
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap ${getPaymentStatusColor(paymentStatus)}`}
+                    >
+                      {PaymentStatusMap[paymentStatus]}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 mt-6">
                 <div className="flex justify-end gap-3">
                   <Controller
                     name="project"
@@ -504,7 +504,7 @@ const UpdatePurchaseInvoice = () => {
               </div>
             </div>
           </form>
-          <Payments invoiceId={invoice_id} invoiceTotal={totalAmount} open={paymentsOpen} setOpen={setPaymentsOpen} isSalesPayment={false} />
+          <Payments invoiceId={invoice_id} invoiceTotal={totalAmount} open={paymentsOpen} setOpen={setPaymentsOpen} isSalesPayment={false} onPaymentsChanged={fetchPurchaseInvoice} />
         </main>
       </div>
     </div>

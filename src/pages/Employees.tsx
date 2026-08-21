@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { UserCog, Plus, Pencil, Trash2 } from "lucide-react"
+import { ArrowLeft, Plus, Edit, Trash2, Search } from "lucide-react"
 
 import { Sidebar } from "@/components/layout/Sidebar"
 import { Header } from "@/components/layout/Header"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb"
+import DataTable from "@/components/ui/data-table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -40,6 +41,30 @@ const ALL_MODULES = [
   { key: "quotations",     label: "Purchase Quotations" },
   { key: "returned_items", label: "Returned Items" },
   { key: "backlog_entries", label: "Backlog" },
+  { key: "accounting",     label: "Accounting" },
+]
+
+const cols = [
+  { key: "id", label: "ID" },
+  { key: "name", label: "Name" },
+  { key: "email", label: "Email" },
+  {
+    key: "modules",
+    label: "Modules with access",
+    render: (value) => (
+      <div className="flex flex-wrap gap-1">
+        {value.length === 0 ? (
+          <span className="text-muted-foreground text-xs">No access</span>
+        ) : (
+          value.map(({ key, label }) => (
+            <Badge key={key} variant="secondary" className="text-xs">
+              {label}
+            </Badge>
+          ))
+        )}
+      </div>
+    ),
+  },
 ]
 
 const ACTIONS = ["view", "create", "edit", "delete"] as const
@@ -75,12 +100,37 @@ const Employees = () => {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [employees, setEmployees] = useState([])
+  const [selectedRows, setSelectedRows] = useState([])
+  const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState<EmployeeForm>(defaultForm())
+
+  const toggleRowSelection = (id) => {
+    setSelectedRows((prev) =>
+      prev.includes(id) ? prev.filter((rowId) => rowId !== id) : [...prev, id]
+    )
+  }
+
+  const employeesData = employees
+    .filter((emp) => {
+      const term = searchTerm.trim().toLowerCase()
+      if (!term) return true
+      const name = `${emp.user.first_name} ${emp.user.last_name}`.toLowerCase()
+      return name.includes(term) || emp.user.email.toLowerCase().includes(term)
+    })
+    .map((emp) => {
+      const permissions = emp.access?.permissions ?? {}
+      return {
+        id: emp.id,
+        name: `${emp.user.first_name} ${emp.user.last_name}`,
+        email: emp.user.email,
+        modules: ALL_MODULES.filter(({ key }) => permissions[key]?.view),
+      }
+    })
 
   // Guard: non-admins get bounced to dashboard
   useEffect(() => {
@@ -115,7 +165,11 @@ const Employees = () => {
     setDialogOpen(true)
   }
 
-  const openEditDialog = (emp) => {
+  const openEditDialog = () => {
+    if (selectedRows.length !== 1) return
+    const emp = employees.find((item) => item.id === selectedRows[0])
+    if (!emp) return
+
     setEditingId(emp.id)
     setForm({
       first_name: emp.user.first_name,
@@ -198,18 +252,25 @@ const Employees = () => {
     }
   }
 
-  const handleDelete = async (emp) => {
+  const handleDeletion = async () => {
+    if (selectedRows.length <= 0) return
+
     try {
-      const success = await deleteEmployee(token, businessId, emp.id)
-      if (success) {
-        toast.success("Employee removed.")
-        setEmployees((prev) => prev.filter((e) => e.id !== emp.id))
+      const results = await Promise.all(
+        selectedRows.map((id) => deleteEmployee(token, businessId, id))
+      )
+
+      if (results.every(Boolean)) {
+        toast.success("Employees removed.")
+        setEmployees((prev) => prev.filter((e) => !selectedRows.includes(e.id)))
+        setSelectedRows([])
       } else {
-        toast.error("Failed to remove employee.")
+        toast.error("Failed to remove employees.")
+        await fetchEmployees()
       }
     } catch (error) {
-      console.log("Error deleting employee:", error)
-      toast.error("Failed to remove employee.")
+      console.log("Error deleting employees:", error)
+      toast.error("Failed to remove employees.")
     }
   }
 
@@ -218,100 +279,82 @@ const Employees = () => {
       <Sidebar onCollapseChange={setSidebarCollapsed} />
 
       <div
-        className={`${sidebarCollapsed ? "ml-16" : "ml-64"} transition-all duration-300`}
+        className={`${sidebarCollapsed ? "ml-16" : "ml-64"} transition-all duration-300 flex flex-col`}
       >
         <Header />
 
         <main className="flex-1 p-6 space-y-6">
-          <DynamicBreadCrumb />
+          <div className="space-y-1">
+            <DynamicBreadCrumb />
 
-          {/* Page header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <UserCog className="w-6 h-6 text-primary" />
+            <div className="flex items-center space-x-3">
+              <ArrowLeft
+                className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary"
+                onClick={() => navigate("/")}
+              />
               <div>
-                <h1 className="text-2xl font-bold">Employees</h1>
+                <h1 className="text-2xl font-semibold">Employees Overview</h1>
                 <p className="text-sm text-muted-foreground">
                   Manage team members and their module permissions.
                 </p>
               </div>
             </div>
-            <Button onClick={openCreateDialog} className="flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Add Employee
-            </Button>
           </div>
 
-          {/* Employee table */}
-          <div className="border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium">Name</th>
-                  <th className="text-left px-4 py-3 font-medium">Email</th>
-                  <th className="text-left px-4 py-3 font-medium">Modules with access</th>
-                  <th className="px-4 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {employees.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="text-center py-12 text-muted-foreground">
-                      No employees yet. Click "Add Employee" to get started.
-                    </td>
-                  </tr>
-                )}
-                {employees.map((emp) => {
-                  const permissions = emp.access?.permissions ?? {}
-                  console.log(permissions)
-                  const accessibleModules = ALL_MODULES.filter(
-                    ({ key }) => permissions[key]?.view
-                  )
-                  return (
-                    <tr key={emp.id} className="border-t hover:bg-muted/40">
-                      <td className="px-4 py-3 font-medium">
-                        {emp.user.first_name} {emp.user.last_name}
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{emp.user.email}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {
-                          accessibleModules.length === 0 ? (
-                            <span className="text-muted-foreground text-xs">No access</span>
-                          ) : (
-                            accessibleModules.map(({ key, label }) => (
-                              <Badge key={key} variant="secondary" className="text-xs">
-                                {label}
-                              </Badge>
-                            ))
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditDialog(emp)}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(emp)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center space-x-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                <Input
+                  placeholder="Search Employees"
+                  className="pl-10 w-80"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center space-x-2"
+                onClick={openCreateDialog}
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Employee</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center space-x-2"
+                disabled={selectedRows.length !== 1}
+                onClick={openEditDialog}
+              >
+                <Edit className="w-4 h-4" />
+                <span>View/Update</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center space-x-2"
+                disabled={selectedRows.length === 0}
+                onClick={handleDeletion}
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </Button>
+            </div>
           </div>
+
+          {employeesData && employeesData.length > 0 ? (
+            <DataTable
+              columns={cols}
+              data={employeesData}
+              selectedRows={selectedRows}
+              onRowClick={toggleRowSelection}
+            />
+          ) : null}
         </main>
       </div>
 

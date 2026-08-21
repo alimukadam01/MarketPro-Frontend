@@ -1,13 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { formatDate } from "../../../services/utils";
 
 interface ChartCardProps {
   title: string;
-  data: { name: string; value: number }[];
+  data: { day: string; value: number }[];
   color?: string;
+  valueLabel?: string;
 }
 
-export function ChartCard({ title, data, color = "#8b5cf6" }: ChartCardProps) {
+const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
+
+export function ChartCard({ title, data, color = "#8b5cf6", valueLabel = "Amount" }: ChartCardProps) {
   return (
     <Card className="shadow-sm">
       <CardHeader className="pb-2">
@@ -17,16 +21,31 @@ export function ChartCard({ title, data, color = "#8b5cf6" }: ChartCardProps) {
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} >
-              <XAxis 
+              <XAxis
                 dataKey="day"
                 tick={false}
                 axisLine={false}
                 allowDataOverflow={false}
               />
               <YAxis hide />
-              <Line 
-                type="monotone" 
-                dataKey="value" 
+              {/* The x axis has no visible ticks, so the tooltip is where the
+                  date and amount for a point are read. */}
+              <Tooltip
+                labelFormatter={(day) => formatDate(day)}
+                formatter={(value) => [formatCurrency(value), valueLabel]}
+                contentStyle={{
+                  backgroundColor: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
+                  borderRadius: "var(--radius)",
+                  fontSize: "0.875rem",
+                }}
+                labelStyle={{ color: "hsl(var(--muted-foreground))" }}
+                itemStyle={{ color: "hsl(var(--foreground))" }}
+                cursor={{ stroke: "hsl(var(--border))" }}
+              />
+              <Line
+                type="monotone"
+                dataKey="value"
                 stroke={color}
                 strokeWidth={2}
                 dot={true}

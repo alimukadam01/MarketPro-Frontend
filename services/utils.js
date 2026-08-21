@@ -58,6 +58,7 @@ const ConfigKeys = [
   "suppliers",
   "locations",
   "expenses",
+  "accounting",
 ];
 
 export const getStatusColor = (status) => {
@@ -79,6 +80,16 @@ export const getStatusColor = (status) => {
   }
 };
 
+// Mirrors the payment_status property on the invoice models.
+export const derivePaymentStatus = (amountPaid, total) => {
+  const paid = Number(amountPaid) || 0;
+  const invoiceTotal = Number(total) || 0;
+
+  if (invoiceTotal > 0 && paid >= invoiceTotal) return "P";
+  if (paid > 0) return "PP";
+  return "PEN";
+};
+
 export const getPaymentStatusColor = (paymentStatus) => {
   switch (paymentStatus) {
     case "P":
@@ -94,18 +105,221 @@ export const getPaymentStatusColor = (paymentStatus) => {
   }
 };
 
+// The business runs on one clock. Pinning it here means a browser set to a
+// different timezone still sees and sends the same day the backend does.
+export const BUSINESS_TIME_ZONE = "Asia/Karachi";
+
 export const formatDate = (dateString) => {
   const date = new Date(dateString);
-  return date.toLocaleDateString("en-GB"); // Format: DD/MM/YYYY
+  // Format: DD/MM/YYYY
+  return date.toLocaleDateString("en-GB", { timeZone: BUSINESS_TIME_ZONE });
+};
+
+/**
+ * Today as YYYY-MM-DD in the business timezone. Use this for date inputs —
+ * `new Date().toISOString()` converts to UTC first, so it reports yesterday
+ * for the first five hours of every local day.
+ */
+export const todayForInput = () => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+
+  return parts; // en-CA already yields YYYY-MM-DD
 };
 
 export function transformExpense(data) {
   return {
     id: data.id,
     name: data.name,
+    category: ExpenseCategoryMap[data.category] || "-",
     desc: data.desc,
     amount: data.amount,
     created_at: formatDate(data.created_at)
+  }
+}
+
+export const TransactionTypeMap = {
+  sale_payment: "Sale Payment",
+  customer_receipt: "Customer Receipt",
+  purchase_return_refund: "Purchase Return Refund",
+  owner_capital: "Owner Capital",
+  loan_received: "Loan Received",
+  other_income: "Other Income",
+  purchase_payment: "Purchase Payment",
+  supplier_payment: "Supplier Payment",
+  sales_return_refund: "Sales Return Refund",
+  expense: "Expense",
+  salary_payment: "Salary Payment",
+  owner_drawings: "Owner Drawings",
+  loan_repayment: "Loan Repayment",
+  other_payment: "Other Payment",
+  transfer: "Account Transfer",
+  cash_adjustment: "Cash Adjustment",
+};
+
+// Grouped for the type picker, mirroring the BRD's catalogue.
+export const TransactionTypeGroups = {
+  "Money In": [
+    "sale_payment", "customer_receipt", "purchase_return_refund",
+    "owner_capital", "loan_received", "other_income",
+  ],
+  "Money Out": [
+    "purchase_payment", "supplier_payment", "sales_return_refund",
+    "expense", "salary_payment", "owner_drawings",
+    "loan_repayment", "other_payment",
+  ],
+  "Neither": ["transfer", "cash_adjustment"],
+};
+
+// Types that name a customer or supplier when paid on account.
+export const PartyTransactionTypes = [
+  "customer_receipt", "supplier_payment",
+  "sales_return_refund", "purchase_return_refund",
+];
+
+export const TransactionStatusMap = {
+  C: "Cleared",
+  PEN: "Pending",
+  B: "Bounced",
+};
+
+export const AccountTypeMap = {
+  cash: "Cash",
+  wallet: "Mobile Wallet",
+  bank: "Bank",
+};
+
+/**
+ * How a money account reads in a dropdown, e.g.
+ * "Bank Al-Habib (Bank) · PKR 45,000". The balance is what tells the user
+ * whether the account can actually cover what they are about to record.
+ */
+export const formatAccountOption = (account) => {
+  const label = `${account.name} (${AccountTypeMap[account.type] || account.type})`;
+  if (account.balance === undefined || account.balance === null) return label;
+  return `${label} · PKR ${Number(account.balance).toLocaleString()}`;
+};
+
+/**
+ * True when a stored JWT is missing, unreadable, or past its exp claim.
+ *
+ * Lets the app send the user back to login on load, rather than rendering the
+ * shell and every page coming up empty because each request quietly 401s.
+ * A token we cannot read is treated as expired - failing closed is right here.
+ */
+export const isTokenExpired = (token) => {
+  if (!token) return true;
+
+  try {
+    const raw = String(token).replace(/^JWT\s+/i, "");
+    // JWTs are base64url; atob only understands standard base64.
+    const encoded = raw.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(atob(encoded));
+
+    if (!payload?.exp) return false;
+    return payload.exp * 1000 <= Date.now();
+  } catch (error) {
+    console.log("Could not read the token expiry:", error);
+    return true;
+  }
+};
+
+/**
+ * WhatsApp text for chasing a party's outstanding balance. Needs only the
+ * balance, so it works for users without accounting access.
+ */
+export const partyReminderText = (name, balance) =>
+  encodeURIComponent(
+    `Hello ${name || ""}, your outstanding balance is PKR ${Number(balance || 0).toLocaleString()}. ` +
+    `Kindly arrange the payment at your earliest. Thank you.`
+  );
+
+/**
+ * WhatsApp text for a full statement. Built from ledger rows, so it is only
+ * ever offered to users who can see the ledger.
+ */
+export const partyStatementText = (name, ledger) => {
+  const lines = (ledger?.rows || []).map(
+    (row) =>
+      `${formatDate(row.date)}  ${row.description}  ` +
+      `${row.naam ? `Debit ${row.naam}` : `Credit ${row.jama}`}  Balance ${row.balance}`
+  );
+  return encodeURIComponent(
+    `Statement - ${name || ""}\n\n${lines.join("\n")}\n\n` +
+    `Outstanding: PKR ${Number(ledger?.closing_balance || 0).toLocaleString()}`
+  );
+};
+
+export const PaymentMethodMap = {
+  cash: "Cash",
+  wallet: "Wallet",
+  bank_transfer: "Bank Transfer",
+  cheque: "Cheque",
+};
+
+// A payment's method follows the account the money moves through.
+export const AccountTypePaymentMethodMap = {
+  cash: "cash",
+  wallet: "wallet",
+  bank: "bank_transfer",
+};
+
+export const ExpenseCategoryMap = {
+  kiraya: "Rent",
+  bijli: "Electricity",
+  tankhwa: "Salaries",
+  transport: "Transport",
+  mutafarriq: "Miscellaneous",
+};
+
+export const getTransactionStatusColor = (status) => {
+  switch (status) {
+    case "C":
+      return "bg-green-100 text-green-700";
+    case "PEN":
+      return "bg-yellow-100 text-yellow-700";
+    case "B":
+      return "bg-red-100 text-red-700";
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
+};
+
+export const getDirectionColor = (direction) => {
+  switch (direction) {
+    case "in":
+      return "bg-green-100 text-green-700";
+    case "out":
+      return "bg-red-100 text-red-700";
+    default:
+      return "bg-blue-100 text-blue-700";
+  }
+};
+
+export function transformTransaction(data) {
+  return {
+    id: data.id,
+    date: formatDate(data.date),
+    type: data.type,
+    account: data.account_name,
+    amount: data.amount,
+    payment_method: PaymentMethodMap[data.payment_method] || data.payment_method,
+    status: data.status,
+  }
+}
+
+export function transformMoneyAccount(data) {
+  return {
+    id: data.id,
+    name: data.name,
+    type: AccountTypeMap[data.type] || data.type,
+    opening_balance: data.opening_balance,
+    balance: data.balance,
+    is_active: data.is_active,
   }
 }
 

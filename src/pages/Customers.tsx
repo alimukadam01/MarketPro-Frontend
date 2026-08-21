@@ -98,9 +98,9 @@ const Customers = () => {
     }
   };
 
-  const handleUpdateClick = () => {
+  const handleViewClick = () => {
     if (selectedRows.length !== 1) return
-    navigate("/customers/update-customer", {
+    navigate("/customers/view-customer", {
       state: { customer_id: selectedRows[0] },
     });
   };
@@ -247,11 +247,11 @@ const Customers = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1 || !permissions["edit"]}
-                  onClick={handleUpdateClick}
+                  disabled={selectedRows.length !== 1 || !permissions["view"]}
+                  onClick={handleViewClick}
                 >
-                  {permissions["edit"]? <Edit className="w-4 h-4" />: <Lock className="w-4 h-4" />}
-                  <span>View/Update</span>
+                  {permissions["view"]? <Edit className="w-4 h-4" />: <Lock className="w-4 h-4" />}
+                  <span>View Customer</span>
                 </Button>
                 <Button
                   variant="outline"

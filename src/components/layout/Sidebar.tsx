@@ -16,6 +16,7 @@ import {
   UserCog,
   Lock,
   ClipboardList,
+  Landmark,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -35,6 +36,7 @@ const sidebarItems = [
   { name: "Locations",           icon: MapPin,       href: "/locations",            module: "locations" },
   { name: "Returned Items",      icon: Undo2,        href: "/returned-items",       module: "returned_items" },
   { name: "Backlog",             icon: ClipboardList, href: "/backlog",              module: "backlog" },
+  { name: "Accounting",          icon: Landmark,     href: "/accounting",           module: "accounting" },
 ];
 
 interface SidebarProps {
@@ -92,7 +94,7 @@ export function Sidebar({ onCollapseChange }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto no-scrollbar">
         {sidebarItems.map((item) => {
           const Icon = item.icon;
           const isActive = location.pathname === item.href;

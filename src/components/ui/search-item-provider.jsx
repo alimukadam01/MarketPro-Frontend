@@ -291,7 +291,7 @@ function SearchCustomers({ data, toggleResults }) {
             className="p-3 rounded-md hover:bg-accent cursor-pointer transition-colors"
             onClick={() =>{
               toggleResults(false)
-              navigate("/customers/update-customer", {
+              navigate("/customers/view-customer", {
                 state: {
                   customer_id: customer.id,
                 },
@@ -387,7 +387,7 @@ function SearchSuppliers({ data, toggleResults }) {
             className="p-3 rounded-md hover:bg-accent cursor-pointer transition-colors"
             onClick={() =>{
               toggleResults(false)
-              navigate("/suppliers/update-supplier", {
+              navigate("/suppliers/view-supplier", {
                 state: {
                   supplier_id: supplier.id,
                 },

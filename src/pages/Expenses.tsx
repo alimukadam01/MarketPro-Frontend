@@ -33,6 +33,7 @@ import { useNavigate } from "react-router-dom";
 const cols = [
   { key: "id", label: "ID" },
   { key: "name", label: "Name" },
+  { key: "category", label: "Category" },
   { key: "desc", label: "Description" },
   { key: "amount", label: "Amount" },
   { key: "created_at", label: "Expense Date" },
@@ -40,6 +41,7 @@ const cols = [
 
 const filter_fields_template = {
   name: "",
+  category: "",
   desc: "",
   amount: ""
 };
@@ -49,6 +51,11 @@ const filter_fields_mapper = {
     label: "Name",
     type: "text",
     placeholder: "Enter Expense Name",
+  },
+  category: {
+    label: "Category",
+    type: "text",
+    placeholder: "kiraya, bijli, tankhwa, transport, mutafarriq",
   },
   desc: {
     label: "Description",

@@ -9,7 +9,7 @@ import {
   formatConfig,
 } from "./utils";
 
-const DEBUG = false;
+const DEBUG = true;
 
 export const BASE_URL = DEBUG
   ? "http://localhost:8000/"
@@ -23,6 +23,30 @@ const apiClient = axios.create({
   },
   timeout: 30000,
 });
+
+// Every fetcher below swallows its errors and returns null, so an expired
+// token would otherwise just render empty pages. AuthProvider registers a
+// handler here that ends the session and sends the user back to login.
+let onUnauthorized = null;
+
+export const setUnauthorizedHandler = (handler) => {
+  onUnauthorized = handler;
+};
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const url = error.config?.url || "";
+    // A 401 from the login call is a wrong password, not a dead session.
+    const isLoginAttempt = url.includes("auth/jwt/create");
+
+    if (error.response?.status === 401 && !isLoginAttempt && onUnauthorized) {
+      onUnauthorized();
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export default class APIPackage {
   constructor(resource) {
@@ -212,6 +236,48 @@ export const login = async (creds) => {
   } catch (error) {
     console.log(error);
     return null;
+  }
+};
+
+/**
+ * Asks the backend to email a reset link.
+ *
+ * PASSWORD_RESET_SHOW_EMAIL_NOT_FOUND is on, so djoser answers 400 for an
+ * address it does not know. That is passed back rather than swallowed, so a
+ * mistyped email is told it was mistyped instead of being left waiting for
+ * an email that will never arrive.
+ */
+export const requestPasswordReset = async (email) => {
+  try {
+    const res = await apiClient.post("/auth/users/reset_password/", { email });
+    return { success: res.status === 204 || res.status === 200 };
+  } catch (error) {
+    console.log(error);
+    const data = error.response?.data;
+    return {
+      success: false,
+      notFound: data?.email?.[0]?.code === "email_not_found" ||
+        /does not exist/i.test(data?.email?.[0] || ""),
+    };
+  }
+};
+
+/**
+ * Completes the reset. Returns true, or the field errors djoser sent back so
+ * the screen can show why the password was rejected.
+ */
+export const confirmPasswordReset = async (uid, token, password) => {
+  try {
+    const res = await apiClient.post("/auth/users/reset_password_confirm/", {
+      uid,
+      token,
+      new_password: password,
+      re_new_password: password,
+    });
+    return { success: res.status === 204 || res.status === 200 };
+  } catch (error) {
+    console.log(error);
+    return { success: false, errors: error.response?.data || null };
   }
 };
 
@@ -1751,6 +1817,27 @@ export const getTotalPendingPayment = async (token) => {
   }
 };
 
+export const getInvoiceWhatsAppMessage = async (token, invoiceId) => {
+  try {
+    const res = await apiClient.get(
+      `sales-invoices/${invoiceId}/whatsapp-message/`,
+      {
+        headers: {
+          Authorization: token,
+        },
+      },
+    );
+
+    if (res.status === 200) {
+      return res.data;
+    }
+    return null;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
 export const getInvoicePDFData = async (token, invoiceId) => {
   try {
     const res = await apiClient.get(
@@ -2048,6 +2135,255 @@ export const toggleBacklogEntryStatus = async (token, id) => {
     return res.status === 200;
   } catch (error) {
     console.log("Error toggling backlog entry status:", error);
+    return false;
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Accounting
+// ---------------------------------------------------------------------------
+
+export const moneyAccountsAPIPackage = new APIPackage("money-accounts");
+export const transactionsAPIPackage = new APIPackage("transactions");
+export const partyOpeningBalancesAPIPackage = new APIPackage("party-opening-balances");
+
+export const createTransaction = async (token, formData) => {
+  try {
+    const res = await apiClient.post("/transactions/", formData, {
+      headers: {
+        Authorization: token,
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return res.status === 201;
+  } catch (error) {
+    console.log("Error creating transaction:", error);
+    return false;
+  }
+};
+
+export const updateTransaction = async (token, id, formData) => {
+  try {
+    const res = await apiClient.put(`/transactions/${id}/`, formData, {
+      headers: {
+        Authorization: token,
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return res.status === 200;
+  } catch (error) {
+    console.log("Error updating transaction:", error);
+    return false;
+  }
+};
+
+export const markChequeCleared = async (token, id) => {
+  try {
+    const res = await apiClient.post(`/transactions/${id}/mark-cleared/`, {}, {
+      headers: { Authorization: token },
+    });
+    return res.status === 200;
+  } catch (error) {
+    console.log("Error marking cheque cleared:", error);
+    return false;
+  }
+};
+
+export const markChequeBounced = async (token, id) => {
+  try {
+    const res = await apiClient.post(`/transactions/${id}/mark-bounced/`, {}, {
+      headers: { Authorization: token },
+    });
+    return res.status === 200;
+  } catch (error) {
+    console.log("Error marking cheque bounced:", error);
+    return false;
+  }
+};
+
+export const getPendingCheques = async (token) => {
+  try {
+    const res = await apiClient.get("transactions/pending-cheques/", {
+      headers: { Authorization: token },
+    });
+    if (res.status == 200) {
+      return res.data;
+    }
+  } catch (error) {
+    console.log(error);
+    return [];
+  }
+};
+
+export const getCashInHand = async (token, asOf = null) => {
+  try {
+    const res = await apiClient.get(
+      `accounting-kpis/cash-in-hand/${asOf ? `?as_of=${asOf}` : ""}`,
+      { headers: { Authorization: token } }
+    );
+    if (res.status == 200) {
+      return res.data.cash_in_hand;
+    }
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getReceivables = async (token) => {
+  try {
+    const res = await apiClient.get("accounting-kpis/receivables/", {
+      headers: { Authorization: token },
+    });
+    if (res.status == 200) {
+      return res.data.receivables;
+    }
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getPayables = async (token) => {
+  try {
+    const res = await apiClient.get("accounting-kpis/payables/", {
+      headers: { Authorization: token },
+    });
+    if (res.status == 200) {
+      return res.data.payables;
+    }
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getCustomerSummary = async (token, customerId) => {
+  try {
+    const res = await apiClient.get(`/customers/${customerId}/summary/`, {
+      headers: { Authorization: token },
+    });
+    if (res.status === 200) {
+      return res.data;
+    }
+    return null;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getSupplierSummary = async (token, supplierId) => {
+  try {
+    const res = await apiClient.get(`/suppliers/${supplierId}/summary/`, {
+      headers: { Authorization: token },
+    });
+    if (res.status === 200) {
+      return res.data;
+    }
+    return null;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getPartyLedger = async (token, params) => {
+  try {
+    const query = new URLSearchParams(
+      Object.entries(params || {}).filter(([, value]) => value)
+    ).toString();
+    const res = await apiClient.get(
+      `accounting-kpis/party-ledger/${query ? `?${query}` : ""}`,
+      { headers: { Authorization: token } }
+    );
+    if (res.status == 200) {
+      return res.data.party_ledger;
+    }
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getDayBook = async (token, date = null) => {
+  try {
+    const res = await apiClient.get(
+      `accounting-kpis/day-book/${date ? `?date=${date}` : ""}`,
+      { headers: { Authorization: token } }
+    );
+    if (res.status == 200) {
+      return res.data.day_book;
+    }
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getDailySummary = async (token, date = null) => {
+  try {
+    const res = await apiClient.get(
+      `accounting-kpis/daily-summary/${date ? `?date=${date}` : ""}`,
+      { headers: { Authorization: token } }
+    );
+    if (res.status == 200) {
+      return res.data.daily_summary;
+    }
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getProfitEstimate = async (token) => {
+  try {
+    const res = await apiClient.get("accounting-kpis/profit-estimate/", {
+      headers: { Authorization: token },
+    });
+    if (res.status == 200) {
+      return res.data.profit_estimate;
+    }
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getMonthlyCashTrend = async (token) => {
+  try {
+    const res = await apiClient.get("accounting-kpis/monthly-cash-trend/", {
+      headers: { Authorization: token },
+    });
+    if (res.status == 200) {
+      return res.data.monthly_cash_trend;
+    }
+  } catch (error) {
+    console.log(error);
+    return [];
+  }
+};
+
+export const toggleMoneyAccountActive = async (token, id) => {
+  try {
+    const res = await apiClient.post(`/money-accounts/${id}/toggle-active/`, {}, {
+      headers: { Authorization: token },
+    });
+    return res.status === 200;
+  } catch (error) {
+    console.log("Error toggling money account status:", error);
+    return false;
+  }
+};
+
+export const setDefaultMoneyAccount = async (token, id) => {
+  try {
+    const res = await apiClient.post(`/money-accounts/${id}/set-default/`, {}, {
+      headers: { Authorization: token },
+    });
+    return res.status === 200;
+  } catch (error) {
+    console.log("Error setting default money account:", error);
     return false;
   }
 };

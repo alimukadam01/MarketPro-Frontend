@@ -96,9 +96,9 @@ const Suppliers = () => {
     }
   };
 
-  const handleUpdateClick = () => {
+  const handleViewClick = () => {
     if (selectedRows.length !== 1) return
-    navigate("/suppliers/update-supplier", {
+    navigate("/suppliers/view-supplier", {
       state: { supplier_id: selectedRows[0] },
     });
   };
@@ -243,11 +243,11 @@ const Suppliers = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1 || !permissions["edit"]}
-                  onClick={handleUpdateClick}
+                  disabled={selectedRows.length !== 1 || !permissions["view"]}
+                  onClick={handleViewClick}
                 >
-                  {permissions["edit"] ? <Edit className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                  <span>View/Update</span>
+                  {permissions["view"] ? <Edit className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                  <span>View Supplier</span>
                 </Button>
                 <Button
                   variant="outline"

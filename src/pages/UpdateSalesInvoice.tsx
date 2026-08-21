@@ -7,14 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Undo2 } from "lucide-react";
+import { Plus, Send, Trash2, Undo2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
   PaymentStatusMap,
   SalesInvoiceStatusMap,
   createIdMap,
-  createNestedIdMap
+  createNestedIdMap,
+  derivePaymentStatus,
+  getPaymentStatusColor
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -23,12 +25,13 @@ import {
   updateSalesInvoiceAndItems,
   getSalesInvoiceDetail,
   getInvoicePDFData,
-  projectsAPIPackage
+  projectsAPIPackage,
+  getInvoiceWhatsAppMessage
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import ReturnItem from "@/components/ui/return-item";
 import Payments from "@/components/ui/payments";
-import { PDFDownloadLink } from "@react-pdf/renderer";
+import { PDFDownloadLink, pdf } from "@react-pdf/renderer";
 import Invoice from "@/pages/Invoice";
 
 const UpdateSalesInvoice = () => {
@@ -38,11 +41,12 @@ const UpdateSalesInvoice = () => {
   const [paymentsOpen, setPaymentsOpen] = useState(false)
   const [itemReturned, setItemReturned] = useState(false)
   const [invoiceItems, setInvoiceItems] = useState([])
-  const [selectedRows, setSelectedRows] = useState([])
+  const [returningItem, setReturningItem] = useState(null)
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
   const [projects, setProjects] = useState([])
   const [pdfData, setPdfData] = useState(null)
+  const [amountPaid, setAmountPaid] = useState(0)
   const { token } = useAuth()
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
@@ -59,8 +63,7 @@ const UpdateSalesInvoice = () => {
       date_due: "2025-08-09",
       discount: "0.0",
       tax: "0.0",
-      payment_status: "Pending",
-      status: "Pending",
+      status: "",
       project: null,
       newItemProduct: "",
       newItemQuantity: 0,
@@ -80,6 +83,7 @@ const UpdateSalesInvoice = () => {
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
   const totalAmount = subtotal - discountAmount + taxAmount
   const selectedProduct = products[watch("newItemProduct")]
+  const paymentStatus = derivePaymentStatus(amountPaid, totalAmount)
 
   const onSubmit = async (data) => {
 
@@ -136,12 +140,6 @@ const UpdateSalesInvoice = () => {
     }
   }
 
-  const toggleRowSelection = (id) => {
-    setSelectedRows((prev) =>
-      prev.includes(id) ? prev.filter((rowId) => rowId !== id) : [...prev, id]
-    )
-  }
-
   const populateInvoiceFields = (data) => {
     reset({
       invoice_number: data.invoice_number || "",
@@ -151,13 +149,14 @@ const UpdateSalesInvoice = () => {
       date_due: data.date_due || "",
       discount: data.discount?.value ?? "0.0",
       tax: data.tax?.value ?? "0.0",
-      payment_status: data.payment_status || "Pending",
-      status: data.status || "Pending",
+      status: data.status || "",
       project: data.projects?.length > 0 ? String(data.projects[0].project) : null,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemPrice: 0,
     })
+
+    setAmountPaid(data.amount_paid || 0)
 
     // build your items array for state
     const items = (data.invoice_items || []).map((item) => ({
@@ -174,9 +173,59 @@ const UpdateSalesInvoice = () => {
     setTaxType(data.tax?.type)
   }
 
-  const handleFilterClick = (e) => {
+  // Returns are one item at a time, so the row being returned is held here
+  // rather than derived from a selection.
+  const handleReturnClick = (e, item) => {
     e.preventDefault();
-    setReturnItemWindowOpen(!returnItemWindowOpen);
+    setReturningItem(item);
+    setReturnItemWindowOpen(true);
+  }
+
+  const handleDeleteItem = (e, id) => {
+    e.preventDefault();
+    setInvoiceItems(invoiceItems.filter(item => item.id !== id));
+  }
+
+  const handleSendWhatsApp = async () => {
+    if (!pdfData) return
+
+    try {
+      const payload = await getInvoiceWhatsAppMessage(token, invoice_id)
+      if (!payload) {
+        toast.error("Could not prepare the message. Check the customer's phone number.")
+        return
+      }
+
+      // Rendered from data already in hand — the component's own fetch would
+      // not have resolved by the time the document is generated.
+      const blob = await pdf(<Invoice invoice={pdfData} />).toBlob()
+      const fileName = `Invoice-${pdfData.invoice_number || invoice_id}.pdf`
+      const file = new File([blob], fileName, { type: "application/pdf" })
+
+      // The share sheet is the only route that carries the PDF into WhatsApp;
+      // a wa.me link can only ever take text.
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], text: payload.message })
+        return
+      }
+
+      // Otherwise hand over the PDF and open the chat with the message ready,
+      // so the invoice is one attach away.
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = fileName
+      link.click()
+      URL.revokeObjectURL(url)
+
+      window.open(payload.whatsapp_url, "_blank")
+      toast.info("Invoice downloaded — attach it in the WhatsApp chat.")
+    } catch (error) {
+      // Dismissing the share sheet is a cancel, not a failure.
+      if (error?.name === "AbortError") return
+      console.log("Error sending invoice:", error)
+      toast.error("Failed to send the invoice.")
+    }
   }
 
   const fetchSalesInvoice = async () => {
@@ -275,7 +324,7 @@ const UpdateSalesInvoice = () => {
   useEffect(() => {
     fetchSalesInvoice()
     setItemReturned(false)
-    setSelectedRows([])
+    setReturningItem(null)
   }, [itemReturned == true])
 
   {
@@ -364,25 +413,6 @@ const UpdateSalesInvoice = () => {
 
               <div className="flex gap-6">
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="payment_status">Payment Status</Label>
-                  <Controller
-                    name="payment_status"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select payment status" /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(PaymentStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-                <div className="flex-1 space-y-1">
                   <Label htmlFor="status">Status</Label>
                   <Controller
                     name="status"
@@ -451,67 +481,74 @@ const UpdateSalesInvoice = () => {
               </div>
 
               {/* Invoice Items Header */}
-              <div className="flex justify-between items-center mb-2">
+              <div className="flex justify-between items-center mb-0.5">
                 <h3 className="text-lg font-semibold">Invoice Items</h3>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center space-x-2"
-                    onClick={handleFilterClick}
-                    disabled={selectedRows.length !== 1}
-                  >
-                    <Undo2 className="w-4 h-4" />
-                    Return
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="flex items-center space-x-2"
-                    onClick={() => {
-                      setInvoiceItems(invoiceItems.filter(item => !selectedRows.includes(item.id)));
-                      setSelectedRows([]);
-                    }}
-                    disabled={selectedRows.length === 0}
-                  >
-                    <Trash2 className="w-4" />
-                    Delete
-                  </Button>
-                </div>
               </div>
 
               {/* Invoice Items */}
+              {/* Measured in-browser: 188px puts this row exactly level with Discount/Tax
+                  in the left column. */}
               <div className="mb-6">
-                <div className="space-y-[10px] h-[174px] overflow-y-auto">
-                  <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
-                    <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
-                      <div>id</div>
-                      <div>product</div>
-                      <div>quantity</div>
-                      <div>unit price</div>
-                      <div>total</div>
+                <div className="space-y-[10px] h-[188px] overflow-y-auto">
+                  {/* Sticky rather than lifted out of the scroll box, so the
+                      header can never drift out of step with the rows when a
+                      scrollbar appears. */}
+                  <div className="sticky top-0 z-10 bg-background flex items-center gap-2">
+                    <div className="bg-card rounded-lg border h-[35px] flex flex-1 items-center px-4">
+                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
+                        <div>id</div>
+                        <div>product</div>
+                        <div>quantity</div>
+                        <div>unit price</div>
+                        <div>total</div>
+                      </div>
                     </div>
+                    {/* Keeps the header aligned with rows, which carry two
+                        16px action buttons outside the card. */}
+                    <div className="w-4" />
+                    <div className="w-4" />
                   </div>
 
                   {invoiceItems && invoiceItems.map((item, idx) => {
-                    const isDisabled = item.is_returned; // disable if is_returned is false
+                    const isReturned = item.is_returned;
                     return (
-                      <div
-                        key={item.id}
-                        onClick={() => !isDisabled && toggleRowSelection(item.id)}
-                        className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer hover:bg-muted/20 ${selectedRows.includes(item.id)
-                          ? "border-2 border-[#4285F4]"
-                          : "border border-border"
-                          } ${isDisabled ? "opacity-50 cursor-not-allowed" : ""}`}
-                      >
-                        <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
-                          <div>{idx + 1}</div>
-                          <div className="font-medium">
-                            {item.product.base.name} ({item.product.name})
+                      <div key={item.id} className="flex items-center gap-2">
+                        <div
+                          className={`bg-card rounded-lg h-[35px] flex flex-1 items-center px-4 border border-border ${isReturned ? "opacity-50" : ""}`}
+                        >
+                          <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
+                            <div>{idx + 1}</div>
+                            <div className="font-medium">
+                              {item.product.base.name} ({item.product.name})
+                            </div>
+                            <div>{item.quantity}</div>
+                            <div>{item.unit_price}</div>
+                            <div className="font-semibold">{item.total}</div>
                           </div>
-                          <div>{item.quantity}</div>
-                          <div>{item.unit_price}</div>
-                          <div className="font-semibold">{item.total}</div>
+                        </div>
+                        <div className="flex items-center h-7">
+                          <Button
+                            type="button"
+                            variant="unstyled"
+                            className="p-0 hover:text-primary"
+                            title="Return item"
+                            disabled={isReturned}
+                            onClick={(e) => handleReturnClick(e, item)}
+                          >
+                            <Undo2 cursor={'pointer'} />
+                          </Button>
+                        </div>
+                        <div className="flex items-center h-7">
+                          <Button
+                            type="button"
+                            variant="unstyled"
+                            className="p-0 hover:text-red-500"
+                            title="Delete item"
+                            disabled={isReturned}
+                            onClick={(e) => handleDeleteItem(e, item.id)}
+                          >
+                            <Trash2 cursor={'pointer'} />
+                          </Button>
                         </div>
                       </div>
                     );
@@ -530,7 +567,32 @@ const UpdateSalesInvoice = () => {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-3 mt-auto">
+              <div className="flex gap-6">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="amount_paid">Amount Paid</Label>
+                  {/* Driven by the payments dialog, never typed into, so it is
+                      disabled rather than readOnly - readOnly still takes focus
+                      and reads as an editable field. */}
+                  <Input
+                    id="amount_paid"
+                    className="disabled:opacity-100 disabled:cursor-default"
+                    value={`PKR ${Number(amountPaid).toLocaleString()}`}
+                    disabled
+                  />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label>Payment Status</Label>
+                  <div className="flex h-10 items-center">
+                    <span
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap ${getPaymentStatusColor(paymentStatus)}`}
+                    >
+                      {PaymentStatusMap[paymentStatus]}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3 mt-6">
                 <div className="flex justify-end gap-3">
                   <Controller
                     name="project"
@@ -556,12 +618,23 @@ const UpdateSalesInvoice = () => {
                 <div className="flex justify-end gap-3">
                   {
                     pdfData &&
-                    <PDFDownloadLink
-                      document={<Invoice token={token} invoice_id={invoice_id} />}
-                      fileName={`invoice.pdf`}
-                    >
-                      <Button type="button" className="w-36">Download PDF</Button>
-                    </PDFDownloadLink>
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-44"
+                        onClick={handleSendWhatsApp}
+                      >
+                        <Send className="w-4 h-4 mr-2" />
+                        Send on WhatsApp
+                      </Button>
+                      <PDFDownloadLink
+                        document={<Invoice invoice={pdfData} />}
+                        fileName={`Invoice-${pdfData.invoice_number || invoice_id}.pdf`}
+                      >
+                        <Button type="button" className="w-36">Download PDF</Button>
+                      </PDFDownloadLink>
+                    </>
                   }
                   <Button type="submit" className="w-36">Update Invoice</Button>
                 </div>
@@ -569,13 +642,16 @@ const UpdateSalesInvoice = () => {
             </div>
           </form>
 
-          <Payments invoiceId={invoice_id} invoiceTotal={totalAmount} isSalesPayment={true} open={paymentsOpen} setOpen={setPaymentsOpen} />
+          <Payments invoiceId={invoice_id} invoiceTotal={totalAmount} isSalesPayment={true} open={paymentsOpen} setOpen={setPaymentsOpen} onPaymentsChanged={fetchSalesInvoice} />
 
-          {selectedRows.length === 1 && <ReturnItem
+          {returningItem && <ReturnItem
             invoiceId={invoice_id}
-            invoiceItem={invoiceItems.find(item => selectedRows.includes(item.id))}
+            invoiceItem={returningItem}
             open={returnItemWindowOpen}
-            setOpen={setReturnItemWindowOpen}
+            setOpen={(open) => {
+              setReturnItemWindowOpen(open)
+              if (!open) setReturningItem(null)
+            }}
             setItemReturned={setItemReturned}
           />}
 

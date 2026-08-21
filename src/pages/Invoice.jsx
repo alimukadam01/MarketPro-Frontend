@@ -1,228 +1,374 @@
-import {React, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
-import { useAuth } from "../../services/AuthProvider"
 import { getInvoicePDFData } from "../../services/api";
 import { formatDate } from "../../services/utils"
 
+/* MarketPro theme, resolved from the HSL tokens in index.css */
+const COLORS = {
+  primary: "#7C3AED",      // --primary
+  primarySoft: "#F5F3FF",  // violet tint for the table head
+  text: "#030712",         // --foreground
+  muted: "#6B7280",        // --muted-foreground
+  border: "#E5E7EB",       // --border
+  wordmark: "#9CA3AF",     // ghosted, but dark enough to actually read
+};
+
+const money = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
+
 const styles = StyleSheet.create({
   page: {
-    size: "A4",
-    padding: 20,
-    fontSize: 10,
+    paddingTop: 40,
+    paddingBottom: 64,
+    paddingHorizontal: 40,
+    fontSize: 9,
     fontFamily: "Helvetica",
-    display: "flex",
-    flexDirection: "column",
-    minHeight: "100vh",
+    color: COLORS.text,
   },
 
   /* ---------- HEADER ---------- */
-  businessHeader: {
-    textAlign: "center",
-    marginBottom: 8,
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
   },
   businessName: {
-    fontSize: 14,
-    fontWeight: "bold",
+    fontSize: 17,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.primary,
+    marginBottom: 4,
+  },
+  headerLeft: {
+    width: "62%",
+  },
+  // No lineHeight anywhere on a Text: this version of react-pdf reserves two
+  // line boxes for any Text that sets one, leaving a blank line under it.
+  businessMeta: {
+    color: COLORS.muted,
+  },
+  invoiceWord: {
+    fontSize: 22,
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: 4,
+    color: COLORS.wordmark,
+    textAlign: "right",
+  },
+  rule: {
+    height: 2,
+    backgroundColor: COLORS.primary,
+    marginTop: 14,
+    marginBottom: 18,
   },
 
-  invoiceTitle: {
-    textAlign: "center",
-    fontSize: 18,
-    marginVertical: 10,
-    fontWeight: "bold",
-    letterSpacing: 2,
-  },
-
-  /* ---------- INFO SECTION ---------- */
-  infoRow: {
+  /* ---------- BILL TO / META ---------- */
+  columns: {
     flexDirection: "row",
-    border: "1 solid #000",
-    marginBottom: 10,
+    justifyContent: "space-between",
+    marginBottom: 22,
   },
-  infoBox: {
-    width: "50%",
-    padding: 6,
-    borderRight: "1 solid #000",
+  label: {
+    fontSize: 7,
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: 1.2,
+    color: COLORS.muted,
+    marginBottom: 5,
   },
-  infoBoxLast: {
-    width: "50%",
-    padding: 6,
+  partyName: {
+    fontSize: 11,
+    fontFamily: "Helvetica-Bold",
+    marginBottom: 3,
+  },
+  billedTo: {
+    width: "58%",
+  },
+  partyMeta: {
+    color: COLORS.muted,
+  },
+  metaRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginBottom: 3,
+  },
+  metaLabel: {
+    color: COLORS.muted,
+    marginRight: 10,
+  },
+  metaValue: {
+    fontFamily: "Helvetica-Bold",
+    width: 90,
+    textAlign: "right",
   },
 
   /* ---------- TABLE ---------- */
-  tableHeader: {
+  tableHead: {
     flexDirection: "row",
-    border: "1 solid #000",
-    backgroundColor: "#f0f0f0",
-    fontWeight: "bold",
+    backgroundColor: COLORS.primarySoft,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
   },
-  tableRow: {
+  headCell: {
+    fontSize: 7,
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: 1.2,
+    color: COLORS.primary,
+  },
+  row: {
     flexDirection: "row",
-    borderBottom: "1 solid #000",
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderBottom: `0.5 solid ${COLORS.border}`,
   },
-
-  colSno: { width: "5%", textAlign: "center", padding: 4 },
-  colParticular: { width: "52%", padding: 4 },
-  colQty: { width: "8%", textAlign: "center", padding: 4 },
-  colRate: { width: "15%", textAlign: "right", padding: 4 },
-  colAmount: { width: "20%", textAlign: "right", padding: 4 },
+  colSno: { width: "6%", color: COLORS.muted },
+  colItem: { width: "48%", paddingRight: 8 },
+  colQty: { width: "10%", textAlign: "right" },
+  colRate: { width: "16%", textAlign: "right" },
+  colAmount: { width: "20%", textAlign: "right" },
+  variant: {
+    color: COLORS.muted,
+    fontSize: 8,
+    marginTop: 2,
+  },
 
   /* ---------- TOTALS ---------- */
   totals: {
-    marginTop: 10,
-    border: "1 solid #000",
+    marginTop: 18,
+    marginLeft: "auto",
+    width: "48%",
   },
+  // Every totals row carries the same horizontal padding as the tinted net
+  // row, so all labels share a left edge and all amounts share a right one.
   totalRow: {
     flexDirection: "row",
-    padding: 6,
-    borderBottom: "1 solid #000",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+    paddingHorizontal: 10,
   },
-  totalLabel: {
-    width: "80%",
-    textAlign: "right",
-    paddingRight: 10,
+  totalLabel: { color: COLORS.muted },
+  netRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    marginTop: 8,
+    paddingTop: 9,
+    paddingBottom: 9,
+    paddingHorizontal: 10,
+    backgroundColor: COLORS.primarySoft,
   },
-  totalValue: {
-    width: "20%",
-    textAlign: "right",
+  netLabel: {
+    fontSize: 10,
+    fontFamily: "Helvetica-Bold",
+    letterSpacing: 1,
+    color: COLORS.primary,
   },
+  netValue: {
+    fontSize: 12,
+    fontFamily: "Helvetica-Bold",
+    color: COLORS.primary,
+  },
+  dueRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  dueLabel: { fontFamily: "Helvetica-Bold" },
 
   /* ---------- FOOTER ---------- */
   footer: {
-    marginTop: "auto",
-    paddingTop: 20,
-    borderTop: "1 solid #ddd",
-    textAlign: "center",
-    fontSize: 9,
-    color: "#555",
+    position: "absolute",
+    bottom: 30,
+    left: 40,
+    right: 40,
+    paddingTop: 10,
+    borderTop: `0.5 solid ${COLORS.border}`,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    fontSize: 7.5,
+    color: COLORS.muted,
   },
 });
 
-const Invoice = ({ token, invoice_id }) => {
-  const [invoice, setInvoice] = useState(null)
+/**
+ * Renders the invoice PDF. Pass `invoice` when the page has already loaded the
+ * data - the PDF is also generated programmatically for sharing, where an
+ * internal fetch would not have resolved before the document renders.
+ */
+const Invoice = ({ token, invoice_id, invoice: invoiceProp = null }) => {
+  const [fetched, setFetched] = useState(null)
+  const invoice = invoiceProp || fetched
 
   useEffect(() => {
     const fetchInvoice = async () => {
+      if (invoiceProp) return
       if (!token || !invoice_id) {
         return
       }
 
       try {
         const data = await getInvoicePDFData(token, invoice_id)
-        setInvoice(data)
+        setFetched(data)
       } catch (error) {
-        console.error("Error fetching invoice details:", error)
+        console.log("Error fetching invoice details:", error)
       }
     }
 
     fetchInvoice()
-  }, [token, invoice_id])
+  }, [token, invoice_id, invoiceProp])
 
-  const business = invoice?.business || null
-  const customer = invoice?.customer || null
-  
-  if (invoice){
+  if (!invoice) {
+    return <Document><Page size="A4" style={styles.page} /></Document>
+  }
+
+  const business = invoice.business || {}
+  const customer = invoice.customer || {}
+  const items = invoice.invoice_items || []
+
+  const paid = Number(invoice.amount_paid || 0)
+  const balance = Number(invoice.total || 0) - paid
+
+  // Mirrors SalesInvoice.adjust_totals: both are worked out on the raw
+  // subtotal — tax is NOT charged on the discounted figure — and
+  // total = subtotal + tax - discount. Kept in step so the lines add up.
+  const modifierAmount = (entry) => {
+    if (!entry || !entry.value) return 0
+    return entry.type === "percentage"
+      ? (Number(invoice.sub_total) || 0) * entry.value / 100
+      : Number(entry.value)
+  }
+
+  const rate = (entry) =>
+    entry?.type === "percentage" ? ` (${entry.value}%)` : ""
+
+  const discountAmount = modifierAmount(invoice.discount)
+  const taxAmount = modifierAmount(invoice.tax)
+
   return (
-      <Document>
-        <Page style={styles.page} wrap>
-          <View style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-          {/* Business Header */}
-          <View style={styles.businessHeader} fixed>
+    <Document>
+      <Page size="A4" style={styles.page}>
+
+        {/* Header */}
+        <View style={styles.header} fixed>
+          <View style={styles.headerLeft}>
             <Text style={styles.businessName}>{business.name}</Text>
-            <Text>{business.address}</Text>
-            <Text>Contact #: {business.phone}</Text>
+            <Text style={styles.businessMeta}>{business.address}</Text>
+            <Text style={styles.businessMeta}>{business.phone}</Text>
+          </View>
+          <Text style={styles.invoiceWord}>INVOICE</Text>
+        </View>
+        <View style={styles.rule} fixed />
+
+        {/* Bill to + invoice meta */}
+        <View style={styles.columns}>
+          <View style={styles.billedTo}>
+            <Text style={styles.label}>BILLED TO</Text>
+            <Text style={styles.partyName}>{customer.name}</Text>
+            {customer.phone ? (
+              <Text style={styles.partyMeta}>{customer.phone}</Text>
+            ) : null}
+            {customer.address ? (
+              <Text style={styles.partyMeta}>{customer.address}</Text>
+            ) : null}
           </View>
 
-          {/* Invoice Title */}
-          <Text style={styles.invoiceTitle} fixed>
-            INVOICE
-          </Text>
-
-          {/* Info Section */}
-          <View style={styles.infoRow}>
-            <View style={styles.infoBox}>
-              <Text>Name: {customer.name}</Text>
-              <Text>Contact: {customer.phone}</Text>
-              <Text>Address: {customer.address}</Text>
-            </View>
-            <View style={styles.infoBoxLast}>
-              <Text>Invoice Number: {invoice.invoice_number}</Text>
-              <Text>Date: {formatDate(invoice.created_at)}</Text>
-            </View>
-          </View>
-
-          {/* Table Header */}
-          <View style={styles.tableHeader} fixed>
-            <Text style={styles.colSno}>S#</Text>
-            <Text style={styles.colParticular}>Particular</Text>
-            <Text style={styles.colQty}>Qty</Text>
-            <Text style={styles.colRate}>Rate</Text>
-            <Text style={styles.colAmount}>Amount</Text>
-          </View>
-
-          {/* Items (MULTI-PAGE SAFE) */}
-          {invoice.invoice_items.map((item, index) => (
-            <View style={styles.tableRow} key={index} wrap>
-              <Text style={styles.colSno}>{index + 1}</Text>
-              <Text style={styles.colParticular}>{item.product.base.name} ({item.product.name})</Text>
-              <Text style={styles.colQty}>{item.net_quantity}</Text>
-              <Text style={styles.colRate}>{item.unit_price}</Text>
-              <Text style={styles.colAmount}>
-                {item.unit_price * item.net_quantity}
+          <View>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Invoice No.</Text>
+              <Text style={styles.metaValue}>
+                {invoice.invoice_number || invoice.id}
               </Text>
             </View>
-          ))}
-
-          {/* Totals */}
-          <View style={styles.totals} wrap={false}>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>SUBTOTAL</Text>
-              <Text style={styles.totalValue}>PKR {invoice.sub_total}</Text>
-            </View>
-
-            {invoice.discount && (
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>
-                  DISCOUNT
-                </Text>
-                <Text style={styles.totalValue}>
-                  {invoice.discount.type === "percentage"?
-                    ` ${invoice.discount.value}%`: ` PKR ${invoice.discount.value}`}
-                </Text> 
-              </View>
-            )}
-
-            {invoice.tax && (
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>
-                  TAX
-                </Text>
-                <Text style={styles.totalValue}>
-                  {invoice.tax.type === "percentage"?
-                    ` ${invoice.tax.value}%`: ` PKR ${invoice.tax.value}`}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>NET AMOUNT</Text>
-              <Text style={styles.totalValue}>PKR {invoice.total}</Text>
+            <View style={styles.metaRow}>
+              <Text style={styles.metaLabel}>Date</Text>
+              <Text style={styles.metaValue}>
+                {formatDate(invoice.date_issued || invoice.created_at)}
+              </Text>
             </View>
           </View>
+        </View>
 
-          {/* Footer */}
-          <View style={styles.footer} fixed>
-            <Text>Invoice generated by Market Pro</Text>
-            <Text>For more details, contact 0331-3689402</Text>
-          </View>
-          </View>
-        </Page>
-      </Document>
-    )}
+        {/* Items */}
+        <View style={styles.tableHead} fixed>
+          <Text style={[styles.headCell, styles.colSno]}>#</Text>
+          <Text style={[styles.headCell, styles.colItem]}>ITEM</Text>
+          <Text style={[styles.headCell, styles.colQty]}>QTY</Text>
+          <Text style={[styles.headCell, styles.colRate]}>RATE</Text>
+          <Text style={[styles.headCell, styles.colAmount]}>AMOUNT</Text>
+        </View>
 
-  else {
-    return (<div></div>)
-  }
+        {items.map((item, index) => (
+          <View style={styles.row} key={index} wrap={false}>
+            <Text style={styles.colSno}>{index + 1}</Text>
+            <View style={styles.colItem}>
+              <Text>{item.product?.base?.name}</Text>
+              {/* "default" is the placeholder name for a variant-less
+                  product — printing it under every line is just noise. */}
+              {item.product?.name && item.product.name !== "default" ? (
+                <Text style={styles.variant}>{item.product.name}</Text>
+              ) : null}
+            </View>
+            <Text style={styles.colQty}>{item.net_quantity}</Text>
+            <Text style={styles.colRate}>{money(item.unit_price)}</Text>
+            <Text style={styles.colAmount}>
+              {money(item.unit_price * item.net_quantity)}
+            </Text>
+          </View>
+        ))}
+
+        {/* Totals */}
+        <View style={styles.totals} wrap={false}>
+          {discountAmount > 0 ? (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>
+                Discount{rate(invoice.discount)}
+              </Text>
+              <Text>- {money(discountAmount)}</Text>
+            </View>
+          ) : null}
+
+          {taxAmount > 0 ? (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>Tax{rate(invoice.tax)}</Text>
+              <Text>{money(taxAmount)}</Text>
+            </View>
+          ) : null}
+
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Subtotal</Text>
+            <Text>{money(invoice.sub_total)}</Text>
+          </View>
+
+          <View style={styles.netRow}>
+            <Text style={styles.netLabel}>NET AMOUNT</Text>
+            <Text style={styles.netValue}>{money(invoice.total)}</Text>
+          </View>
+
+          {paid > 0 ? (
+            <View style={styles.dueRow}>
+              <Text style={styles.totalLabel}>Amount Paid</Text>
+              <Text>{money(paid)}</Text>
+            </View>
+          ) : null}
+
+          {balance > 0 ? (
+            <View style={styles.dueRow}>
+              <Text style={styles.dueLabel}>Balance Due</Text>
+              <Text style={styles.dueLabel}>{money(balance)}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer} fixed>
+          <Text>Generated by Market Pro</Text>
+          <Text
+            render={({ pageNumber, totalPages }) =>
+              `Page ${pageNumber} of ${totalPages}`
+            }
+          />
+        </View>
+      </Page>
+    </Document>
+  )
 };
 
 export default Invoice;
