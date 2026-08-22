@@ -83,10 +83,45 @@ const filter_fields_template = {
     date: "",
 };
 
+// Values mirror Transaction.TYPE_CHOICES / STATUS_CHOICES /
+// PAYMENT_METHOD_CHOICES in accounts/models.py — the API filters on the raw
+// value, so these must stay in step with the model.
+const transaction_type_options = [
+    { value: "sale_payment", label: "Sale Payment" },
+    { value: "customer_receipt", label: "Customer Receipt" },
+    { value: "purchase_return_refund", label: "Purchase Return Refund" },
+    { value: "owner_capital", label: "Owner Capital" },
+    { value: "loan_received", label: "Loan Received" },
+    { value: "other_income", label: "Other Income" },
+    { value: "purchase_payment", label: "Purchase Payment" },
+    { value: "supplier_payment", label: "Supplier Payment" },
+    { value: "sales_return_refund", label: "Sales Return Refund" },
+    { value: "expense", label: "Expense" },
+    { value: "salary_payment", label: "Salary Payment" },
+    { value: "owner_drawings", label: "Owner Drawings" },
+    { value: "loan_repayment", label: "Loan Repayment" },
+    { value: "other_payment", label: "Other Payment" },
+    { value: "transfer", label: "Account Transfer" },
+    { value: "cash_adjustment", label: "Cash Adjustment" },
+];
+
+const transaction_status_options = [
+    { value: "C", label: "Cleared" },
+    { value: "PEN", label: "Pending" },
+    { value: "B", label: "Bounced" },
+];
+
+const payment_method_options = [
+    { value: "cash", label: "Cash" },
+    { value: "wallet", label: "Wallet" },
+    { value: "bank_transfer", label: "Bank Transfer" },
+    { value: "cheque", label: "Cheque" },
+];
+
 const filter_fields_mapper = {
-    type: { label: "Type", type: "text", placeholder: "e.g. customer_receipt" },
-    status: { label: "Status", type: "text", placeholder: "C, PEN or B" },
-    payment_method: { label: "Method", type: "text", placeholder: "cash, wallet, bank_transfer, cheque" },
+    type: { label: "Type", type: "select", options: transaction_type_options, anyLabel: "Any type" },
+    status: { label: "Status", type: "select", options: transaction_status_options, anyLabel: "Any status" },
+    payment_method: { label: "Method", type: "select", options: payment_method_options, anyLabel: "Any method" },
     date: { label: "Date", type: "date", placeholder: "" },
 };
 
@@ -402,6 +437,7 @@ const Accounting = () => {
                             ) : null}
 
                             <CustomFilter
+                                title="Filter Transactions"
                                 template={filter_fields_template}
                                 templateMapper={filter_fields_mapper}
                                 dataFetcher={fetchTransactions}

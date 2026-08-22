@@ -280,6 +280,7 @@ const PurchaseQuotations = () => {
           ) : null}
 
           {/* <CustomFilter
+            title="Filter Purchase Quotations"
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
             dataFetcher={fetchPurchaseQuotations}

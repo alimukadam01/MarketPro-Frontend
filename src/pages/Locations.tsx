@@ -271,6 +271,7 @@ const Locations = () => {
           ) : null}
 
           {/* <CustomFilter
+            title="Filter Locations"
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
             dataFetcher={fetchLocations}

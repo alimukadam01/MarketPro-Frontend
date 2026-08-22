@@ -318,6 +318,7 @@ const Expenses = () => {
           ) : null}
 
           <CustomFilter
+            title="Filter Expenses"
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
             dataFetcher={fetchExpenses}

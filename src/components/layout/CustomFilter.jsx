@@ -3,19 +3,40 @@ import * as DialogUI from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatFilterQuery } from "../../../services/utils";
 import { ArrowLeft } from "lucide-react";
 
 /**
+ * Radix refuses an empty string as a SelectItem value, so "no filter" needs a
+ * stand-in. It is mapped back to "" on change, which is what formatFilterQuery
+ * drops from the query string.
+ */
+const ANY = "__any__";
+
+/**
  * Props:
+ *  - title: string (dialog heading; defaults to "Filter Records")
  *  - template: object (initial filter values)
  *  - templateMapper: object (UI metadata for fields)
  *  - setData: function to update parent data
  *  - dataFetcher: async function (query?) => data
  *  - open: boolean (dialog open state)
  *  - setOpen: function (setOpen boolean)
+ *
+ * templateMapper entries:
+ *  { label, type, placeholder }                        text / date / number
+ *  { label, type: "checkbox" }                         checkbox
+ *  { label, type: "select", options: [{value,label}] } dropdown
  */
 export default function CustomFilter({
+  title = "Filter Records",
   template,
   templateMapper,
   dataFetcher,
@@ -45,7 +66,7 @@ export default function CustomFilter({
     <DialogUI.Dialog open={!!open} onOpenChange={setOpen}>
       <DialogUI.DialogContent className="max-w-2xl">
         <DialogUI.DialogHeader className="flex items-center gap-3">
-          <DialogUI.DialogTitle>Filter Sales Records</DialogUI.DialogTitle>
+          <DialogUI.DialogTitle>{title}</DialogUI.DialogTitle>
         </DialogUI.DialogHeader>
 
         <div className="flex flex-wrap gap-4 my-4">
@@ -58,6 +79,28 @@ export default function CustomFilter({
                   checked={!!filters[key]}
                   onCheckedChange={(checked) => handleChange(key, checked)}
                 />
+              ) : config.type === "select" ? (
+                <Select
+                  value={filters[key] ? filters[key] : ANY}
+                  onValueChange={(value) =>
+                    handleChange(key, value === ANY ? "" : value)
+                  }
+                >
+                  <SelectTrigger className="w-56">
+                    <SelectValue placeholder={config.placeholder || "Any"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {/* Lets a chosen value be cleared again without reopening */}
+                    <SelectItem value={ANY}>
+                      {config.anyLabel || "Any"}
+                    </SelectItem>
+                    {(config.options || []).map((option) => (
+                      <SelectItem value={option.value} key={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : (
                 <Input
                   type={config.type}

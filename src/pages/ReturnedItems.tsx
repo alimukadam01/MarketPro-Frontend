@@ -336,6 +336,7 @@ const ReturnedItems = () => {
           ) : null}
 
           <CustomFilter
+            title="Filter Returned Items"
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
             dataFetcher={fetchReturnedItems}

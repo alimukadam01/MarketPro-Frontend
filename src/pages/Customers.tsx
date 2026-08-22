@@ -277,6 +277,7 @@ const Customers = () => {
           ) : null}
 
           <CustomFilter
+            title="Filter Customers"
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
             dataFetcher={fetchCustomers}

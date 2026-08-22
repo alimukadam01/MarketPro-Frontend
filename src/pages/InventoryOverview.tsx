@@ -288,6 +288,7 @@ const InventoryOverview = () => {
             : null}
 
             <CustomFilter
+              title="Filter Inventory Items"
               template={filter_fields_template}
               templateMapper={filter_fields_mapper}
               dataFetcher={fetchInventoryItems}

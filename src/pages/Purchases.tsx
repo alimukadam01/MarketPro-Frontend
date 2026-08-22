@@ -371,6 +371,7 @@ const Purchases = () => {
           {purchasesData && purchasesData.length > 0 ? <DataTable columns={cols} data={permissions["view"] ? purchasesData : null} selectedRows={selectedRows} onRowClick={toggleRowSelection} /> : null}
 
           <CustomFilter
+            title="Filter Purchase Invoices"
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
             dataFetcher={fetchPurchaseInvoices}

@@ -430,6 +430,7 @@ const Sales = () => {
           ) : null}
 
           <CustomFilter
+            title="Filter Sales Invoices"
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
             dataFetcher={fetchSalesInvoices}

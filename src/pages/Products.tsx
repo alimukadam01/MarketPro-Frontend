@@ -273,6 +273,7 @@ const Products = () => {
           ) : null}
 
           <CustomFilter
+            title="Filter Products"
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
             dataFetcher={fetchProducts}
