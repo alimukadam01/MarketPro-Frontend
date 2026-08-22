@@ -180,7 +180,12 @@ const Index = () => {
 
           {/* Charts and Metrics Section */}
           <div className="grid grid-cols-2 gap-6">
-            <div className="grid grid-2 gap-6">
+            {/* grid-cols-1 (not the non-existent "grid-2") so this column is a real
+                minmax(0,1fr) track. Without it the column is an implicit auto track that
+                sizes to its content, so a chart that measures wider than the available
+                space drags the column with it and paints over Quick Actions.
+                min-w-0 lets the grid item shrink below its content's min-content width. */}
+            <div className="grid grid-cols-1 gap-6 min-w-0">
               <ChartCard
                 title="Total Sales this month"
                 data={monthlySalesTrend}
