@@ -9,7 +9,7 @@ import {
   formatConfig,
 } from "./utils";
 
-const DEBUG = false;
+const DEBUG = true;
 
 export const BASE_URL = DEBUG
   ? "http://localhost:8000/"
@@ -2385,5 +2385,31 @@ export const setDefaultMoneyAccount = async (token, id) => {
   } catch (error) {
     console.log("Error setting default money account:", error);
     return false;
+  }
+};
+
+// Names the buyer on a walk-in invoice. The customer is created and the invoice
+// reassigned in one transaction server-side, so there is no window where a new
+// customer exists that no invoice points at.
+// Returns { invoice, whatsapp } — whatsapp is null when the number is unusable.
+export const captureInvoiceCustomer = async (token, invoiceId, customerData) => {
+  try {
+    const res = await apiClient.post(
+      `sales-invoices/${invoiceId}/capture-customer/`,
+      customerData,
+      {
+        headers: {
+          Authorization: token,
+        },
+      },
+    );
+
+    if (res.status === 200) {
+      return res.data;
+    }
+    return null;
+  } catch (error) {
+    console.log(error.response?.data || error);
+    return null;
   }
 };

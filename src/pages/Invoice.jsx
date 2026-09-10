@@ -265,6 +265,9 @@ const Invoice = ({ token, invoice_id, invoice: invoiceProp = null }) => {
             {customer.phone ? (
               <Text style={styles.partyMeta}>{customer.phone}</Text>
             ) : null}
+            {customer.email ? (
+              <Text style={styles.partyMeta}>{customer.email}</Text>
+            ) : null}
             {customer.address ? (
               <Text style={styles.partyMeta}>{customer.address}</Text>
             ) : null}

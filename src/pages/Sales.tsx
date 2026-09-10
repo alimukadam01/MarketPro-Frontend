@@ -4,7 +4,6 @@ import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
-import { PDFDownloadLink } from "@react-pdf/renderer";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   getStatusColor,
@@ -31,11 +30,13 @@ import {
   Edit,
   Trash2,
   Lock,
+  Send,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import Invoice from '../pages/Invoice'
+import WalkInCustomer from "@/components/ui/walk-in-customer";
+import { useInvoiceActions } from "@/hooks/use-invoice-actions";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each customer.
 
@@ -147,6 +148,12 @@ const Sales = () => {
   const [isDeleted, setIsDeleted] = useState(false);
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();
+  // Download never prompts. Sending prompts only for a counter sale, which has
+  // no number to send to until the buyer is named.
+  const {
+    downloadInvoice, sendOnWhatsApp, isDownloading, isSending, isBusy,
+    walkInDialogProps,
+  } = useInvoiceActions();
 
   const toggleRowSelection = (id: string) => {
     setSelectedRows((prev) =>
@@ -391,20 +398,26 @@ const Sales = () => {
                   {permissions["edit"] ? <Edit className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>View/Update</span>
                 </Button>
-                <PDFDownloadLink
-                  document={<Invoice token = {token} invoice_id = {selectedRows[0]}/>}
-                  fileName={`invoice.pdf`}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-2"
+                  onClick={() => downloadInvoice(selectedRows[0])}
+                  disabled={selectedRows.length !== 1 || !permissions["view"] || isBusy}
                 >
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center space-x-2"
-                    disabled={selectedRows.length !== 1 || !permissions["view"]}
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Download</span>
-                  </Button>
-                </PDFDownloadLink>
+                  <Download className="w-4 h-4" />
+                  <span>{isDownloading ? "Preparing…" : "Download"}</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center space-x-2"
+                  onClick={() => sendOnWhatsApp(selectedRows[0])}
+                  disabled={selectedRows.length !== 1 || !permissions["view"] || isBusy}
+                >
+                  <Send className="w-4 h-4" />
+                  <span>{isSending ? "Preparing…" : "Send on WhatsApp"}</span>
+                </Button>
 
                 <Button
                   variant="outline"
@@ -428,6 +441,8 @@ const Sales = () => {
               onRowClick={toggleRowSelection}
             />
           ) : null}
+
+          <WalkInCustomer {...walkInDialogProps} />
 
           <CustomFilter
             title="Filter Sales Invoices"

@@ -546,3 +546,64 @@ export const getImageUrl = (url) => {
   if (url.startsWith("http")) return url;
   return `${BASE_URL}${url}`;
 }
+// The counter-sale customer every business is given. Walk-in invoices are
+// recognised by this name when they are downloaded, so it must stay in step
+// with root/models.py: WALK_IN_CUSTOMER_NAME on the backend.
+export const WALK_IN_CUSTOMER_NAME = "Walk-In Customer";
+
+// Trim-and-casefold so a stray space or a capitalisation drift does not quietly
+// turn detection off. Both the Download button and the ViewCustomer name lock
+// go through this, so they can never disagree about what a walk-in is.
+export const isWalkInCustomer = (customer) =>
+  (customer?.name || "").trim().toLowerCase() ===
+  WALK_IN_CUSTOMER_NAME.toLowerCase();
+
+/**
+ * The initials MarketPro puts at the front of an invoice number.
+ *
+ * Multi-word names give one letter per word ("Test Business 01" -> "TB");
+ * trailing numbers are skipped because they are not initials. A single-word
+ * name would give one lonely letter, so it gives the first three instead
+ * ("Kumail" -> "KUM").
+ */
+export const businessInitials = (businessName) => {
+  const words = String(businessName || "")
+    .split(/[^A-Za-z0-9]+/)
+    .filter((word) => /^[A-Za-z]/.test(word));
+
+  if (words.length > 1) {
+    return words.map((word) => word[0]).join("").toUpperCase().slice(0, 5);
+  }
+  if (words.length === 1) {
+    return words[0].slice(0, 3).toUpperCase();
+  }
+  return "INV";
+};
+
+/**
+ * A draft invoice number: <INITIALS>-<YYYYMMDD>-<HHMMSS>, e.g. STB-20260910-142337.
+ *
+ * Built in the business timezone for the same reason todayForInput is — the
+ * browser's own clock would roll the date over at the wrong moment.
+ *
+ * Uniqueness is by the second, not enforced: the field stays editable, so a
+ * user can always type over it, including into a duplicate.
+ */
+export const generateInvoiceNumber = (businessName, at = new Date()) => {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: BUSINESS_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23", // so midnight is 00, not 24
+  }).formatToParts(at);
+
+  const part = (type) => parts.find((p) => p.type === type)?.value || "";
+  const date = `${part("year")}${part("month")}${part("day")}`;
+  const time = `${part("hour")}${part("minute")}${part("second")}`;
+
+  return `${businessInitials(businessName)}-${date}-${time}`;
+};

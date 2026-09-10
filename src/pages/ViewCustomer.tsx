@@ -18,7 +18,7 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { ArrowLeft } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
-import { createIdMap } from "../../services/utils";
+import { createIdMap, isWalkInCustomer } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider";
 import {
     getCitiesList,
@@ -33,6 +33,9 @@ const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`
 const ViewCustomer = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [cities, setCities] = useState([]);
+    // Walk-in invoices are recognised by this customer's name, so it is the
+    // one field on this page that cannot be edited.
+    const [isWalkIn, setIsWalkIn] = useState(false);
     const [summary, setSummary] = useState(null);
     const [ledger, setLedger] = useState(null);
     const { token, getPermissions } = useAuth();
@@ -57,6 +60,7 @@ const ViewCustomer = () => {
     });
 
     const populateCustomerFields = (data) => {
+        setIsWalkIn(isWalkInCustomer(data));
         reset({
             name: data.name || "",
             phone: data.phone || "",
@@ -189,12 +193,19 @@ const ViewCustomer = () => {
                             className="text-xl font-semibold mb-2 w-fit"
                             type="text"
                             placeholder="Customer name"
-                            disabled={!permissions?.["edit"]}
+                            disabled={!permissions?.["edit"] || isWalkIn}
                             {...register("name", {
                                 onChange: (e) =>
                                     patchField(endpoint, "name", e.target.value),
                             })}
                         />
+                        {isWalkIn && (
+                            <p className="text-xs text-muted-foreground mb-2">
+                                This is the counter-sale customer. Its name is fixed so
+                                walk-in invoices can still be recognised when they are
+                                downloaded.
+                            </p>
+                        )}
 
                         <div className="grid grid-cols-6 gap-4">
                             <div className="col-span-2">

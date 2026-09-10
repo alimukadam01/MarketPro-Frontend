@@ -41,7 +41,7 @@ const Login = () => {
         const business = await getActiveBusiness(accessToken)
         const config = formatConfig(business.config, userData.role)
         
-        authLogIn(accessToken, userData, business.id, config)
+        authLogIn(accessToken, userData, business.id, config, business.name)
         
         setIsLoading(false)
         navigate('/')

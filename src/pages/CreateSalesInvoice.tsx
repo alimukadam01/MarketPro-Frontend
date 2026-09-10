@@ -17,11 +17,13 @@ import {
   createIdMap,
   createNestedIdMap,
   derivePaymentStatus,
+  generateInvoiceNumber,
   getPaymentStatusColor,
   todayForInput,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
+  getActiveBusiness,
   getAvailableProductsList,
   getCustomersList,
   postSalesInvoiceAndItems,
@@ -43,9 +45,17 @@ const CreateSalesInvoice = () => {
   const project_id = location.state?.project_id || null
 
   // react-hook-form setup
-  const { register, handleSubmit, control, watch, reset, setValue } = useForm({
+  // Cached at login. Sessions that predate that caching fall back to a fetch
+  // below, so nobody has to sign in again to get an invoice number.
+  const [businessName, setBusinessName] = useState(
+    () => localStorage.getItem("mp-business-name") || ""
+  )
+
+  const { register, handleSubmit, control, watch, reset, setValue, getValues } = useForm({
     defaultValues: {
-      invoice_number: "",
+      invoice_number: businessName
+        ? generateInvoiceNumber(businessName)
+        : "",
       customer: "",
       notes: "",
       date_issued: todayForInput(),
@@ -60,6 +70,34 @@ const CreateSalesInvoice = () => {
       newItemPrice: 0
     },
   })
+
+  useEffect(() => {
+    if (businessName || !token) return
+
+    const fetchBusinessName = async () => {
+      try {
+        const business = await getActiveBusiness(token)
+        if (business?.name) {
+          localStorage.setItem("mp-business-name", business.name)
+          setBusinessName(business.name)
+        }
+      } catch (error) {
+        console.log("Error fetching business name:", error)
+      }
+    }
+    fetchBusinessName()
+  }, [token, businessName])
+
+  // Only reached by a session that predates the name being cached at login:
+  // defaultValues above already covers the normal case. Keeps anything the user
+  // has typed, so the draft number can never overwrite a real one.
+  useEffect(() => {
+    if (!businessName) return
+    if (getValues("invoice_number")) return
+    // Spread the current values: reset() replaces the whole form, so passing
+    // only the number would blank every other field.
+    reset({ ...getValues(), invoice_number: generateInvoiceNumber(businessName) })
+  }, [businessName, getValues, reset])
 
   const discount = parseFloat(watch("discount") || 0)
   const tax = parseFloat(watch("tax") || 0)
@@ -208,8 +246,17 @@ const CreateSalesInvoice = () => {
 
               <div className="flex gap-6 mb-6">
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="invoice_number">Invoice no. (optional)</Label>
-                  <Input id="invoice_number" {...register("invoice_number")} placeholder="Enter invoice number" />
+                  <Label htmlFor="invoice_number">Invoice no.</Label>
+                  {/* The explanation rides on `title` rather than a line of its
+                      own: the two form columns are independent stacks with no
+                      cross-column alignment, so any extra height on this side
+                      knocks Status out of line with Amount Paid opposite. */}
+                  <Input
+                    id="invoice_number"
+                    title="Generated automatically — edit it if you number invoices differently."
+                    {...register("invoice_number")}
+                    placeholder="Enter invoice number"
+                  />
                 </div>
                 <div className="flex-1 space-y-1">
                   <Label htmlFor="customer">Customer</Label>

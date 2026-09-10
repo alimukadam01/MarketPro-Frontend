@@ -41,6 +41,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("mp-user");
     localStorage.removeItem("mp-access-config");
     localStorage.removeItem("mp-business-id");
+    localStorage.removeItem("mp-business-name");
     localStorage.removeItem("mp-user-permissions");
     setToken(null);
     setUser(null);
@@ -71,12 +72,15 @@ export const AuthProvider = ({ children }) => {
   }, [token, endExpiredSession])
 
   // Login: store token, user, and access config
-  const login = (newToken, userData, businessId, accessConfig) => {
+  // businessName is cached because invoice numbers are built from its
+  // initials on the client, and Login already has the whole business object.
+  const login = (newToken, userData, businessId, accessConfig, businessName) => {
 
     expiryHandledRef.current = false
 
     localStorage.setItem("mp-access-token", newToken)
     localStorage.setItem("mp-business-id", businessId)
+    if (businessName) localStorage.setItem("mp-business-name", businessName)
     localStorage.setItem("mp-access-config", JSON.stringify(accessConfig));
     
     const {permissions, ...userInfo} = userData

@@ -25,14 +25,13 @@ import {
   updateSalesInvoiceAndItems,
   getSalesInvoiceDetail,
   getInvoicePDFData,
-  projectsAPIPackage,
-  getInvoiceWhatsAppMessage
+  projectsAPIPackage
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import ReturnItem from "@/components/ui/return-item";
 import Payments from "@/components/ui/payments";
-import { PDFDownloadLink, pdf } from "@react-pdf/renderer";
-import Invoice from "@/pages/Invoice";
+import WalkInCustomer from "@/components/ui/walk-in-customer";
+import { useInvoiceActions } from "@/hooks/use-invoice-actions";
 
 const UpdateSalesInvoice = () => {
 
@@ -52,6 +51,21 @@ const UpdateSalesInvoice = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const invoice_id = location.state?.invoice_id || null
+
+  // Download never prompts. Sending prompts only for a counter sale; the
+  // capture returns the reassigned invoice, so the page refreshes from it
+  // without another round trip.
+  const {
+    downloadInvoice, sendOnWhatsApp, isDownloading, isSending, isBusy,
+    walkInDialogProps,
+  } = useInvoiceActions({
+    onInvoiceUpdated: (invoice) => {
+      setPdfData(invoice)
+      setCustomers((prev) => ({ ...prev, [invoice.customer.id]: invoice.customer }))
+      setValue("customer", invoice.customer.id)
+      fetchSalesInvoice()
+    },
+  })
 
   // react-hook-form setup
   const { register, handleSubmit, control, watch, reset, setValue } = useForm({
@@ -184,48 +198,6 @@ const UpdateSalesInvoice = () => {
   const handleDeleteItem = (e, id) => {
     e.preventDefault();
     setInvoiceItems(invoiceItems.filter(item => item.id !== id));
-  }
-
-  const handleSendWhatsApp = async () => {
-    if (!pdfData) return
-
-    try {
-      const payload = await getInvoiceWhatsAppMessage(token, invoice_id)
-      if (!payload) {
-        toast.error("Could not prepare the message. Check the customer's phone number.")
-        return
-      }
-
-      // Rendered from data already in hand — the component's own fetch would
-      // not have resolved by the time the document is generated.
-      const blob = await pdf(<Invoice invoice={pdfData} />).toBlob()
-      const fileName = `Invoice-${pdfData.invoice_number || invoice_id}.pdf`
-      const file = new File([blob], fileName, { type: "application/pdf" })
-
-      // The share sheet is the only route that carries the PDF into WhatsApp;
-      // a wa.me link can only ever take text.
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], text: payload.message })
-        return
-      }
-
-      // Otherwise hand over the PDF and open the chat with the message ready,
-      // so the invoice is one attach away.
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = fileName
-      link.click()
-      URL.revokeObjectURL(url)
-
-      window.open(payload.whatsapp_url, "_blank")
-      toast.info("Invoice downloaded — attach it in the WhatsApp chat.")
-    } catch (error) {
-      // Dismissing the share sheet is a cancel, not a failure.
-      if (error?.name === "AbortError") return
-      console.log("Error sending invoice:", error)
-      toast.error("Failed to send the invoice.")
-    }
   }
 
   const fetchSalesInvoice = async () => {
@@ -623,17 +595,20 @@ const UpdateSalesInvoice = () => {
                         type="button"
                         variant="outline"
                         className="w-44"
-                        onClick={handleSendWhatsApp}
+                        onClick={() => sendOnWhatsApp(invoice_id, pdfData)}
+                        disabled={isBusy}
                       >
                         <Send className="w-4 h-4 mr-2" />
-                        Send on WhatsApp
+                        {isSending ? "Preparing…" : "Send on WhatsApp"}
                       </Button>
-                      <PDFDownloadLink
-                        document={<Invoice invoice={pdfData} />}
-                        fileName={`Invoice-${pdfData.invoice_number || invoice_id}.pdf`}
+                      <Button
+                        type="button"
+                        className="w-36"
+                        onClick={() => downloadInvoice(invoice_id, pdfData)}
+                        disabled={isBusy}
                       >
-                        <Button type="button" className="w-36">Download PDF</Button>
-                      </PDFDownloadLink>
+                        {isDownloading ? "Preparing…" : "Download PDF"}
+                      </Button>
                     </>
                   }
                   <Button type="submit" className="w-36">Update Invoice</Button>
@@ -654,6 +629,8 @@ const UpdateSalesInvoice = () => {
             }}
             setItemReturned={setItemReturned}
           />}
+
+          <WalkInCustomer {...walkInDialogProps} />
 
         </main>
       </div>
