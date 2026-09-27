@@ -5,7 +5,7 @@ import { toast } from "sonner"
 import CustomFilter from "@/components/layout/CustomFilter";
 import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
-import { formatSearchQuery } from "../../services/utils"
+import { formatSearchQuery, listCountLabel } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
   getInventoryItemList,
@@ -234,7 +234,9 @@ const InventoryOverview = () => {
 
           {/* Inventory Items Section */}
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Inventory Items</h2>
+            <h2 className="text-xl font-semibold">
+              Inventory Items ({listCountLabel(inventoryData, selectedRows)})
+            </h2>
 
             {/* Search and Filter */}
             <div className="flex items-center justify-between mb-4">

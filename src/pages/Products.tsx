@@ -7,6 +7,7 @@ import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   formatSearchQuery,
+  listCountLabel,
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -209,7 +210,9 @@ const Products = () => {
               heading or a button changed. */}
           <div>
           <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
-            <h2 className="text-xl font-semibold">Product Listing</h2>
+            <h2 className="text-xl font-semibold">
+              Product Listing ({listCountLabel(productsData, selectedRows)})
+            </h2>
 
             {/* Search and Filter */}
             <div className="flex items-center justify-between">

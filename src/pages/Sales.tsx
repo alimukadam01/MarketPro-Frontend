@@ -11,6 +11,7 @@ import {
   SalesInvoiceStatusMap,
   PaymentStatusMap,
   formatSearchQuery,
+  listCountLabel,
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -359,7 +360,9 @@ const Sales = () => {
               heading or a button changed. */}
           <div>
           <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
-            <h2 className="text-xl font-semibold">Sales Records</h2>
+            <h2 className="text-xl font-semibold">
+              Sales Records ({listCountLabel(salesData, selectedRows)})
+            </h2>
 
             {/* Search and Filter */}
             <div className="flex items-center justify-between">

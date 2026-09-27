@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
-import { formatSearchQuery, formatDate, getImageUrl } from "../../services/utils";
+import { formatSearchQuery, formatDate, getImageUrl, listCountLabel } from "../../services/utils";
 import {
   backlogEntriesAPIPackage,
   toggleBacklogEntryStatus,
@@ -230,7 +230,9 @@ const Backlog = () => {
               heading or a button changed. */}
           <div>
           <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
-            <h2 className="text-xl font-semibold">Backlog Listing</h2>
+            <h2 className="text-xl font-semibold">
+              Backlog Listing ({listCountLabel(backlogData, selectedRows)})
+            </h2>
 
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
