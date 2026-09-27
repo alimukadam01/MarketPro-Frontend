@@ -32,6 +32,7 @@ const cols = [
   { key: "id", label: "ID" },
   { key: "invoice_no", label: "Invoice No." },
   { key: "supplier", label: "Supplier" },
+  { key: "date_issued", label: "Invoice Date" },
   {
     key: "status",
     label: "Status",

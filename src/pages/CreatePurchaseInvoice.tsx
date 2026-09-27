@@ -46,6 +46,7 @@ const CreatePurchaseInvoice = () => {
       amount_paid: "0.0",
       supplier: "",
       notes: "",
+      date_issued: todayForInput(),
       delivery: todayForInput(),
       date_due: todayForInput(),
       tax: 0.0,
@@ -219,6 +220,13 @@ const CreatePurchaseInvoice = () => {
               </div>
 
               <div className="flex gap-6 mb-6">
+                <div className="flex-1 space-y-1">
+                  {/* The day the purchase happened, which is what a purchase
+                      target counts on. Editable, so an invoice entered late
+                      still lands in the right period. */}
+                  <Label htmlFor="date_issued">Invoice Date</Label>
+                  <Input id="date_issued" type="date" {...register("date_issued")} />
+                </div>
                 <div className="flex-1 space-y-1">
                   <Label htmlFor="date_due">Date Due</Label>
                   <Input id="date_due" type="date" {...register("date_due")} />
