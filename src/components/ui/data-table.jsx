@@ -35,11 +35,21 @@ function MarqueeCell({ children }) {
   );
 }
 
-function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = null }) {
+/**
+ * headerOnly / rowsOnly split the table so a page can pin its column header.
+ *
+ * A list page wants its section heading, its action row and the column header to
+ * stay put once they reach the top, while the rows keep scrolling under them.
+ * Pinning them separately would mean giving the column header a top offset equal
+ * to the height of everything above it - a number that differs per page and
+ * silently drifts whenever a heading or a button changes. Rendering the header
+ * inside the same sticky container as the rest removes the arithmetic.
+ *
+ * Neither flag: unchanged, header and rows together, as every page had it.
+ */
+function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = null, headerOnly = false, rowsOnly = false }) {
 
-  return (
-    <div className="space-y-[10px]">
-      {/* Table Header */}
+  const tableHeader = (
       <div className="bg-card rounded-lg border h-[35px] flex items-center px-4">
         <div
           className={`grid grid-cols-${colsConfig ? colsConfig : columns.length} gap-4 w-full text-sm font-medium text-muted-foreground`}
@@ -54,9 +64,10 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
           ))}
         </div>
       </div>
+  );
 
-      {/* Table Rows */}
-      {data ? data.map((row, idx) => (
+  const tableRows = (
+    data ? data.map((row, idx) => (
         <div
           key={row.id}
           onClick={() => onRowClick && onRowClick(row.id)}
@@ -82,7 +93,15 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
           <Lock className="w-4 h-4" />
           <p>Access not granted. Please contact Admin.</p>
         </div>
-      }
+  );
+
+  if (headerOnly) return tableHeader;
+  if (rowsOnly) return <div className="space-y-[10px]">{tableRows}</div>;
+
+  return (
+    <div className="space-y-[10px]">
+      {tableHeader}
+      {tableRows}
     </div>
   );
 };

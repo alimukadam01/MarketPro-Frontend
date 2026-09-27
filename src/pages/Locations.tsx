@@ -198,11 +198,18 @@ const Locations = () => {
           </div>
 
           {/* Sales Records Section */}
-          <div className="space-y-4">
+          {/* Sticky from here down: once the heading reaches the top of the
+              window it stays there, along with the action row and the column
+              header, and only the rows carry on scrolling underneath. The three
+              sit in one container so the column header needs no top offset of
+              its own - a number that would differ per page and drift whenever a
+              heading or a button changed. */}
+          <div>
+          <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
             <h2 className="text-xl font-semibold">Location Listing</h2>
 
             {/* Search and Filter */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -258,6 +265,10 @@ const Locations = () => {
                 </Button>
               </div>
             </div>
+
+            {locationsData && locationsData.length > 0 ? (
+              <DataTable columns={cols} colsConfig="[48px_512px_1fr]" headerOnly />
+            ) : null}
           </div>
 
           {locationsData && locationsData.length > 0 ? (
@@ -267,8 +278,10 @@ const Locations = () => {
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               colsConfig="[48px_512px_1fr]"
+              rowsOnly
             />
           ) : null}
+          </div>
 
           {/* <CustomFilter
             title="Filter Locations"
