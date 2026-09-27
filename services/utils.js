@@ -607,3 +607,21 @@ export const generateInvoiceNumber = (businessName, at = new Date()) => {
 
   return `${businessInitials(businessName)}-${date}-${time}`;
 };
+
+/**
+ * What goes in the brackets beside a list page's heading.
+ *
+ * Counts the rows actually on screen, so it follows a search or a filter without
+ * having to be told either happened. Once the user selects anything it reports
+ * the selection instead, because that is what the action buttons beside it are
+ * about to act on.
+ */
+export const listCountLabel = (rows, selectedRows = []) => {
+  const selected = selectedRows ? selectedRows.length : 0;
+
+  if (selected > 0) {
+    return `${selected} row${selected === 1 ? "" : "s"} selected`;
+  }
+
+  return String(rows ? rows.length : 0);
+};

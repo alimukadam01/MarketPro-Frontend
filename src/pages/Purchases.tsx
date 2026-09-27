@@ -10,7 +10,8 @@ import {
   getPaymentStatusColor,
   PurchaseInvoiceStatusMap,
   PaymentStatusMap,
-  formatSearchQuery
+  formatSearchQuery,
+  listCountLabel,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -324,7 +325,9 @@ const Purchases = () => {
 
           {/* Purchases Records Section */}
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Purchase Records</h2>
+            <h2 className="text-xl font-semibold">
+              Purchase Records ({listCountLabel(purchasesData, selectedRows)})
+            </h2>
 
             {/* Search and Filter */}
             <div className="flex items-center justify-between mb-4">

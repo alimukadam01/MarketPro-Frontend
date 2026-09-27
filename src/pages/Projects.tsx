@@ -8,7 +8,8 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   formatSearchQuery,
   transformProject,
-  createIdMap
+  createIdMap,
+  listCountLabel,
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -209,11 +210,20 @@ const Projects = () => {
           </div>
 
           {/* Sales Records Section */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold">Project Listing</h2>
+          {/* Sticky from here down: once the heading reaches the top of the
+              window it stays there, along with the action row and the column
+              header, and only the rows carry on scrolling underneath. The three
+              sit in one container so the column header needs no top offset of
+              its own - a number that would differ per page and drift whenever a
+              heading or a button changed. */}
+          <div>
+          <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
+            <h2 className="text-xl font-semibold">
+              Project Listing ({listCountLabel(projectsData, selectedRows)})
+            </h2>
 
             {/* Search and Filter */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -271,6 +281,10 @@ const Projects = () => {
                 </Button>
               </div>
             </div>
+
+            {projectsData && projectsData.length > 0 ? (
+              <DataTable columns={cols} headerOnly />
+            ) : null}
           </div>
 
           {projectsData && projectsData.length > 0 ? (
@@ -279,8 +293,10 @@ const Projects = () => {
               data={permissions["view"] ? projectsData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
+              rowsOnly
             />
           ) : null}
+          </div>
 
           <CustomFilter
             title="Filter Projects"
