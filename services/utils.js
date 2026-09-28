@@ -59,6 +59,7 @@ const ConfigKeys = [
   "locations",
   "expenses",
   "accounting",
+  "targets",
 ];
 
 export const getStatusColor = (status) => {
@@ -363,6 +364,7 @@ export function transformPurchaseInvoice(data) {
     invoice_no: data.invoice_number ? data.invoice_number : "N/A",
     status: data.status,
     supplier: data.supplier.name,
+    date_issued: formatDate(data.date_issued),
     delivery: formatDate(data.delivery),
     date_due: formatDate(data.date_due),
     payment_status: data.payment_status,
@@ -608,6 +610,66 @@ export const generateInvoiceNumber = (businessName, at = new Date()) => {
   return `${businessInitials(businessName)}-${date}-${time}`;
 };
 
+
+/* ------------------------------------------------------------------ targets */
+
+export const TargetPeriodTypeMap = {
+  month: "Month",
+  quarter: "Quarter",
+  year: "Year",
+  custom: "Custom Range",
+  rolling: "Rolling Window",
+};
+
+export const TargetStatusMap = {
+  not_started: "Not Started",
+  on_track: "On Track",
+  behind: "Behind",
+  achieved: "Achieved",
+  missed: "Missed",
+};
+
+/**
+ * Its own function rather than a case added to getStatusColor: that one
+ * switches on single-letter invoice codes, where "C" already means completed.
+ * All four palettes below are the ones already safelisted in tailwind.config.
+ */
+export const getTargetStatusColor = (status) => {
+  switch (status) {
+    case "achieved":
+    case "on_track":
+      return "bg-green-100 text-green-700";
+    case "behind":
+      return "bg-yellow-100 text-yellow-700";
+    case "missed":
+      return "bg-red-100 text-red-700";
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
+};
+
+export function transformManualDataPoint(data) {
+  return {
+    id: data.id,
+    name: data.name,
+    value:
+      data.value_type === "amount"
+        ? `PKR ${Number(data.value || 0).toLocaleString()}`
+        : Number(data.value || 0).toLocaleString(),
+    as_of_date: data.as_of_date ? formatDate(data.as_of_date) : "-",
+    created_at: formatDate(data.created_at),
+  };
+}
+
+/**
+ * A target figure with its unit. Counts are not money and must not be given a
+ * PKR prefix: "PKR 15 drums" would be wrong, and the BRD forbids copy that
+ * misrepresents a number.
+ */
+export const formatTargetValue = (value, unit) =>
+  unit === "amount"
+    ? `PKR ${Number(value || 0).toLocaleString()}`
+    : Number(value || 0).toLocaleString();
 /**
  * What goes in the brackets beside a list page's heading.
  *

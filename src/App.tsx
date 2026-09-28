@@ -64,6 +64,10 @@ import Ledgers from "./pages/Ledgers";
 import PartyLedger from "./pages/PartyLedger";
 import MoneyAccounts from "./pages/MoneyAccounts";
 import Cheques from "./pages/Cheques";
+import Targets from "./pages/Targets";
+import CreateTarget from "./pages/CreateTarget";
+import UpdateTarget from "./pages/UpdateTarget";
+import CreateManualDataPoint from "./pages/CreateManualDataPoint";
 
 const queryClient = new QueryClient();
 
@@ -149,6 +153,12 @@ const App = () => {
           <Route path="/accounting/party-ledger" element={<ProtectedRoute module="accounting"><PartyLedger /></ProtectedRoute>} />
           <Route path="/accounting/accounts" element={<ProtectedRoute module="accounting"><MoneyAccounts /></ProtectedRoute>} />
           <Route path="/accounting/cheques" element={<ProtectedRoute module="accounting"><Cheques /></ProtectedRoute>} />
+
+          {/* Targets */}
+          <Route path="/targets" element={<ProtectedRoute module="targets"><Targets /></ProtectedRoute>} />
+          <Route path="/targets/create-target" element={<ProtectedRoute module="targets" action="create"><CreateTarget /></ProtectedRoute>} />
+          <Route path="/targets/update-target" element={<ProtectedRoute module="targets" action="edit"><UpdateTarget /></ProtectedRoute>} />
+          <Route path="/targets/create-data-point" element={<ProtectedRoute module="targets" action="create"><CreateManualDataPoint /></ProtectedRoute>} />
 
           {/* Employees — admin only (ProtectedRoute token check; page itself guards role) */}
           <Route path="/employees" element={<ProtectedRoute module="employees" action="create"><Employees /></ProtectedRoute>} />

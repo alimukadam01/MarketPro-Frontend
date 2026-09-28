@@ -17,6 +17,7 @@ import {
   Lock,
   ClipboardList,
   Landmark,
+  Target,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -37,6 +38,7 @@ const sidebarItems = [
   { name: "Returned Items",      icon: Undo2,        href: "/returned-items",       module: "returned_items" },
   { name: "Backlog",             icon: ClipboardList, href: "/backlog",              module: "backlog" },
   { name: "Accounting",          icon: Landmark,     href: "/accounting",           module: "accounting" },
+  { name: "Targets",             icon: Target,       href: "/targets",              module: "targets" },
 ];
 
 interface SidebarProps {

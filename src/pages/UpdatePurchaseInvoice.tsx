@@ -49,6 +49,7 @@ const UpdatePurchaseInvoice = () => {
       invoice_number: "",
       supplier: "",
       notes: "",
+      date_issued: "",
       delivery: "",
       date_due: "",
       tax: "0.0",
@@ -138,6 +139,8 @@ const UpdatePurchaseInvoice = () => {
       invoice_number: data.invoice_number || "",
       supplier: data.supplier,
       notes: data.notes || "",
+      // A DateTimeField, and an <Input type="date"> rejects a full ISO datetime.
+      date_issued: data.date_issued?.split("T")[0] || "",
       delivery: data.delivery?.split("T")[0] || "",
       date_due: data.date_due || "",
       tax: data.tax?.value ?? "0.0",
@@ -293,6 +296,10 @@ const UpdatePurchaseInvoice = () => {
               </div>
 
               <div className="flex gap-6 mb-6">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="date_issued">Invoice Date</Label>
+                  <Input id="date_issued" type="date" {...register("date_issued")} />
+                </div>
                 <div className="flex-1 space-y-1">
                   <Label htmlFor="delivery">Delivery</Label>
                   <Input id="delivery" type="date" {...register("delivery")} />
