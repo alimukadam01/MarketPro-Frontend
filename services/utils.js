@@ -399,10 +399,22 @@ export function transformInventoryItem(data) {
 }
 
 export function transformProduct(data) {
+  // Two serializers feed this. The products list uses SimpleProductSerializer,
+  // which sends num_variants, while global search still returns the full
+  // product with its variants array. Read whichever the payload carries, or
+  // String(undefined) would put the text "undefined" in the table.
+  const variantCount =
+    data.num_variants !== undefined
+      ? data.num_variants
+      : data.variants
+        ? data.variants.length
+        : 0;
+
   return {
     id: data.id,
     name: data.name,
     unit: `${data.unit.name} (${data.unit.abv})`,
+    num_variants: String(variantCount),
     desc: data.desc || "",
   };
 }

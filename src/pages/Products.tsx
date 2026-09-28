@@ -36,6 +36,7 @@ const cols = [
   { key: "id", label: "ID" },
   { key: "name", label: "Name" },
   { key: "unit", label: "Unit" },
+  { key: "num_variants", label: "Total Variants" },
   { key: "desc", label: "Description" },
 ];
 
