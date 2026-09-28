@@ -2413,3 +2413,101 @@ export const captureInvoiceCustomer = async (token, invoiceId, customerData) => 
     return null;
   }
 };
+
+// ---------------------------------------------------------------------------
+// Targets
+// ---------------------------------------------------------------------------
+
+export const targetsAPIPackage = new APIPackage("targets");
+export const manualDataPointsAPIPackage = new APIPackage("manual-data-points");
+
+// What can be measured, and what each measure allows as a filter or a subject.
+// Entity options are not included: a shop can have thousands of customers, so
+// the form loads those from the existing list endpoints instead.
+export const getTargetCatalogue = async (token) => {
+  try {
+    const res = await apiClient.get("targets/catalogue/", {
+      headers: { Authorization: token },
+    });
+    if (res.status === 200) {
+      return res.data.catalogue;
+    }
+    return null;
+  } catch (error) {
+    console.log("Error fetching target catalogue:", error);
+    return null;
+  }
+};
+
+export const getTargetsSummary = async (token) => {
+  try {
+    const res = await apiClient.get("target-kpis/summary/", {
+      headers: { Authorization: token },
+    });
+    if (res.status === 200) {
+      return res.data.summary;
+    }
+    return null;
+  } catch (error) {
+    console.log("Error fetching targets summary:", error);
+    return null;
+  }
+};
+
+// One request for every card. Progress is computed on read server-side, and the
+// server measures each distinct question once, which it cannot do if the client
+// asks per target.
+export const getTargetsDashboard = async (token, params) => {
+  try {
+    const query = new URLSearchParams(
+      Object.entries(params || {}).filter(([, value]) => value),
+    ).toString();
+    const res = await apiClient.get(
+      `target-kpis/dashboard/${query ? `?${query}` : ""}`,
+      { headers: { Authorization: token } },
+    );
+    if (res.status === 200) {
+      return res.data.dashboard;
+    }
+    return null;
+  } catch (error) {
+    console.log("Error fetching targets dashboard:", error);
+    return null;
+  }
+};
+
+export const getTargetProgress = async (token, params) => {
+  try {
+    const query = new URLSearchParams(
+      Object.entries(params || {}).filter(([, value]) => value),
+    ).toString();
+    const res = await apiClient.get(
+      `target-kpis/progress/${query ? `?${query}` : ""}`,
+      { headers: { Authorization: token } },
+    );
+    if (res.status === 200) {
+      return res.data.progress;
+    }
+    return null;
+  } catch (error) {
+    console.log("Error fetching target progress:", error);
+    return null;
+  }
+};
+
+// Copies a target and its filters into a new one. The only way to carry an
+// arrangement into a new period, since a target whose period has ended is
+// read-only.
+export const duplicateTarget = async (token, id) => {
+  try {
+    const res = await apiClient.post(
+      `targets/${id}/duplicate/`,
+      {},
+      { headers: { Authorization: token } },
+    );
+    return res.status === 201;
+  } catch (error) {
+    console.log("Error duplicating target:", error);
+    return false;
+  }
+};
