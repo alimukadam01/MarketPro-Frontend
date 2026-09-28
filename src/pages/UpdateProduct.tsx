@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, X, RotateCcwIcon, RefreshCcwIcon } from "lucide-react";
+import { Plus, X, Trash2, RotateCcwIcon, RefreshCcwIcon, Search } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
@@ -30,31 +30,59 @@ const UpdateProduct = () => {
     const [currentAttributes, setCurrentAttributes] = useState({})
     const [productVariants, setProductVariants] = useState([])
     const [selectedVariant, setSelectedVariant] = useState(null)
+    const [variantSearchTerm, setVariantSearchTerm] = useState("")
     const { token } = useAuth()
     const navigate = useNavigate()
     const location = useLocation()
     const product_id = location.state?.product_id || null
 
+    const attributeCount = Object.keys(currentAttributes).length
+    const maxAttributesReached = attributeCount === 3
+
+    // Every attribute needs a value before a variant can be built, otherwise the
+    // variant label comes out with an empty segment ("Red / ").
+    const variantReady = attributeCount > 0 &&
+        Object.values(currentAttributes).every((value) => String(value ?? "").trim() !== "")
+
     // react-hook-form setup
-    const { register, handleSubmit, control, watch, reset, setValue } = useForm({
+    const { register, handleSubmit, control, reset } = useForm({
         defaultValues: {
             name: "",
             desc: "",
             unit: "",
-            productVariantAttr: "",
-            productVariantVal: ""
+            productVariantAttr: ""
         }
     })
 
-    const addProductVariantAttr = (productVariantAttr, productVariantVal) => {
-        if (!productVariantAttr || !productVariantVal) return;
+    // Picking from the dropdown adds the attribute straight away — there is no
+    // separate "Add Attribute" button. Re-picking an existing attribute keeps
+    // whatever value was already typed against it.
+    const addProductVariantAttr = (productVariantAttr) => {
+        if (!productVariantAttr) return;
 
         const selectedVariantType = productVariantTypes[productVariantAttr]
+        if (!selectedVariantType) return;
+
         setCurrentAttributes(prevAttributes => ({
             ...prevAttributes,
-            [selectedVariantType.name]: productVariantVal, // add or update
+            [selectedVariantType.name]: prevAttributes[selectedVariantType.name] ?? "",
         }))
-        reset({ productVariantAttr: "", productVariantVal: "" }, { keepValues: true })
+    }
+
+    // Keeps the attribute keys in place and wipes only their values, so the next
+    // variant can be typed without picking the attributes again.
+    const clearAttributeValues = () => {
+        setCurrentAttributes((prev) =>
+            Object.keys(prev).reduce((acc, key) => {
+                acc[key] = ""
+                return acc
+            }, {})
+        )
+    }
+
+    const deselectVariant = () => {
+        setSelectedVariant(null)
+        clearAttributeValues()
     }
 
     const addProductVariant = () => {
@@ -62,47 +90,50 @@ const UpdateProduct = () => {
             "attributes": currentAttributes
         }])
 
-        setCurrentAttributes(() =>
-            Object.keys(currentAttributes).reduce((acc, key) => {
-                acc[key] = ""
-                return acc
-            }, {})
-        )
+        clearAttributeValues()
     }
 
+    // Replaced in place rather than removed and re-appended, so an edited variant
+    // keeps its position in the list.
     const updateProductVariant = () => {
         if (!selectedVariant) return;
 
-        // 1. remove selectedVariant from variants
-        const filteredVariants = productVariants.filter(
-            v => v !== selectedVariant
+        setProductVariants((prev) =>
+            prev.map((variant) =>
+                variant === selectedVariant
+                    ? { ...variant, attributes: currentAttributes }
+                    : variant
+            )
         )
 
-        // 2. update selectedVariant attributes
-        const updatedVariant = {
-            ...selectedVariant,
-            attributes: currentAttributes
-        }
-        
-        // 3. add updated variant back
-        setProductVariants([...filteredVariants, updatedVariant]);
-
-        // 4. reset selected variant
-        setSelectedVariant(null);
-
-        // 5. reset current attributes values
-        setCurrentAttributes(() =>
-            Object.keys(currentAttributes).reduce((acc, key) => {
-                acc[key] = ""
-                return acc
-            }, {})
-        )
+        deselectVariant()
     }
 
     const handleVariantSelection = (item) => {
         setSelectedVariant(item)
-        setCurrentAttributes(item.attributes)
+        setCurrentAttributes({ ...item.attributes })
     }
+
+    const handleVariantDeletion = (index) => {
+        const variant = productVariants[index]
+        if (variant === selectedVariant) {
+            deselectVariant()
+        }
+        setProductVariants(prev => prev.filter((_, i) => i !== index))
+    }
+
+    // Carries the original index so the number shown and the row deleted still
+    // refer to the real entry while the list is filtered.
+    const visibleVariants = productVariants
+        .map((item, index) => ({ item, index }))
+        .filter(({ item }) => {
+            const query = variantSearchTerm.trim().toLowerCase()
+            if (!query) return true
+            const label = item.attributes && Object.keys(item.attributes).length > 0
+                ? Object.values(item.attributes).join(" / ")
+                : "default"
+            return label.toLowerCase().includes(query)
+        })
 
     const populateProductFields = (data) => {
         reset({
@@ -117,7 +148,6 @@ const UpdateProduct = () => {
 
         const {
             productVariantAttr,
-            productVariantVal,
             ...rest
         } = data
 
@@ -139,6 +169,20 @@ const UpdateProduct = () => {
             console.log("Error updating product:", error)
         }
     }
+
+    // Esc drops the selection but leaves the attribute keys standing.
+    useEffect(() => {
+        if (!selectedVariant) return
+
+        const handleEscape = (event) => {
+            if (event.key === "Escape") {
+                deselectVariant()
+            }
+        }
+
+        window.addEventListener("keydown", handleEscape)
+        return () => window.removeEventListener("keydown", handleEscape)
+    }, [selectedVariant])
 
     useEffect(() => {
 
@@ -204,112 +248,131 @@ const UpdateProduct = () => {
     return (
         <div className="min-h-screen bg-background">
             <Sidebar onCollapseChange={setSidebarCollapsed} />
-            <div className={`${sidebarCollapsed ? "ml-16" : "ml-64"} transition-all duration-300 flex flex-col`}>
+            <div className={`${sidebarCollapsed ? "ml-16" : "ml-64"} transition-all duration-300 flex flex-col h-screen`}>
                 <Header />
 
-                <main className="flex-1 p-6 space-y-6">
+                <main className="flex-1 flex flex-col p-6 gap-6">
                     {/* Breadcrumb */}
                     <DynamicBreadCrumb />
 
-                    <form onSubmit={handleSubmit(onProductUpdate)} className="flex flex-row gap-12">
-                        {/* First Column */}
-                        <div className="flex flex-col flex-wrap flex-1">
-                            <h2 className="text-lg font-semibold mb-6">Update Product</h2>
+                    <form onSubmit={handleSubmit(onProductUpdate)} className="flex flex-col flex-1 gap-4">
+                        <div className="flex gap-12 flex-1">
+                            {/* First Column */}
+                            <div className="flex flex-col flex-1">
+                                <h2 className="text-lg font-semibold mb-6">Update Product</h2>
 
-                            <div className="flex gap-6 mb-6">
-                                <div className="flex-1 space-y-1">
-                                    <Label htmlFor="name">Name</Label>
-                                    <Input id="name" type="text" {...register("name")} />
-                                </div>
-                                <div className="flex-1 space-y-1">
-                                    <Label htmlFor="unit">Unit</Label>
-                                    <Controller
-                                        name="unit"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select Unit"></SelectValue>
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {units && Object.keys(units).length > 0 && Object.entries(units).map(([key, unit]) => (
-                                                        <SelectItem value={key} key={key}>
-                                                            {unit.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        )}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="mb-6 space-y-1">
-                                <Label htmlFor="desc">Description</Label>
-                                <Textarea id="desc" {...register("desc")} placeholder="Add product description here..." rows={6} />
-                            </div>
-                        </div>
-
-                        {/* Second Column */}
-                        <div className="flex flex-col flex-wrap flex-1">
-                            <h2 className="text-lg font-semibold mb-6">Update Product Variants</h2>
-                            {currentAttributes && Object.keys(currentAttributes).length > 0 && <div className="flex flex-col mb-2 gap-2">
-                                {Object.entries(currentAttributes).map(([key, value], entryIndex) => (
-                                    <div
-                                        key={`${entryIndex}`}
-                                        className="flex w-full gap-4"
-                                    >
-                                        <div className="w-[50%] space-y-1">
-                                            <Input
-                                                id="productVariantKey"
-                                                type="text"
-                                                disabled={true}
-                                                value={key}
-                                            />
-                                        </div>
-
-                                        <div className="w-[50%] space-y-1">
-                                            <Input
-                                                id="productVariantVal"
-                                                type="text"
-                                                value={currentAttributes[key]}
-                                                onChange={(e) => setCurrentAttributes((prev) => ({
-                                                    ...prev,
-                                                    [key]: e.target.value,   // update only this key
-                                                }))
-                                                }
-                                            />
-                                        </div>
-
-                                        <div className="w-[5%] space-y-1">
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={() =>
-                                                    setCurrentAttributes((prev) => Object.fromEntries(
-                                                        Object.entries(prev).filter(([attrKey]) => attrKey !== key)
-                                                    ))
-                                                }
-                                                className="w-full"
-                                            >
-                                                <X />
-                                            </Button>
-                                        </div>
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="name">Name</Label>
+                                        <Input id="name" type="text" {...register("name")} />
                                     </div>
-                                ))}
-                            </div>}
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="unit">Unit</Label>
+                                        <Controller
+                                            name="unit"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select Unit"></SelectValue>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {units && Object.keys(units).length > 0 && Object.entries(units).map(([key, unit]) => (
+                                                            <SelectItem value={key} key={key}>
+                                                                {unit.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                    </div>
+                                </div>
 
-                            {
-                                Object.keys(currentAttributes).length < 3 &&
+                                <div className="mb-6 space-y-1">
+                                    <Label htmlFor="desc">Description</Label>
+                                    <Textarea id="desc" {...register("desc")} placeholder="Add product description here..." rows={6} />
+                                </div>
+                            </div>
+
+                            {/* Second Column */}
+                            <div className="flex flex-col flex-1">
+                                <h2 className="text-lg font-semibold mb-6">Update Product Variants</h2>
+
+                                {/* Attribute rows — the heading only appears once an attribute has been picked.
+                                    Label + space-y-1 on a block wrapper, exactly as the left column does it:
+                                    the inline <label> takes the parent's line box, so these rows land on the
+                                    same baseline as the Name and Unit fields instead of 10px above them. */}
+                                {attributeCount > 0 && <div className="space-y-1 mb-2">
+                                    <Label className="font-semibold">Variant Configuration</Label>
+
+                                    <div className="flex flex-col gap-2">
+                                    {Object.entries(currentAttributes).map(([key, value], entryIndex) => (
+                                        <div
+                                            key={`${entryIndex}`}
+                                            className="flex w-full gap-4"
+                                        >
+                                            <div className="w-[50%] space-y-1">
+                                                <Input
+                                                    id="productVariantKey"
+                                                    type="text"
+                                                    disabled={true}
+                                                    value={key}
+                                                    className="bg-muted disabled:opacity-100 disabled:text-foreground"
+                                                />
+                                            </div>
+
+                                            <div className="w-[50%] space-y-1">
+                                                <Input
+                                                    id="productVariantVal"
+                                                    type="text"
+                                                    value={currentAttributes[key]}
+                                                    onChange={(e) => setCurrentAttributes((prev) => ({
+                                                        ...prev,
+                                                        [key]: e.target.value,   // update only this key
+                                                    }))
+                                                    }
+                                                />
+                                            </div>
+
+                                            <div className="w-[5%] space-y-1">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        setCurrentAttributes((prev) => Object.fromEntries(
+                                                            Object.entries(prev).filter(([attrKey]) => attrKey !== key)
+                                                        ))
+                                                    }
+                                                    className="w-full"
+                                                >
+                                                    <X />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    </div>
+                                </div>}
+
+                                {/* Pick, build and reset all sit on one row */}
                                 <div className="flex gap-4 mb-2 items-end">
                                     <div className="w-[50%] space-y-1">
-                                        <Label htmlFor="productVariantAttr">Select Attribute</Label>
+                                        <Label htmlFor="productVariantAttr">Add Attribute</Label>
                                         <Controller
                                             name="productVariantAttr"
                                             control={control}
                                             render={({ field }) => (
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <SelectTrigger><SelectValue placeholder="Select Attribute" /></SelectTrigger>
+                                                <Select
+                                                    value={field.value}
+                                                    disabled={maxAttributesReached}
+                                                    onValueChange={(value) => {
+                                                        addProductVariantAttr(value)
+                                                        field.onChange("")   // back to the placeholder
+                                                    }}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder={maxAttributesReached ? "Max. 3 attributes allowed" : "Select Attribute"} />
+                                                    </SelectTrigger>
                                                     <SelectContent>
                                                         {productVariantTypes && Object.keys(productVariantTypes).length > 0 && Object.entries(productVariantTypes).map(([key, item]) => (
                                                             <SelectItem key={key} value={key}>
@@ -322,126 +385,105 @@ const UpdateProduct = () => {
                                         />
                                     </div>
 
-                                    <div className="w-[50%] space-y-1">
-                                        <Label htmlFor="productVariantVal">Value</Label>
-                                        <Input id="productVariantVal" type="text" {...register("productVariantVal")} />
-                                    </div>
-
-                                    {
-                                        Object.keys(currentAttributes).length != 0 &&
-                                        <div className="w-[5%]">
-
-                                        </div>
-                                    }
-
-
-                                </div>
-                            }
-
-                            <div className="flex gap-4 mb-1">
-
-                                <div className="w-[50%] flex items-end">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={() =>
-                                            addProductVariantAttr(watch("productVariantAttr"), watch("productVariantVal") || "")
-                                        }
-                                        className="w-full"
-                                        disabled={Object.keys(currentAttributes).length == 3 ? true : false}
-                                    >
-                                        {
-                                            Object.keys(currentAttributes).length == 3 ? "Max. 3 attributes allowed" :
+                                    <div className="w-[50%] flex items-end">
+                                        <Button
+                                            type="button"
+                                            onClick={selectedVariant ? updateProductVariant : addProductVariant}
+                                            className="w-full"
+                                            disabled={!variantReady}
+                                        >
+                                            {selectedVariant ?
+                                                <>
+                                                    <RefreshCcwIcon className="h-4 w-4 mr-2" />
+                                                    Update Variant
+                                                </>
+                                                :
                                                 <>
                                                     <Plus className="h-4 w-4 mr-2" />
-                                                    Add Attribute
+                                                    Create Variant
                                                 </>
-                                        }
-                                    </Button>
-                                </div>
+                                            }
+                                        </Button>
+                                    </div>
 
-                                <div className="w-[50%] flex items-end">
-                                    <Button
-                                        type="button"
-                                        onClick={selectedVariant ? updateProductVariant : addProductVariant}
-                                        className="w-full"
-                                    >
-                                        {
-                                        selectedVariant ? 
-                                        <>
-                                            <RefreshCcwIcon className="h-4 w-4 mr-2" />
-                                            Update Variant 
-                                        </>
-                                        : 
-                                        <>
-                                            <Plus className="h-4 w-4 mr-2" />
-                                            Create Variant 
-                                        </>
-                                        
-                                        }
-                                        
-                                    </Button>
-                                </div>
-
-                                {Object.keys(currentAttributes).length != 0 &&
                                     <div className="w-[5%] space-y-1">
                                         <Button
                                             type="button"
                                             variant="outline"
-                                            onClick={() =>
+                                            onClick={() => {
+                                                setSelectedVariant(null)
                                                 setCurrentAttributes({})
-                                            }
+                                            }}
                                             className="w-full"
                                         >
                                             <RotateCcwIcon />
                                         </Button>
                                     </div>
+                                </div>
+
+                                {/* Ends flush with the Create Variant button, clear of the reset column */}
+                                <div className="flex gap-4 mb-2">
+                                    <div className="w-[100%] relative">
+                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                                        <Input
+                                            id="variantSearch"
+                                            type="text"
+                                            placeholder="Search variants"
+                                            className="pl-10"
+                                            value={variantSearchTerm}
+                                            onChange={(e) => setVariantSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="w-[5%]"></div>
+                                </div>
+
+                                {/* Product Variants */}
+                                {productVariants && productVariants.length > 0 &&
+                                    <div className="mb-6">
+                                        <div className="flex flex-col gap-[2px] h-[250px] overflow-y-auto">
+
+                                            {visibleVariants.map(({ item, index }) => (
+                                                <div
+                                                    key={`${item.id}-${index}`}
+                                                    className="flex gap-4 items-center"
+                                                >
+                                                    <div
+                                                        className={
+                                                            `flex-1 bg-card rounded-lg h-[35px] flex cursor-pointer items-center px-4 gap-4
+                                                            ${selectedVariant === item ? "border-2 border-[#4285F4]" : "border border-border"}`
+                                                        }
+                                                        onClick={() => handleVariantSelection(item)}
+                                                    >
+                                                        <div>{index + 1}.</div>
+                                                        {<div className="font-sm flex flex-1">
+                                                            {
+                                                                item.attributes && Object.keys(item.attributes).length > 0 ?
+                                                                    Object.values(item.attributes).join(" / ") :
+                                                                    'default'
+                                                            }
+                                                        </div>}
+                                                    </div>
+
+                                                    <div className="w-[5%]">
+                                                        <Button
+                                                            type="button"
+                                                            variant="unstyled"
+                                                            className="p-[0] w-full hover:text-destructive"
+                                                            onClick={() => handleVariantDeletion(index)}
+                                                        >
+                                                            <Trash2 cursor={'pointer'} />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 }
                             </div>
+                        </div>
 
-                            {/* Product Variants */}
-                            {productVariants && productVariants.length > 0 &&
-                                <div className="mb-6">
-                                    <div className="flex flex-col-reverse gap-[2px] h-[250px] overflow-y-auto">
-
-                                        {productVariants.map((item, idx) => (
-                                            <div
-                                                key={`${item.id}-${idx}`}
-                                                className={
-                                                    `bg-card rounded-lg h-[35px] flex cursor-pointer items-center px-4 gap-4 border 
-                                                    ${selectedVariant == item ? "border-2 border-[#4285F4]" : "border border-border"} 
-                                                    scrollbar-none`
-                                                }
-                                                onClick={() => handleVariantSelection(item)}
-                                            >
-                                                <div>{idx + 1}.</div>
-                                                {<div className="font-sm flex flex-1">
-                                                    {
-                                                        item.attributes && Object.keys(item.attributes).length > 0? 
-                                                        Object.values(item.attributes).join(" / "):
-                                                        'default'
-                                                    }
-                                                </div>}
-                                                <Button
-                                                    type="button"
-                                                    variant="unstyled"
-                                                    className="p-[0]"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        setProductVariants(prev => prev.filter((_, i) => i !== idx))
-                                                    }}>
-                                                    <X cursor={'pointer'} />
-                                                </Button>
-                                            </div>
-                                        ))}
-                                        <h2 className="text-sm font-semibold mb-1">Product Variants</h2>
-                                    </div>
-                                </div>
-                            }
-
-                            <div className="flex justify-end gap-3 mt-auto">
-                                <Button type="submit">Update Product and Variants</Button>
-                            </div>
+                        <div className="flex justify-end mt-auto">
+                            <Button type="submit">Update Product and Variants</Button>
                         </div>
                     </form>
                 </main>
