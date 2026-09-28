@@ -9,10 +9,8 @@ export default {
 		"./src/**/*.{ts,tsx,jsx}",
 	],
 	safelist: [
-    // grid column counts you need. DataTable interpolates grid-cols-${n} from
-    // the column count, and a value missing here is purged silently with no
-    // build error - the table just loses its grid. Purchases is at 12.
-    ...Array.from({ length: 16 }, (_, i) => `grid-cols-${i + 1}`),
+    // grid column counts you need
+    ...Array.from({ length: 12 }, (_, i) => `grid-cols-${i + 1}`),
     // any other dynamic classes you rely on, e.g. custom borders
 	"grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr]",
 	"grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]",
