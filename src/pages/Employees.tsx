@@ -27,8 +27,7 @@ import {
   deleteEmployee,
 } from "../../services/api"
 
-// Every module the permission table covers. A module missing here can never
-// be granted to an employee: the row simply is not rendered.
+// All 11 modules the permission table covers
 const ALL_MODULES = [
   { key: "sales",          label: "Sales" },
   { key: "purchases",      label: "Purchases" },
@@ -43,7 +42,6 @@ const ALL_MODULES = [
   { key: "returned_items", label: "Returned Items" },
   { key: "backlog_entries", label: "Backlog" },
   { key: "accounting",     label: "Accounting" },
-  { key: "targets",        label: "Targets" },
 ]
 
 const cols = [
