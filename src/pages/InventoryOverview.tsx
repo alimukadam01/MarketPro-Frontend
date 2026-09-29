@@ -233,13 +233,20 @@ const InventoryOverview = () => {
           </div>
 
           {/* Inventory Items Section */}
-          <div className="space-y-4">
+          {/* Sticky from here down: once the heading reaches the top of the
+              window it stays there, along with the action row and the column
+              header, and only the rows carry on scrolling underneath. The three
+              sit in one container so the column header needs no top offset of
+              its own - a number that would differ per page and drift whenever a
+              heading or a button changed. */}
+          <div>
+          <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
             <h2 className="text-xl font-semibold">
               Inventory Items ({listCountLabel(inventoryData, selectedRows)})
             </h2>
 
             {/* Search and Filter */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -278,26 +285,38 @@ const InventoryOverview = () => {
               </div>
             </div>
 
-            {/* Inventory Data Table */}
-            {inventoryData && inventoryData.length > 0 ? 
-              <DataTable 
-                columns={cols} 
-                data={permissions["view"]? inventoryData : null} 
-                selectedRows={selectedRows} 
-                onRowClick={toggleRowSelection} 
-                colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"} 
+            {/* Same colsConfig as the rows below, or the pinned header's tracks
+                would not line up with them. */}
+            {inventoryData && inventoryData.length > 0 ? (
+              <DataTable
+                columns={cols}
+                colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"}
+                headerOnly
               />
-            : null}
-
-            <CustomFilter
-              title="Filter Inventory Items"
-              template={filter_fields_template}
-              templateMapper={filter_fields_mapper}
-              dataFetcher={fetchInventoryItems}
-              open={filterWindowOpen}
-              setOpen={setFilterWindowOpen}
-            />
+            ) : null}
           </div>
+
+          {/* Inventory Data Table */}
+          {inventoryData && inventoryData.length > 0 ? (
+            <DataTable
+              columns={cols}
+              data={permissions["view"] ? inventoryData : null}
+              selectedRows={selectedRows}
+              onRowClick={toggleRowSelection}
+              colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"}
+              rowsOnly
+            />
+          ) : null}
+          </div>
+
+          <CustomFilter
+            title="Filter Inventory Items"
+            template={filter_fields_template}
+            templateMapper={filter_fields_mapper}
+            dataFetcher={fetchInventoryItems}
+            open={filterWindowOpen}
+            setOpen={setFilterWindowOpen}
+          />
         </main>
       </div>
     </div>
