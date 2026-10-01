@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Lock } from "lucide-react";
 
+import { ACCESS_DENIED_MESSAGE } from "../../../services/utils";
+
 /**
  * Renders a single cell. When the content is wider than the cell, it scrolls
  * itself back and forth instead of showing a scrollbar.
@@ -91,7 +93,7 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
       )) :
         <div className="flex items-center gap-2 justify-center flex-1 mt-4">
           <Lock className="w-4 h-4" />
-          <p>Access not granted. Please contact Admin.</p>
+          <p>{ACCESS_DENIED_MESSAGE}</p>
         </div>
   );
 

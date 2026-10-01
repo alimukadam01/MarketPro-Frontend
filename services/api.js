@@ -1,5 +1,7 @@
 import axios from "axios";
+import { toast } from "sonner";
 import {
+  ACCESS_DENIED_MESSAGE,
   transformSalesInvoice,
   transformPurchaseInvoice,
   transformInventoryItem,
@@ -9,7 +11,7 @@ import {
   formatConfig,
 } from "./utils";
 
-const DEBUG = false;
+const DEBUG = true;
 
 export const BASE_URL = DEBUG
   ? "http://localhost:8000/"
@@ -42,6 +44,14 @@ apiClient.interceptors.response.use(
 
     if (error.response?.status === 401 && !isLoginAttempt && onUnauthorized) {
       onUnauthorized();
+    }
+
+    // A module the user may not see answers 403, never 401 — 401 above ends
+    // the session, so using it for a permissions problem would sign someone
+    // out instead of telling them. One toast here means every caller reports
+    // it identically without each one having to check the status.
+    if (error.response?.status === 403) {
+      toast.error(ACCESS_DENIED_MESSAGE);
     }
 
     return Promise.reject(error);
@@ -118,7 +128,12 @@ export default class APIPackage {
         headers: this.getHeaders(token),
       });
 
-      return res.status === 204;
+      // 204 is DRF's default, but the viewsets that override destroy return
+      // 200 with {"detail": "Success."} - the project's own response
+      // convention. Accepting only 204 meant transactions, money accounts and
+      // backlog entries really were deleted while the caller was told the
+      // delete had failed, so the list never refreshed.
+      return res.status === 204 || res.status === 200;
     } catch (error) {
       console.log(`Error deleting ${this.resource}:`, error);
       return false;
@@ -135,7 +150,14 @@ export default class APIPackage {
         },
       );
 
-      return res.status === 200;
+      if (res.status !== 200) return false;
+
+      // An endpoint that reports how many rows it removed lets us tell a real
+      // delete from a selection that matched nothing — transactions used to
+      // answer "Success" while silently skipping every row it refused.
+      // Endpoints that report no count are unaffected.
+      if (typeof res.data?.deleted === "number") return res.data.deleted > 0;
+      return true;
     } catch (error) {
       console.log(`Error bulk deleting ${this.resource}:`, error);
       return false;
@@ -518,13 +540,21 @@ export const bulkDeleteProducts = async (token, productIds) => {
   }
 };
 
-export const getProductVariantsList = async (token) => {
+/**
+ * @param searchQuery optional query string, e.g. "?has_inventory_item=false"
+ *   for variants that are not stocked yet. Defaults to the full list, so the
+ *   existing callers are unaffected.
+ */
+export const getProductVariantsList = async (token, searchQuery = null) => {
   try {
-    const res = await apiClient.get("/product-variants/", {
-      headers: {
-        Authorization: token,
+    const res = await apiClient.get(
+      `/product-variants/${searchQuery ? searchQuery : ""}`,
+      {
+        headers: {
+          Authorization: token,
+        },
       },
-    });
+    );
 
     if (res.status === 200) {
       return res.data.map(transformProductVariant);
@@ -2145,8 +2175,38 @@ export const toggleBacklogEntryStatus = async (token, id) => {
 
 export const moneyAccountsAPIPackage = new APIPackage("money-accounts");
 export const transactionsAPIPackage = new APIPackage("transactions");
+// Raw rows, unlike getSalesInvoiceList/getPurchaseInvoiceList which map through
+// the display transforms and turn totals into "PKR 10,000" strings. The
+// transaction screen's invoice pickers need the numbers.
+export const salesInvoicesAPIPackage = new APIPackage("sales-invoices");
+export const purchaseInvoicesAPIPackage = new APIPackage("purchase-invoices");
 export const partyOpeningBalancesAPIPackage = new APIPackage("party-opening-balances");
 
+/**
+ * Turns a DRF error body into one line a user can act on.
+ *
+ * A bare boolean return meant every failure showed the same generic message,
+ * so "accumulated amount cannot exceed invoice total" reached nobody.
+ */
+const firstFieldError = (error, fallback) => {
+  if (error?.response?.status === 403) return null;   // the interceptor toasts
+  const data = error?.response?.data;
+  if (!data) return fallback;
+  if (typeof data === "string") return data;
+  if (data.detail) return data.detail;
+
+  const firstKey = Object.keys(data)[0];
+  if (!firstKey) return fallback;
+  const value = data[firstKey];
+  return Array.isArray(value) ? value[0] : String(value);
+};
+
+/**
+ * Returns { ok, data, error }. `ok` is true only when the server answered 201
+ * AND the body carries an id — the create path used to answer 201 with the
+ * submitted payload echoed back for writes that never happened, so the status
+ * alone is not proof a row exists.
+ */
 export const createTransaction = async (token, formData) => {
   try {
     const res = await apiClient.post("/transactions/", formData, {
@@ -2155,10 +2215,19 @@ export const createTransaction = async (token, formData) => {
         "Content-Type": "multipart/form-data",
       },
     });
-    return res.status === 201;
+    const created = res.status === 201 && Boolean(res.data?.id);
+    return {
+      ok: created,
+      data: res.data,
+      error: created ? null : "Failed to record transaction.",
+    };
   } catch (error) {
     console.log("Error creating transaction:", error);
-    return false;
+    return {
+      ok: false,
+      data: null,
+      error: firstFieldError(error, "Failed to record transaction."),
+    };
   }
 };
 
@@ -2170,10 +2239,18 @@ export const updateTransaction = async (token, id, formData) => {
         "Content-Type": "multipart/form-data",
       },
     });
-    return res.status === 200;
+    return {
+      ok: res.status === 200,
+      data: res.data,
+      error: res.status === 200 ? null : "Failed to update transaction.",
+    };
   } catch (error) {
     console.log("Error updating transaction:", error);
-    return false;
+    return {
+      ok: false,
+      data: null,
+      error: firstFieldError(error, "Failed to update transaction."),
+    };
   }
 };
 
@@ -2240,6 +2317,28 @@ export const getReceivables = async (token) => {
     }
   } catch (error) {
     console.log(error);
+    return null;
+  }
+};
+
+/**
+ * Parties still carrying an unsettled opening balance, with what is left on
+ * it. Not the same as getPayables/getReceivables, which include invoice debt —
+ * an on-account payment settles only the khaata balance brought across at
+ * onboarding.
+ */
+export const getOpeningBalances = async (token, party = "supplier") => {
+  try {
+    const res = await apiClient.get(
+      `accounting-kpis/opening-balances/?party=${party}`,
+      { headers: { Authorization: token } },
+    );
+    if (res.status === 200) {
+      return res.data.opening_balances;
+    }
+    return null;
+  } catch (error) {
+    console.log("Error fetching opening balances:", error);
     return null;
   }
 };

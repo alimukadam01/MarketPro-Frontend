@@ -8,6 +8,7 @@ import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../services/AuthProvider";
+import { ACCESS_DENIED_MESSAGE } from "../../services/utils";
 import {
     getReceivables,
     getPayables,
@@ -178,7 +179,7 @@ const Ledgers = () => {
                     {!permissions?.["view"] ? (
                         <div className="bg-card rounded-lg p-6 border">
                             <p className="text-sm text-muted-foreground">
-                                Access not granted. Please contact Admin.
+                                {ACCESS_DENIED_MESSAGE}
                             </p>
                         </div>
                     ) : (

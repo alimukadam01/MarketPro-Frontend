@@ -302,7 +302,11 @@ const ViewCustomer = () => {
                     </div>
 
                     {accountingPermissions?.["view"] && (
-                        <PartyLedgerSection ledger={ledger} onRangeApply={fetchLedger} />
+                        <PartyLedgerSection
+                            ledger={ledger}
+                            onRangeApply={fetchLedger}
+                            title="Customer Ledger"
+                        />
                     )}
                 </main>
             </div>

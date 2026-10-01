@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../../services/AuthProvider'
-import { isTokenExpired } from '../../services/utils'
+import { ACCESS_DENIED_MESSAGE, isTokenExpired } from '../../services/utils'
 import { toast } from "sonner"
 
 interface ProtectedRouteProps {
@@ -35,7 +35,7 @@ const ProtectedRoute = ({ children, module, action = null }: ProtectedRouteProps
 
   useEffect(() => {
     if (shouldRedirect) {
-      toast.error("You do not have access to this page. Please contact admin.");
+      toast.error(ACCESS_DENIED_MESSAGE);
     }
   }, [shouldRedirect]);
 

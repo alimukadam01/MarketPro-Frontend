@@ -145,7 +145,7 @@ export function transformExpense(data) {
 
 export const TransactionTypeMap = {
   sale_payment: "Sale Payment",
-  customer_receipt: "Customer Receipt",
+  customer_receipt: "Customer Payment",
   purchase_return_refund: "Purchase Return Refund",
   owner_capital: "Owner Capital",
   loan_received: "Loan Received",
@@ -162,7 +162,15 @@ export const TransactionTypeMap = {
   cash_adjustment: "Cash Adjustment",
 };
 
-// Grouped for the type picker, mirroring the BRD's catalogue.
+/**
+ * Grouped for the type picker, mirroring the BRD's catalogue.
+ *
+ * salary_payment is deliberately absent: a salary is an expense, recorded as
+ * Expense with the "Salaries (Tankhwa)" category, so offering both was two
+ * ways to record one thing. It stays in TransactionTypeMap above because
+ * existing rows still carry it and have to render a label, and the daily
+ * summary still reports those alongside salary-category expenses.
+ */
 export const TransactionTypeGroups = {
   "Money In": [
     "sale_payment", "customer_receipt", "purchase_return_refund",
@@ -170,7 +178,7 @@ export const TransactionTypeGroups = {
   ],
   "Money Out": [
     "purchase_payment", "supplier_payment", "sales_return_refund",
-    "expense", "salary_payment", "owner_drawings",
+    "expense", "owner_drawings",
     "loan_repayment", "other_payment",
   ],
   "Neither": ["transfer", "cash_adjustment"],
@@ -263,11 +271,111 @@ export const PaymentMethodMap = {
 };
 
 // A payment's method follows the account the money moves through.
+// Scalar: the ONE default method for an account type. payments.jsx reads it
+// that way. Use MethodsForAccountType below when you need the full list.
 export const AccountTypePaymentMethodMap = {
   cash: "cash",
   wallet: "wallet",
   bank: "bank_transfer",
 };
+
+/**
+ * Which payment methods an account of each type can actually use.
+ *
+ * Cash does not leave a cash account by bank transfer, and a cheque is drawn
+ * on a bank. Separate from AccountTypePaymentMethodMap because that one is a
+ * scalar default and this one is a list of choices; merging them would break
+ * payments.jsx, which reads the scalar.
+ */
+export const MethodsForAccountType = {
+  cash: ["cash"],
+  wallet: ["wallet"],
+  bank: ["bank_transfer", "cheque"],
+};
+
+/**
+ * The methods offered for a given account, always including `current` so a
+ * value already stored on a transaction stays selectable. Editing an old row
+ * must not silently rewrite a method that no longer fits the account.
+ */
+export const methodsForAccount = (account, current = null) => {
+  const allowed = MethodsForAccountType[account?.type] || Object.keys(PaymentMethodMap);
+  if (current && !allowed.includes(current)) return [...allowed, current];
+  return allowed;
+};
+
+/**
+ * How an invoice reads in a picker, e.g. "INV-1042 · Beta Traders · PKR 7,000
+ * left". The amount still owed is what tells the user whether this is the
+ * invoice they meant to settle.
+ */
+export const formatInvoiceOption = (invoice) => {
+  const party = invoice.customer?.name || invoice.supplier?.name || "";
+  const label = [invoice.invoice_number || `#${invoice.id}`, party]
+    .filter(Boolean)
+    .join(" · ");
+
+  const total = Number(invoice.total || 0);
+  if (!total) return label;
+  return `${label} · PKR ${invoicePending(invoice).toLocaleString()} left`;
+};
+
+/**
+ * What an invoice still has outstanding. Never negative.
+ */
+export const invoicePending = (invoice) =>
+  Math.max(Number(invoice?.total || 0) - Number(invoice?.amount_paid || 0), 0);
+
+/**
+ * Only invoices that still owe something can be settled, so a fully paid one
+ * has no business appearing in a payment picker.
+ */
+export const pendingInvoicesOnly = (invoices) =>
+  Object.fromEntries(
+    Object.entries(invoices || {}).filter(([, invoice]) => invoicePending(invoice) > 0)
+  );
+
+/**
+ * A party with an unsettled opening balance:
+ * "Ali Traders (Ali & Sons) · PKR 12,000".
+ *
+ * The separator is a middle dot, matching formatInvoiceOption above, so both
+ * pickers read the same way. The business name is dropped rather than repeated
+ * when a party has none.
+ */
+export const formatPartyBalanceOption = (party) => {
+  const label = party.business_name
+    ? `${party.name} (${party.business_name})`
+    : party.name;
+  return `${label} · PKR ${Number(party.balance || 0).toLocaleString()}`;
+};
+
+/**
+ * What each transaction type refers to, which decides the input shown beside
+ * Type. Types absent from this map refer to nothing, so Type spans the row.
+ */
+export const ReferenceForType = {
+  customer_receipt: "customer",
+  sales_return_refund: "customer",
+  supplier_payment: "supplier",
+  purchase_return_refund: "supplier",
+  sale_payment: "sales_invoice",
+  purchase_payment: "purchase_invoice",
+  expense: "expense",
+  transfer: "transfer_account",
+};
+
+// How a locked transaction names where it came from. The detail payload sends
+// { kind, id, label }; this turns the kind into something readable.
+export const SourceKindMap = {
+  sales_invoice: "sales invoice",
+  purchase_invoice: "purchase invoice",
+  expense: "the expense",
+};
+
+// One string for every "you may not see this" surface, so the toast, the
+// table placeholder and the route guard all say the same thing.
+export const ACCESS_DENIED_MESSAGE = "Access not granted. Please contact Admin.";
 
 export const ExpenseCategoryMap = {
   kiraya: "Rent",

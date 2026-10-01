@@ -15,7 +15,7 @@ import {
     getPartyLedger,
     partyOpeningBalancesAPIPackage,
 } from "../../services/api";
-import { todayForInput } from "../../services/utils";
+import { ACCESS_DENIED_MESSAGE, todayForInput } from "../../services/utils";
 
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
 
@@ -141,7 +141,7 @@ const PartyLedger = () => {
                     {!permissions?.["view"] ? (
                         <div className="bg-card rounded-lg p-6 border">
                             <p className="text-sm text-muted-foreground">
-                                Access not granted. Please contact Admin.
+                                {ACCESS_DENIED_MESSAGE}
                             </p>
                         </div>
                     ) : (
@@ -161,6 +161,7 @@ const PartyLedger = () => {
                                 ledger={ledger}
                                 onRangeApply={fetchLedger}
                                 actions={partyActions}
+                                title={isCustomer ? "Customer Ledger" : "Supplier Ledger"}
                             />
 
                             {/* Opening balance from the paper khaata */}

@@ -18,6 +18,7 @@ import {
     TransactionStatusMap,
     getTransactionStatusColor,
     todayForInput,
+  ACCESS_DENIED_MESSAGE,
 } from "../../services/utils";
 
 const cols = [
@@ -156,7 +157,7 @@ const DailyBook = () => {
                     {!permissions?.["view"] ? (
                         <div className="bg-card rounded-lg p-6 border">
                             <p className="text-sm text-muted-foreground">
-                                Access not granted. Please contact Admin.
+                                {ACCESS_DENIED_MESSAGE}
                             </p>
                         </div>
                     ) : (

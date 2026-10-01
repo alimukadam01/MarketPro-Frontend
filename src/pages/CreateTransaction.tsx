@@ -18,8 +18,9 @@ import { useForm, Controller } from "react-hook-form";
 import {
     createTransaction,
     moneyAccountsAPIPackage,
-    suppliersAPIPackage,
-    getCustomersList,
+    salesInvoicesAPIPackage,
+    purchaseInvoicesAPIPackage,
+    getOpeningBalances,
 } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
@@ -27,17 +28,30 @@ import {
     createIdMap,
     TransactionTypeGroups,
     TransactionTypeMap,
-    PartyTransactionTypes,
     PaymentMethodMap,
+    MethodsForAccountType,
+    ReferenceForType,
+    ExpenseCategoryMap,
     formatAccountOption,
+    formatInvoiceOption,
+    formatPartyBalanceOption,
+    pendingInvoicesOnly,
     todayForInput,
 } from "../../services/utils";
+
+// Dropdown rows keyed by id, as createIdMap returns them. Typed loosely
+// because each picker holds a different shape - an account, a party or an
+// invoice - and only the render function knows which.
+type PickerOption = Record<string, unknown>;
+type PickerOptions = Record<string, PickerOption>;
 
 const CreateTransaction = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [accounts, setAccounts] = useState({});
     const [customers, setCustomers] = useState({});
     const [suppliers, setSuppliers] = useState({});
+    const [salesInvoices, setSalesInvoices] = useState({});
+    const [purchaseInvoices, setPurchaseInvoices] = useState({});
     const [imageFile, setImageFile] = useState(null);
     const { token } = useAuth();
     const navigate = useNavigate();
@@ -56,16 +70,38 @@ const CreateTransaction = () => {
             cheque_due_date: "",
             customer: "",
             supplier: "",
+            sales_invoice: "",
+            purchase_invoice: "",
+            expense_name: "",
+            expense_category: "",
         },
     });
 
     const selectedType = watch("type");
     const selectedMethod = watch("payment_method");
+    const selectedAccountId = watch("account");
 
-    const isTransfer = selectedType === "transfer";
+    // One rule decides the cell beside Type: what does this type refer to?
+    // Types absent from the map refer to nothing, and Type spans the row.
+    const referenceKind = ReferenceForType[selectedType] || null;
+    const isTransfer = referenceKind === "transfer_account";
     const isCheque = selectedMethod === "cheque";
-    const needsParty = PartyTransactionTypes.includes(selectedType);
-    const isCustomerType = ["customer_receipt", "sales_return_refund"].includes(selectedType);
+
+    const selectedAccount = accounts[selectedAccountId];
+    // Cash does not leave a cash account by bank transfer, and a cheque is
+    // drawn on a bank. Before a type is picked, offer everything.
+    const allowedMethods =
+        MethodsForAccountType[selectedAccount?.type] || Object.keys(PaymentMethodMap);
+
+    // The method has to follow the account. Picking a bank account while
+    // "Cash" is selected would otherwise submit a combination the account
+    // cannot produce.
+    useEffect(() => {
+        if (!selectedAccount) return;
+        if (!allowedMethods.includes(selectedMethod)) {
+            setValue("payment_method", allowedMethods[0]);
+        }
+    }, [selectedAccountId, selectedAccount, allowedMethods, selectedMethod, setValue]);
 
     const onTransactionCreate = async (data) => {
         if (!data.type) {
@@ -85,27 +121,47 @@ const CreateTransaction = () => {
             formData.append("account", data.account);
             formData.append("payment_method", data.payment_method);
 
-            if (isTransfer && data.transfer_account) {
+            // Only the reference this type actually has. Sending a stale key
+            // from a previously chosen type would link the wrong record.
+            if (referenceKind === "transfer_account" && data.transfer_account) {
                 formData.append("transfer_account", data.transfer_account);
             }
+            if (referenceKind === "customer" && data.customer) {
+                formData.append("customer", data.customer);
+            }
+            if (referenceKind === "supplier" && data.supplier) {
+                formData.append("supplier", data.supplier);
+            }
+            if (referenceKind === "sales_invoice" && data.sales_invoice) {
+                formData.append("sales_invoice", data.sales_invoice);
+            }
+            if (referenceKind === "purchase_invoice" && data.purchase_invoice) {
+                formData.append("purchase_invoice", data.purchase_invoice);
+            }
+            if (referenceKind === "expense") {
+                if (data.expense_name) formData.append("expense_name", data.expense_name);
+                if (data.expense_category) {
+                    formData.append("expense_category", data.expense_category);
+                }
+            }
+
             if (isCheque) {
                 if (data.cheque_number) formData.append("cheque_number", data.cheque_number);
                 if (data.cheque_due_date) formData.append("cheque_due_date", data.cheque_due_date);
-            }
-            if (needsParty) {
-                if (isCustomerType && data.customer) formData.append("customer", data.customer);
-                if (!isCustomerType && data.supplier) formData.append("supplier", data.supplier);
             }
             if (data.reference) formData.append("reference", data.reference);
             if (data.notes) formData.append("notes", data.notes);
             if (imageFile) formData.append("image", imageFile);
 
-            const success = await createTransaction(token, formData);
-            if (success) {
+            // ok is true only when the server returned an id, so a write that
+            // failed can no longer be reported as success.
+            const result = await createTransaction(token, formData);
+            if (result.ok) {
                 toast.success("Transaction recorded successfully!");
                 navigate("/accounting");
-            } else {
-                toast.error("Failed to record transaction.");
+            } else if (result.error) {
+                // null means the interceptor already toasted (403).
+                toast.error(result.error);
             }
         } catch (error) {
             console.log("Error creating transaction:", error);
@@ -133,9 +189,13 @@ const CreateTransaction = () => {
 
         const fetchCustomers = async () => {
             try {
-                const res = await getCustomersList(token);
-                if (res) {
-                    setCustomers(createIdMap(res));
+                // Unsettled OPENING balances, same rule as suppliers. A
+                // customer payment settles the khaata balance carried across
+                // at onboarding; money owed on a sales invoice is settled by
+                // paying that invoice.
+                const res = await getOpeningBalances(token, "customer");
+                if (res?.parties) {
+                    setCustomers(createIdMap(res.parties));
                 }
             } catch (error) {
                 console.log("Error fetching customers:", error);
@@ -144,19 +204,178 @@ const CreateTransaction = () => {
 
         const fetchSuppliers = async () => {
             try {
-                const res = await suppliersAPIPackage.list(token);
-                if (res) {
-                    setSuppliers(createIdMap(res));
+                // Unsettled OPENING balances, not payables. A supplier payment
+                // settles the khaata balance carried across at onboarding;
+                // money owed against a purchase invoice is settled by paying
+                // that invoice. Payables mixes the two, so it listed suppliers
+                // with nothing for this payment to settle.
+                const res = await getOpeningBalances(token, "supplier");
+                if (res?.parties) {
+                    setSuppliers(createIdMap(res.parties));
                 }
             } catch (error) {
                 console.log("Error fetching suppliers:", error);
             }
         };
 
+        // Only invoices that still owe something: a fully paid invoice cannot
+        // take another payment, and offering it only invites the 400.
+        const fetchSalesInvoices = async () => {
+            try {
+                const res = await salesInvoicesAPIPackage.list(token);
+                if (res) setSalesInvoices(pendingInvoicesOnly(createIdMap(res)));
+            } catch (error) {
+                console.log("Error fetching sales invoices:", error);
+            }
+        };
+
+        const fetchPurchaseInvoices = async () => {
+            try {
+                const res = await purchaseInvoicesAPIPackage.list(token);
+                if (res) setPurchaseInvoices(pendingInvoicesOnly(createIdMap(res)));
+            } catch (error) {
+                console.log("Error fetching purchase invoices:", error);
+            }
+        };
+
         fetchAccounts();
         fetchCustomers();
         fetchSuppliers();
+        fetchSalesInvoices();
+        fetchPurchaseInvoices();
     }, [token]);
+
+    /**
+     * The cell beside Type. One place decides it, so the create and update
+     * screens cannot drift apart on what a type refers to.
+     */
+    const renderReferenceCell = () => {
+        if (!referenceKind) return null;
+
+        // An expense needs both a name and a category, so this row carries
+        // three inputs rather than the usual two.
+        if (referenceKind === "expense") {
+            return (
+                <>
+                    <div className="flex-1 space-y-1">
+                        <Label htmlFor="expense_name">Expense Name</Label>
+                        <Input
+                            id="expense_name"
+                            type="text"
+                            placeholder="e.g. Shop rent, Diesel"
+                            {...register("expense_name")}
+                        />
+                    </div>
+                    <div className="flex-1 space-y-1">
+                        <Label htmlFor="expense_category">Expense Type</Label>
+                        <Controller
+                            name="expense_category"
+                            control={control}
+                            render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {Object.entries(ExpenseCategoryMap).map(([key, label]) => (
+                                            <SelectItem value={key} key={key}>
+                                                {label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        />
+                    </div>
+                </>
+            );
+        }
+
+        // Every picker here is filtered to rows that still need settling, so
+        // an empty one is normal rather than broken - and has to say why.
+        const config = {
+            customer: {
+                name: "customer" as const,
+                label: "Customer",
+                placeholder: "Select customer",
+                empty: "No customers with pending balances",
+                options: customers as PickerOptions,
+                render: formatPartyBalanceOption,
+            },
+            supplier: {
+                name: "supplier" as const,
+                label: "Supplier",
+                placeholder: "Select supplier",
+                empty: "No suppliers with pending balances",
+                options: suppliers as PickerOptions,
+                render: formatPartyBalanceOption,
+            },
+            sales_invoice: {
+                name: "sales_invoice" as const,
+                label: "Sales Invoice",
+                placeholder: "Select invoice",
+                empty: "No sales invoices with pending payments",
+                options: salesInvoices as PickerOptions,
+                render: formatInvoiceOption,
+            },
+            purchase_invoice: {
+                name: "purchase_invoice" as const,
+                label: "Purchase Invoice",
+                placeholder: "Select invoice",
+                empty: "No purchase invoices with pending payments",
+                options: purchaseInvoices as PickerOptions,
+                render: formatInvoiceOption,
+            },
+            transfer_account: {
+                name: "transfer_account" as const,
+                label: "Transfer To",
+                placeholder: "Select destination account",
+                empty: "No other accounts to transfer to",
+                options: accounts as PickerOptions,
+                render: formatAccountOption,
+            },
+        }[referenceKind];
+
+        if (!config) return null;
+
+        // Shown on the trigger, so the reason is visible without opening the
+        // dropdown onto an empty box.
+        const isEmpty = Object.keys(config.options).length === 0;
+
+        return (
+            <div className="flex-1 space-y-1">
+                <Label htmlFor={config.name}>{config.label}</Label>
+                <Controller
+                    name={config.name}
+                    control={control}
+                    render={({ field }) => (
+                        <Select onValueChange={field.onChange} value={field.value}>
+                            <SelectTrigger>
+                                <SelectValue
+                                    placeholder={isEmpty ? config.empty : config.placeholder}
+                                />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {isEmpty ? (
+                                    // A plain div, not a SelectItem: an item would
+                                    // look pickable and Radix rejects an empty value.
+                                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                        {config.empty}
+                                    </div>
+                                ) : (
+                                    Object.entries(config.options).map(([key, item]) => (
+                                        <SelectItem value={String(key)} key={key}>
+                                            {config.render(item)}
+                                        </SelectItem>
+                                    ))
+                                )}
+                            </SelectContent>
+                        </Select>
+                    )}
+                />
+            </div>
+        );
+    };
 
     return (
         <div className="min-h-screen bg-background">
@@ -220,19 +439,14 @@ const CreateTransaction = () => {
                                             )}
                                         />
                                     </div>
+
+                                    {/* Whatever this type refers to sits here, beside Type.
+                                        When it refers to nothing, Type spans the row. */}
+                                    {renderReferenceCell()}
                                 </div>
 
-                                <div className="flex gap-6 mb-6">
-                                    <div className="flex-1 space-y-1">
-                                        <Label htmlFor="amount">Amount (PKR)</Label>
-                                        <Input id="amount" type="number" {...register("amount")} />
-                                    </div>
-                                    <div className="flex-1 space-y-1">
-                                        <Label htmlFor="date">Date</Label>
-                                        <Input id="date" type="date" {...register("date")} />
-                                    </div>
-                                </div>
-
+                                {/* Payment Method belongs next to the account it has to
+                                    agree with, not a column away. */}
                                 <div className="flex gap-6 mb-6">
                                     <div className="flex-1 space-y-1">
                                         <Label htmlFor="account">Account</Label>
@@ -255,30 +469,40 @@ const CreateTransaction = () => {
                                             )}
                                         />
                                     </div>
-                                    {isTransfer && (
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="transfer_account">Transfer To</Label>
-                                            <Controller
-                                                name="transfer_account"
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select destination account" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {accounts && Object.keys(accounts).length > 0 && Object.entries(accounts).map(([key, account]: any) => (
-                                                                <SelectItem value={String(key)} key={key}>
-                                                                    {formatAccountOption(account)}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            />
-                                        </div>
-                                    )}
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="payment_method">Payment Method</Label>
+                                        <Controller
+                                            name="payment_method"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select method" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {allowedMethods.map((key) => (
+                                                            <SelectItem value={key} key={key}>
+                                                                {PaymentMethodMap[key]}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                    </div>
                                 </div>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="amount">Amount (PKR)</Label>
+                                        <Input id="amount" type="number" {...register("amount")} />
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="date">Date</Label>
+                                        <Input id="date" type="date" {...register("date")} />
+                                    </div>
+                                </div>
+
                             </div>
 
                             {/* Second Column */}
@@ -312,61 +536,9 @@ const CreateTransaction = () => {
                         {/* Row Two — starts a fresh baseline, so Photo lines up with
                             Payment Method. */}
                         <div className="flex gap-12">
-                            {/* First Column */}
+                            {/* First Column — Payment Method and the reference cell both
+                                moved up beside the fields they belong with. */}
                             <div className="flex flex-col flex-1">
-                                <div className="flex gap-6 mb-6">
-                                    <div className="flex-1 space-y-1">
-                                        <Label htmlFor="payment_method">Payment Method</Label>
-                                        <Controller
-                                            name="payment_method"
-                                            control={control}
-                                            render={({ field }) => (
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Select method" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {Object.entries(PaymentMethodMap).map(([key, label]) => (
-                                                            <SelectItem value={key} key={key}>
-                                                                {label}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            )}
-                                        />
-                                    </div>
-                                    {needsParty && (
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor={isCustomerType ? "customer" : "supplier"}>
-                                                {isCustomerType ? "Customer" : "Supplier"}
-                                            </Label>
-                                            <Controller
-                                                name={isCustomerType ? "customer" : "supplier"}
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <SelectTrigger>
-                                                            <SelectValue
-                                                                placeholder={`Select ${isCustomerType ? "customer" : "supplier"}`}
-                                                            />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {Object.entries(
-                                                                isCustomerType ? customers : suppliers
-                                                            ).map(([key, party]: any) => (
-                                                                <SelectItem value={String(key)} key={key}>
-                                                                    {party.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-
                                 {isCheque && (
                                     <div className="flex gap-6 mb-6">
                                         <div className="flex-1 space-y-1">

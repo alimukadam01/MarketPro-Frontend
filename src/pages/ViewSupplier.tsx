@@ -234,7 +234,11 @@ const ViewSupplier = () => {
                     </div>
 
                     {accountingPermissions?.["view"] && (
-                        <PartyLedgerSection ledger={ledger} onRangeApply={fetchLedger} />
+                        <PartyLedgerSection
+                            ledger={ledger}
+                            onRangeApply={fetchLedger}
+                            title="Supplier Ledger"
+                        />
                     )}
                 </main>
             </div>
