@@ -76,8 +76,11 @@ const UpdateExpense = () => {
             category: data.category || "",
             desc: data.desc || "",
             amount: data.amount || 0,
-            account: "",
-            date: data.created_at ? data.created_at.split("T")[0] : "",
+            // paid_from / paid_on come off the linked transaction. account and
+            // date are write_only, so the detail response never carried them
+            // and this used to hard-code "" - the account always looked unset.
+            account: data.paid_from ? String(data.paid_from) : "",
+            date: data.paid_on || (data.created_at ? data.created_at.split("T")[0] : ""),
         });
     };
 
@@ -115,8 +118,14 @@ const UpdateExpense = () => {
             }
         };
 
-        fetchAccounts();
-        fetchExpense();
+        const init = async () => {
+            // Accounts FIRST, then the expense. Fired together, reset() lands
+            // before the options exist and the Select falls back to its
+            // placeholder with a value it cannot match.
+            await fetchAccounts();
+            fetchExpense();
+        };
+        init();
     }, [token, expense_id]);
 
 

@@ -19,7 +19,7 @@ import {
   manualDataPointsAPIPackage,
   targetsAPIPackage,
 } from "../../services/api";
-import { formatDate } from "../../services/utils";
+import { ACCESS_DENIED_MESSAGE, formatDate } from "../../services/utils";
 
 const Targets = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -171,7 +171,7 @@ const Targets = () => {
           {!permissions?.["view"] ? (
             <div className="bg-card rounded-lg p-6 border">
               <p className="text-sm text-muted-foreground">
-                Access not granted. Please contact Admin.
+                {ACCESS_DENIED_MESSAGE}
               </p>
             </div>
           ) : items && items.length > 0 ? (

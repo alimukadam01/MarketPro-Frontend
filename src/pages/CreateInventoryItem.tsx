@@ -161,7 +161,11 @@ const CreateInventoryItem = () => {
         if (!token) return;
 
         try {
-            const products = await getProductVariantsList(token)
+            // Only variants that are not stocked yet. One already carrying an
+            // inventory item would just create a duplicate, and listing them
+            // all made it impossible to see which still needed one.
+            const products = await getProductVariantsList(
+                token, "?has_inventory_item=false")
             if (products) {
                 const productMap = createIdMap(products)
                 setProductVariants(productMap)
@@ -455,14 +459,28 @@ const CreateInventoryItem = () => {
                                             render={({ field }) => (
                                                 <Select onValueChange={field.onChange} value={field.value}>
                                                     <SelectTrigger>
-                                                        <SelectValue placeholder="Select product" />
+                                                        {/* The list is filtered to unstocked variants, so
+                                                            empty means every product already has an item -
+                                                            normal, and it has to say so rather than open
+                                                            onto nothing. */}
+                                                        <SelectValue placeholder={
+                                                            Object.keys(productVariants || {}).length === 0
+                                                                ? "Every product already has an inventory item"
+                                                                : "Select product"
+                                                        } />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        {productVariants && Object.keys(productVariants).length > 0 && Object.entries(productVariants).map(([key, item]) => (
-                                                            <SelectItem key={key} value={key}>
-                                                                {item.name}
-                                                            </SelectItem>
-                                                        ))}
+                                                        {Object.keys(productVariants || {}).length === 0 ? (
+                                                            <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                                                Every product already has an inventory item
+                                                            </div>
+                                                        ) : (
+                                                            Object.entries(productVariants).map(([key, item]) => (
+                                                                <SelectItem key={key} value={key}>
+                                                                    {item.name}
+                                                                </SelectItem>
+                                                            ))
+                                                        )}
                                                     </SelectContent>
                                                 </Select>
                                             )}

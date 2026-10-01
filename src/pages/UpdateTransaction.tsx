@@ -19,6 +19,8 @@ import {
     transactionsAPIPackage,
     updateTransaction,
     moneyAccountsAPIPackage,
+    suppliersAPIPackage,
+    getCustomersList,
 } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
@@ -29,15 +31,21 @@ import {
     TransactionTypeMap,
     PaymentMethodMap,
     TransactionStatusMap,
+    ReferenceForType,
+    SourceKindMap,
+    methodsForAccount,
     formatAccountOption,
 } from "../../services/utils";
 
 const UpdateTransaction = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [accounts, setAccounts] = useState({});
+    const [customers, setCustomers] = useState({});
+    const [suppliers, setSuppliers] = useState({});
     const [imageFile, setImageFile] = useState(null);
     const [existingImageUrl, setExistingImageUrl] = useState(null);
     const [isSourceLinked, setIsSourceLinked] = useState(false);
+    const [source, setSource] = useState(null);
     const { token } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -56,13 +64,27 @@ const UpdateTransaction = () => {
             notes: "",
             cheque_number: "",
             cheque_due_date: "",
+            customer: "",
+            supplier: "",
         },
     });
 
     const selectedType = watch("type");
     const selectedMethod = watch("payment_method");
-    const isTransfer = selectedType === "transfer";
+    const selectedAccountId = watch("account");
     const isCheque = selectedMethod === "cheque";
+
+    // Same single rule as the create screen: the cell beside Type is whatever
+    // this type refers to. Only the three party/transfer kinds are editable
+    // here - an invoice-backed or expense-backed row is locked anyway.
+    const referenceKind = ReferenceForType[selectedType] || null;
+    const isTransfer = referenceKind === "transfer_account";
+
+    // Options are filtered by the account, but the value already stored stays
+    // selectable and is never rewritten on load. Auto-correcting during reset()
+    // would silently change a legacy row just by opening it.
+    const allowedMethods = methodsForAccount(
+        accounts[selectedAccountId], selectedMethod);
 
     // Active accounts only, plus whichever this transaction already uses — a
     // deactivated account takes no new money but stays visible on its history.
@@ -84,8 +106,16 @@ const UpdateTransaction = () => {
             formData.append("payment_method", data.payment_method);
             formData.append("status", data.status);
 
-            if (isTransfer && data.transfer_account) {
+            if (referenceKind === "transfer_account" && data.transfer_account) {
                 formData.append("transfer_account", data.transfer_account);
+            }
+            // The party was never sent before, so editing a supplier payment
+            // could not change - or even keep - its supplier.
+            if (referenceKind === "customer" && data.customer) {
+                formData.append("customer", data.customer);
+            }
+            if (referenceKind === "supplier" && data.supplier) {
+                formData.append("supplier", data.supplier);
             }
             if (isCheque) {
                 if (data.cheque_number) formData.append("cheque_number", data.cheque_number);
@@ -95,12 +125,13 @@ const UpdateTransaction = () => {
             if (data.notes) formData.append("notes", data.notes);
             if (imageFile) formData.append("image", imageFile);
 
-            const success = await updateTransaction(token, transaction_id, formData);
-            if (success) {
+            const result = await updateTransaction(token, transaction_id, formData);
+            if (result.ok) {
                 toast.success("Transaction updated successfully!");
                 navigate("/accounting");
-            } else {
-                toast.error("Failed to update transaction.");
+            } else if (result.error) {
+                // null means the interceptor already toasted (403).
+                toast.error(result.error);
             }
         } catch (error) {
             console.log("Error updating transaction:", error);
@@ -130,7 +161,12 @@ const UpdateTransaction = () => {
                 const transaction = await transactionsAPIPackage.detail(token, transaction_id);
                 if (transaction) {
                     setIsSourceLinked(transaction.is_source_linked);
+                    setSource(transaction.source || null);
                     setExistingImageUrl(getImageUrl(transaction.image) || null);
+                    // party_payment has always been in this payload; the screen
+                    // simply never read it, which is why the supplier or
+                    // customer never appeared and was dropped on save.
+                    const party = transaction.party_payment || {};
                     reset({
                         type: transaction.type || "",
                         amount: transaction.amount || 0,
@@ -145,6 +181,8 @@ const UpdateTransaction = () => {
                         notes: transaction.notes || "",
                         cheque_number: transaction.cheque_number || "",
                         cheque_due_date: transaction.cheque_due_date || "",
+                        customer: party.customer ? String(party.customer.id) : "",
+                        supplier: party.supplier ? String(party.supplier.id) : "",
                     });
                 } else {
                     toast.error("Failed to fetch transaction.");
@@ -157,9 +195,132 @@ const UpdateTransaction = () => {
             }
         };
 
-        fetchAccounts();
-        fetchTransaction();
+        const fetchCustomers = async () => {
+            try {
+                const res = await getCustomersList(token);
+                if (res) setCustomers(createIdMap(res));
+            } catch (error) {
+                console.log("Error fetching customers:", error);
+            }
+        };
+
+        const fetchSuppliers = async () => {
+            try {
+                const res = await suppliersAPIPackage.list(token);
+                if (res) setSuppliers(createIdMap(res));
+            } catch (error) {
+                console.log("Error fetching suppliers:", error);
+            }
+        };
+
+        const init = async () => {
+            // Dropdowns FIRST, then the record. These used to be fired
+            // together, so reset() usually landed before the account list
+            // arrived; with no matching SelectItem, Radix showed the
+            // placeholder and the account looked empty. Same pattern
+            // UpdateProduct.tsx already uses.
+            await Promise.all([fetchAccounts(), fetchCustomers(), fetchSuppliers()]);
+            fetchTransaction();
+        };
+        init();
     }, [token, transaction_id]);
+
+    /**
+     * The cell beside Type, mirroring the create screen.
+     */
+    const renderReferenceCell = () => {
+        // The destination account uses selectableAccounts so a deactivated one
+        // already on this transfer stays visible, so it is built separately.
+        if (referenceKind === "transfer_account") {
+            return (
+                <div className="flex-1 space-y-1">
+                    <Label htmlFor="transfer_account">Transfer To</Label>
+                    <Controller
+                        name="transfer_account"
+                        control={control}
+                        render={({ field }) => (
+                            <Select
+                                onValueChange={field.onChange}
+                                value={field.value}
+                                disabled={isSourceLinked}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select destination account" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {selectableAccounts(field.value).map(([key, account]: any) => (
+                                        <SelectItem value={String(key)} key={key}>
+                                            {formatAccountOption(account)}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+                    />
+                </div>
+            );
+        }
+
+        const config = {
+            customer: {
+                name: "customer" as const,
+                label: "Customer",
+                placeholder: "Select customer",
+                empty: "No customers on this business yet",
+                options: customers,
+            },
+            supplier: {
+                name: "supplier" as const,
+                label: "Supplier",
+                placeholder: "Select supplier",
+                empty: "No suppliers on this business yet",
+                options: suppliers,
+            },
+        }[referenceKind];
+
+        if (!config) return null;
+
+        // The wording differs from the create screen on purpose: this picker
+        // carries the FULL list so a party already on the transaction stays
+        // selectable, so empty here means the business has none at all.
+        const isEmpty = Object.keys(config.options).length === 0;
+
+        return (
+            <div className="flex-1 space-y-1">
+                <Label htmlFor={config.name}>{config.label}</Label>
+                <Controller
+                    name={config.name}
+                    control={control}
+                    render={({ field }) => (
+                        <Select
+                            onValueChange={field.onChange}
+                            value={field.value}
+                            disabled={isSourceLinked}
+                        >
+                            <SelectTrigger>
+                                <SelectValue
+                                    placeholder={isEmpty ? config.empty : config.placeholder}
+                                />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {isEmpty ? (
+                                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                                        {config.empty}
+                                    </div>
+                                ) : (
+                                    Object.entries(config.options).map(([key, party]) => (
+                                        <SelectItem value={String(key)} key={key}>
+                                            {String((party as Record<string, unknown>).name ?? "")}
+                                        </SelectItem>
+                                    ))
+                                )}
+                            </SelectContent>
+                        </Select>
+                    )}
+                />
+            </div>
+        );
+    };
 
     return (
         <div className="min-h-screen bg-background">
@@ -177,8 +338,9 @@ const UpdateTransaction = () => {
                     {isSourceLinked && (
                         <div className="bg-card rounded-lg p-4 border">
                             <p className="text-sm text-muted-foreground">
-                                This transaction came from an invoice payment or an expense.
-                                Edit it from that record instead.
+                                {source?.label
+                                    ? `This transaction came from ${SourceKindMap[source.kind] || "a source record"} ${source.label}. Edit it from that record instead.`
+                                    : "This transaction came from an invoice payment or an expense. Edit it from that record instead."}
                             </p>
                         </div>
                     )}
@@ -229,27 +391,10 @@ const UpdateTransaction = () => {
                                             )}
                                         />
                                     </div>
-                                </div>
 
-                                <div className="flex gap-6 mb-6">
-                                    <div className="flex-1 space-y-1">
-                                        <Label htmlFor="amount">Amount (PKR)</Label>
-                                        <Input
-                                            id="amount"
-                                            type="number"
-                                            disabled={isSourceLinked}
-                                            {...register("amount")}
-                                        />
-                                    </div>
-                                    <div className="flex-1 space-y-1">
-                                        <Label htmlFor="date">Date</Label>
-                                        <Input
-                                            id="date"
-                                            type="date"
-                                            disabled={isSourceLinked}
-                                            {...register("date")}
-                                        />
-                                    </div>
+                                    {/* Same rule as the create screen: the reference
+                                        sits beside Type, or Type spans the row. */}
+                                    {renderReferenceCell()}
                                 </div>
 
                                 <div className="flex gap-6 mb-6">
@@ -278,33 +423,55 @@ const UpdateTransaction = () => {
                                             )}
                                         />
                                     </div>
-                                    {isTransfer && (
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="transfer_account">Transfer To</Label>
-                                            <Controller
-                                                name="transfer_account"
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Select
-                                                        onValueChange={field.onChange}
-                                                        value={field.value}
-                                                        disabled={isSourceLinked}
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select destination account" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {selectableAccounts(field.value).map(([key, account]: any) => (
-                                                                <SelectItem value={String(key)} key={key}>
-                                                                    {formatAccountOption(account)}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            />
-                                        </div>
-                                    )}
+                                    {/* Payment Method sits with the account it has to
+                                        agree with. Options follow the account type,
+                                        but a stored value stays selectable. */}
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="payment_method">Payment Method</Label>
+                                        <Controller
+                                            name="payment_method"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select
+                                                    onValueChange={field.onChange}
+                                                    value={field.value}
+                                                    disabled={isSourceLinked}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select method" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {allowedMethods.map((key) => (
+                                                            <SelectItem value={key} key={key}>
+                                                                {PaymentMethodMap[key]}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="amount">Amount (PKR)</Label>
+                                        <Input
+                                            id="amount"
+                                            type="number"
+                                            disabled={isSourceLinked}
+                                            {...register("amount")}
+                                        />
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="date">Date</Label>
+                                        <Input
+                                            id="date"
+                                            type="date"
+                                            disabled={isSourceLinked}
+                                            {...register("date")}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
@@ -338,37 +505,12 @@ const UpdateTransaction = () => {
                             </div>
                         </div>
 
-                        {/* Row Two — starts a fresh baseline, so Photo lines up with
-                            Payment Method and Status. */}
+                        {/* Row Two — Payment Method moved up beside Account, so
+                            Status now leads this row and Photo lines up with it. */}
                         <div className="flex gap-12">
                             {/* First Column */}
                             <div className="flex flex-col flex-1">
                                 <div className="flex gap-6 mb-6">
-                                    <div className="flex-1 space-y-1">
-                                        <Label htmlFor="payment_method">Payment Method</Label>
-                                        <Controller
-                                            name="payment_method"
-                                            control={control}
-                                            render={({ field }) => (
-                                                <Select
-                                                    onValueChange={field.onChange}
-                                                    value={field.value}
-                                                    disabled={isSourceLinked}
-                                                >
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder="Select method" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {Object.entries(PaymentMethodMap).map(([key, label]) => (
-                                                            <SelectItem value={key} key={key}>
-                                                                {label}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            )}
-                                        />
-                                    </div>
                                     <div className="flex-1 space-y-1">
                                         <Label htmlFor="status">Status</Label>
                                         <Controller

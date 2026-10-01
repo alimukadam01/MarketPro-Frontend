@@ -3,7 +3,7 @@ import DataTable from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatDate } from "../../../services/utils";
+import { formatDate, listCountLabel } from "../../../services/utils";
 
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
 
@@ -34,8 +34,16 @@ const cols = [
 /**
  * One party's khaata. Owns the date range inputs and hands the chosen range
  * back to the page, which does the fetching.
+ *
+ * title names the party kind, so the customer and supplier screens can share
+ * this component and still read "Customer Ledger" / "Supplier Ledger".
  */
-const PartyLedgerSection = ({ ledger, onRangeApply, actions = null }) => {
+const PartyLedgerSection = ({
+    ledger,
+    onRangeApply,
+    actions = null,
+    title = "Ledger",
+}) => {
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
 
@@ -69,7 +77,18 @@ const PartyLedgerSection = ({ ledger, onRangeApply, actions = null }) => {
     ];
 
     return (
-        <div className="space-y-4">
+        /* Sticky from here down: once the heading reaches the top of the
+           window it stays there, along with the date range and the column
+           header, and only the rows carry on scrolling underneath. The three
+           sit in one container so the column header needs no top offset of
+           its own - a number that would differ per page and drift whenever a
+           heading or a button changed. */
+        <div>
+        <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
+            <h2 className="text-xl font-semibold">
+                {title} ({listCountLabel(rows)})
+            </h2>
+
             {/* Date range on the left, any party actions on the right, so the
                 whole control strip reads as one row. */}
             <div className="flex items-end justify-between flex-wrap gap-4">
@@ -106,19 +125,25 @@ const PartyLedgerSection = ({ ledger, onRangeApply, actions = null }) => {
             </div>
 
             {rows.length > 0 ? (
-                <DataTable
-                    columns={cols}
-                    data={rows}
-                    selectedRows={[]}
-                    onRowClick={() => { }}
-                />
-            ) : (
-                <div className="bg-card rounded-lg p-6 border">
-                    <p className="text-sm text-muted-foreground">
-                        Nothing recorded for this party yet.
-                    </p>
-                </div>
-            )}
+                <DataTable columns={cols} headerOnly />
+            ) : null}
+        </div>
+
+        {rows.length > 0 ? (
+            <DataTable
+                columns={cols}
+                data={rows}
+                selectedRows={[]}
+                onRowClick={() => { }}
+                rowsOnly
+            />
+        ) : (
+            <div className="bg-card rounded-lg p-6 border">
+                <p className="text-sm text-muted-foreground">
+                    Nothing recorded for this party yet.
+                </p>
+            </div>
+        )}
         </div>
     );
 };

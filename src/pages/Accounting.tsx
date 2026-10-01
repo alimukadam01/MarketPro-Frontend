@@ -38,6 +38,7 @@ import {
     TransactionStatusMap,
     getTransactionStatusColor,
     listCountLabel,
+  ACCESS_DENIED_MESSAGE,
 } from "../../services/utils";
 
 const subModules = [
@@ -89,7 +90,7 @@ const filter_fields_template = {
 // value, so these must stay in step with the model.
 const transaction_type_options = [
     { value: "sale_payment", label: "Sale Payment" },
-    { value: "customer_receipt", label: "Customer Receipt" },
+    { value: "customer_receipt", label: "Customer Payment" },
     { value: "purchase_return_refund", label: "Purchase Return Refund" },
     { value: "owner_capital", label: "Owner Capital" },
     { value: "loan_received", label: "Loan Received" },
@@ -278,7 +279,7 @@ const Accounting = () => {
                     {!permissions?.["view"] ? (
                         <div className="bg-card rounded-lg p-6 border">
                             <p className="text-sm text-muted-foreground">
-                                Access not granted. Please contact Admin.
+                                {ACCESS_DENIED_MESSAGE}
                             </p>
                         </div>
                     ) : (
