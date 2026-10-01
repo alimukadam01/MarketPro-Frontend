@@ -11,7 +11,7 @@ import {
   formatConfig,
 } from "./utils";
 
-const DEBUG = true;
+const DEBUG = false;
 
 export const BASE_URL = DEBUG
   ? "http://localhost:8000/"
