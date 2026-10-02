@@ -11,6 +11,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
+  formatPartyLabel,
   PaymentStatusMap,
   PurchaseInvoiceStatusMap,
   createIdMap,
@@ -280,7 +281,7 @@ const UpdatePurchaseInvoice = () => {
                         <SelectContent>
                           {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, supplier]) => (
                             <SelectItem value={key} key={key}>
-                              {supplier.name}
+                              {formatPartyLabel(supplier)}
                             </SelectItem>
                           ))}
                         </SelectContent>

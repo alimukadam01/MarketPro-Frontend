@@ -11,6 +11,7 @@ import { CheckCircle2Icon, Plus, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
+    formatPartyLabel,
     PaymentStatusMap,
     PQStatusMap,
     createIdMap,
@@ -214,7 +215,7 @@ const CreatePurchaseQuotation = () => {
                                                     <SelectContent>
                                                         {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, item]) => (
                                                             <SelectItem key={key} value={key}>
-                                                                {item.name}
+                                                                {formatPartyLabel(item)}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>

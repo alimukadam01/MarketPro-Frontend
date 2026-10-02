@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
-import { createIdMap, ProjectStatusMap, PQStatusMap } from "../../services/utils";
+import { createIdMap, formatPartyLabel, ProjectStatusMap, PQStatusMap } from "../../services/utils";
 import { createCompleteProject, getCustomersList, suppliersAPIPackage, getProductVariantsList } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
@@ -492,7 +492,7 @@ const CreateProject = () => {
                                                             <SelectContent>
                                                                 {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, item]) => (
                                                                     <SelectItem key={key} value={key}>
-                                                                        {item.name}
+                                                                        {formatPartyLabel(item)}
                                                                     </SelectItem>
                                                                 ))}
                                                             </SelectContent>

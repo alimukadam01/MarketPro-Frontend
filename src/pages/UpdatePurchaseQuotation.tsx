@@ -11,6 +11,7 @@ import { Plus, X, RotateCcwIcon, RefreshCcwIcon, CheckCircle2Icon } from "lucide
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
+    formatPartyLabel,
     createIdMap,
     PQStatusMap
 } from "../../services/utils"
@@ -256,7 +257,7 @@ const UpdatePurchaseQuotation = () => {
                                                     <SelectContent>
                                                         {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, item]) => (
                                                             <SelectItem key={key} value={key}>
-                                                                {item.name}
+                                                                {formatPartyLabel(item)}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
