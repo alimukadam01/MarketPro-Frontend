@@ -207,6 +207,13 @@ export const AccountTypeMap = {
  * "Bank Al-Habib (Bank) · PKR 45,000". The balance is what tells the user
  * whether the account can actually cover what they are about to record.
  */
+/**
+ * "PKR 12,400". Null and undefined read as zero rather than "PKR NaN", which
+ * is what a missing KPI figure used to render as.
+ */
+export const formatCurrency = (amount) =>
+  `PKR ${Number(amount || 0).toLocaleString()}`;
+
 export const formatAccountOption = (account) => {
   const label = `${account.name} (${AccountTypeMap[account.type] || account.type})`;
   if (account.balance === undefined || account.balance === null) return label;
