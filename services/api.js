@@ -2343,6 +2343,90 @@ export const getOpeningBalances = async (token, party = "supplier") => {
   }
 };
 
+/**
+ * Everything one party's money could settle, oldest first: their uncleared
+ * opening balance, then every invoice with room left.
+ *
+ * `room` here is authoritative and must NOT be recomputed on the client.
+ * invoicePending() in utils.js subtracts amount_paid, which excludes pending
+ * cheques, so it would offer money the server then refuses.
+ */
+/**
+ * Set or replace a party's opening balance. PartyOpeningBalance is OneToOne
+ * per party, so the party page always upserts: look for an existing row, PUT
+ * it if there is one, POST if there is not.
+ */
+export const saveOpeningBalance = async (token, { customerId, supplierId, amount, asOfDate }) => {
+  const filter = customerId ? `?customer=${customerId}` : `?supplier=${supplierId}`;
+  const payload = {
+    amount,
+    as_of_date: asOfDate,
+    ...(customerId ? { customer: customerId } : { supplier: supplierId }),
+  };
+
+  try {
+    const existing = await partyOpeningBalancesAPIPackage.list(token, filter);
+    const row = Array.isArray(existing) ? existing[0] : null;
+
+    const ok = row
+      ? await partyOpeningBalancesAPIPackage.update(token, row.id, payload)
+      : await partyOpeningBalancesAPIPackage.create(token, payload);
+
+    return ok;
+  } catch (error) {
+    console.log("Error saving opening balance:", error);
+    return false;
+  }
+};
+
+export const getSettleableItems = async (token, { customerId, supplierId }) => {
+  try {
+    const query = customerId
+      ? `customer_id=${customerId}`
+      : `supplier_id=${supplierId}`;
+    const res = await apiClient.get(
+      `accounting-kpis/settleable-items/?${query}`,
+      { headers: { Authorization: token } },
+    );
+    if (res.status === 200) {
+      return res.data;
+    }
+    return null;
+  } catch (error) {
+    console.log("Error fetching settleable items:", error);
+    return null;
+  }
+};
+
+/**
+ * One amount against several ticked items. The server writes one transaction
+ * per settled item, atomically, and answers with the rows it actually wrote —
+ * so `ok` requires a non-empty list, not just a 201.
+ */
+export const recordPartyPayment = async (token, formData) => {
+  try {
+    const res = await apiClient.post("/transactions/record-payment/", formData, {
+      headers: {
+        Authorization: token,
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    const created = res.status === 201 && Array.isArray(res.data) && res.data.length > 0;
+    return {
+      ok: created,
+      data: res.data,
+      error: created ? null : "Failed to record the payment.",
+    };
+  } catch (error) {
+    console.log("Error recording party payment:", error);
+    return {
+      ok: false,
+      data: null,
+      error: firstFieldError(error, "Failed to record the payment."),
+    };
+  }
+};
+
 export const getPayables = async (token) => {
   try {
     const res = await apiClient.get("accounting-kpis/payables/", {
