@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner"
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -31,7 +31,8 @@ import {
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { Combobox } from "@/components/ui/combobox";
 
 const CreateSalesInvoice = () => {
   const { pending, run } = usePending();
@@ -41,6 +42,11 @@ const CreateSalesInvoice = () => {
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
   const [projects, setProjects] = useState([])
+  // One flag per list, not one for the page: three independent requests feeding
+  // three independent pickers.
+  const [productsLoading, setProductsLoading] = useState(true)
+  const [customersLoading, setCustomersLoading] = useState(true)
+  const [projectsLoading, setProjectsLoading] = useState(true)
   const { token } = useAuth()
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
@@ -189,6 +195,8 @@ const CreateSalesInvoice = () => {
       } catch (error) {
         console.log("Error fetching products:", error)
         toast.error("Failed to fetch products")
+      } finally {
+        setProductsLoading(false)
       }
     }
 
@@ -204,6 +212,8 @@ const CreateSalesInvoice = () => {
       } catch (error) {
         console.log("Error fetching customers:", error)
         toast.error("Failed to fetch customers")
+      } finally {
+        setCustomersLoading(false)
       }
     }
 
@@ -218,6 +228,8 @@ const CreateSalesInvoice = () => {
       } catch (error) {
         console.log("Error fetching projects:", error)
         toast.error("Failed to fetch projects")
+      } finally {
+        setProjectsLoading(false)
       }
     }
 
@@ -225,6 +237,33 @@ const CreateSalesInvoice = () => {
     fetchCustomers()
     fetchProjects()
   }, [token])
+
+  // The pickers take a flat {value, label} list, so each map runs once per fetch
+  // rather than on every keystroke in the search box.
+  const customerOptions = useMemo(
+    () => Object.entries(customers).map(([value, customer]) => ({
+      value,
+      label: customer.name,
+      keywords: [customer.phone_number, customer.city?.name].filter(Boolean),
+    })),
+    [customers])
+
+  const productOptions = useMemo(
+    () => Object.entries(products).map(([value, item]) => ({
+      value,
+      label: `${item.product.base.name} (${item.product.name}) (available: ${item.available_quantity})`,
+      // the bare names too, so a search for "shirt" is not defeated by the
+      // quantity and variant the label carries
+      keywords: [item.product.base.name, item.product.name],
+    })),
+    [products])
+
+  const projectOptions = useMemo(
+    () => Object.entries(projects).map(([value, project]) => ({
+      value,
+      label: project.name,
+    })),
+    [projects])
 
   useEffect(() => {
     if (selectedProduct) {
@@ -267,18 +306,16 @@ const CreateSalesInvoice = () => {
                     name="customer"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select customer"></SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {customers && Object.keys(customers).length > 0 && Object.entries(customers).map(([key, customer]) => (
-                            <SelectItem value={key} key={key}>
-                              {customer.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Combobox
+                        id="customer"
+                        options={customerOptions}
+                        value={field.value}
+                        onChange={field.onChange}
+                        loading={customersLoading}
+                        placeholder="Select customer"
+                        emptyText="No customers yet. Add one first."
+                        notFoundText="No customer matches that."
+                      />
                     )}
                   />
                 </div>
@@ -355,16 +392,16 @@ const CreateSalesInvoice = () => {
                     name="newItemProduct"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                        <SelectContent>
-                          {products && Object.keys(products).length > 0 && Object.entries(products).map(([key, item]) => (
-                            <SelectItem key={key} value={key}>
-                              {item.product.base.name} ({item.product.name}) (available: {item.available_quantity})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Combobox
+                        id="newItemProduct"
+                        options={productOptions}
+                        value={field.value}
+                        onChange={field.onChange}
+                        loading={productsLoading}
+                        placeholder="Select product"
+                        emptyText="No stocked products yet."
+                        notFoundText="No product matches that."
+                      />
                     )}
                   />
                 </div>
@@ -479,19 +516,18 @@ const CreateSalesInvoice = () => {
                   name="project"
                   control={control}
                   render={({ field }) => (
-                    <Select onValueChange={(val) => field.onChange(val === "none" ? null : val)} value={field.value ?? "none"}>
-                      <SelectTrigger className="w-48">
-                        <SelectValue placeholder="Add to project" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Select Project</SelectItem>
-                        {projects && Object.keys(projects).length > 0 && Object.entries(projects).map(([key, project]) => (
-                          <SelectItem value={key} key={key}>
-                            {project.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <Combobox
+                      id="project"
+                      className="w-48"
+                      options={projectOptions}
+                      value={field.value ?? ""}
+                      onChange={(val) => field.onChange(val || null)}
+                      loading={projectsLoading}
+                      placeholder="Add to project"
+                      emptyText="No projects yet."
+                      notFoundText="No project matches that."
+                      clearable
+                    />
                   )}
                 />
                 <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Invoice</SubmitButton>
