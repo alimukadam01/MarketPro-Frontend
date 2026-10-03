@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
-import { Check, ChevronsUpDown, X } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, ChevronUp, X } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,42 @@ export interface ComboboxOption {
    */
   keywords?: string[];
   disabled?: boolean;
+}
+
+/**
+ * The hover-to-scroll chevron a Select has at each end of a long list.
+ *
+ * Base UI's combobox has no equivalent part - its `Arrow` is the pointer that
+ * aims at the field, not a scroll control - so this is the behaviour Radix's
+ * SelectScrollUpButton/SelectScrollDownButton gave the old dropdowns, rebuilt.
+ *
+ * A div rather than a button, and aria-hidden: it exists for the mouse only.
+ * Keyboard users move the highlight with the arrow keys and Base UI scrolls the
+ * active row into view for them, so exposing this would add a tab stop that does
+ * nothing they cannot already do.
+ */
+function ScrollArrow({
+  direction,
+  onHoverStart,
+  onHoverEnd,
+}: {
+  direction: "up" | "down";
+  onHoverStart: (direction: "up" | "down") => void;
+  onHoverEnd: () => void;
+}) {
+  const Icon = direction === "up" ? ChevronUp : ChevronDown;
+  return (
+    <div
+      aria-hidden="true"
+      onPointerEnter={() => onHoverStart(direction)}
+      onPointerLeave={onHoverEnd}
+      // shrink-0 so the flex column gives the list the rest, and bg-popover so
+      // rows scrolling past read as going under the chevron rather than through it
+      className="flex shrink-0 cursor-default items-center justify-center bg-popover py-1 text-muted-foreground"
+    >
+      <Icon className="h-4 w-4" />
+    </div>
+  );
 }
 
 interface ComboboxProps {
@@ -89,6 +125,78 @@ export function Combobox({
   // Update pages reset() the form from one request and load the list in another.
   const awaitingLabel = Boolean(value) && !selected && loading;
 
+  // --- hover-to-scroll, the behaviour the old Select dropdowns had -----------
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+  const listObserverRef = React.useRef<MutationObserver | null>(null);
+  const frameRef = React.useRef<number | null>(null);
+  const [canScrollUp, setCanScrollUp] = React.useState(false);
+  const [canScrollDown, setCanScrollDown] = React.useState(false);
+
+  const syncArrows = React.useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    setCanScrollUp(el.scrollTop > 0);
+    // -1 absorbs the sub-pixel rounding that otherwise leaves the down chevron
+    // showing on a list scrolled fully to the bottom
+    setCanScrollDown(el.scrollTop + el.clientHeight < el.scrollHeight - 1);
+  }, []);
+
+  const attachList = React.useCallback(
+    (el: HTMLDivElement | null) => {
+      listRef.current = el;
+      if (!el) {
+        // the popup closed: drop the observer with the node it was watching
+        listObserverRef.current?.disconnect();
+        listObserverRef.current = null;
+        setCanScrollUp(false);
+        setCanScrollDown(false);
+        return;
+      }
+      // after layout, or scrollHeight is still 0
+      requestAnimationFrame(syncArrows);
+      // Typing filters rows in and out, which changes what is scrollable without
+      // firing scroll or resize. Watching the children is what keeps the chevrons
+      // honest as the list narrows.
+      const observer = new MutationObserver(() => requestAnimationFrame(syncArrows));
+      observer.observe(el, { childList: true, subtree: true });
+      listObserverRef.current?.disconnect();
+      listObserverRef.current = observer;
+    },
+    [syncArrows],
+  );
+
+  const stopScroll = React.useCallback(() => {
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+  }, []);
+
+  const startScroll = React.useCallback(
+    (direction: "up" | "down") => {
+      stopScroll();
+      const step = () => {
+        const el = listRef.current;
+        if (!el) return;
+        el.scrollTop += direction === "up" ? -3 : 3;
+        syncArrows();
+        frameRef.current = requestAnimationFrame(step);
+      };
+      frameRef.current = requestAnimationFrame(step);
+    },
+    [stopScroll, syncArrows],
+  );
+
+  // The popup unmounts while a pointer is still over a chevron if the list is
+  // closed by a selection, so the loop has to be stopped from here too.
+  React.useEffect(
+    () => () => {
+      stopScroll();
+      listObserverRef.current?.disconnect();
+    },
+    [stopScroll],
+  );
+
   return (
     <ComboboxPrimitive.Root
       items={options}
@@ -150,7 +258,7 @@ export function Combobox({
               // app: no visible scrollbar, and a width that starts at the field's
               // and grows to the longest option, capped at the space Base UI
               // reports so a long product name cannot push it off screen
-              "relative overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
+              "relative flex flex-col overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
               "max-h-96 w-auto min-w-[var(--anchor-width)] max-w-[var(--available-width)]",
               "origin-[var(--transform-origin)]",
               "data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 data-[closed]:zoom-out-95 data-[open]:zoom-in-95",
@@ -168,31 +276,47 @@ export function Combobox({
               <div className="px-3 py-4 text-sm text-muted-foreground">{emptyText}</div>
             ) : (
               <>
-                <ComboboxPrimitive.Empty className="px-3 py-4 text-sm text-muted-foreground">
-                  {notFoundText}
+                {/* The padding goes on the CHILD, never on Empty itself. Base UI
+                    keeps this element mounted at all times so screen readers
+                    announce the transition, and renders its children only while
+                    the list is empty - so padding on the element itself became a
+                    permanent blank strip above the first option. */}
+                <ComboboxPrimitive.Empty>
+                  <div className="px-3 py-4 text-sm text-muted-foreground">{notFoundText}</div>
                 </ComboboxPrimitive.Empty>
-                <ComboboxPrimitive.List className="max-h-96 overflow-y-auto overscroll-contain p-1 no-scrollbar">
+                {canScrollUp && (
+                  <ScrollArrow direction="up" onHoverStart={startScroll} onHoverEnd={stopScroll} />
+                )}
+                <ComboboxPrimitive.List
+                  ref={attachList}
+                  onScroll={syncArrows}
+                  className="flex-1 overflow-y-auto overscroll-contain p-1 no-scrollbar"
+                >
                   {(option: ComboboxOption) => (
                     <ComboboxPrimitive.Item
                       key={option.value}
                       value={option}
                       disabled={option.disabled}
                       className={cn(
-                        "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none",
+                        // px-2, not the pl-8 a Select row uses to reserve a gutter
+                        // for its tick. The tick sits at the end here instead, so
+                        // every label starts hard against the left edge - in a
+                        // narrow dropdown an 8-unit gutter read as centred text.
+                        "flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none",
                         "data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",
                         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
                       )}
                     >
-                      {/* Absolute, like SelectItem's: Base UI renders the
-                          indicator only for the selected row, so in the flow it
-                          would shift every other row's text. */}
-                      <ComboboxPrimitive.ItemIndicator className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
+                      <ComboboxPrimitive.ItemIndicator className="order-last ml-auto flex h-3.5 w-3.5 shrink-0 items-center justify-center">
                         <Check className="h-4 w-4" />
                       </ComboboxPrimitive.ItemIndicator>
                       <span>{option.label}</span>
                     </ComboboxPrimitive.Item>
                   )}
                 </ComboboxPrimitive.List>
+                {canScrollDown && (
+                  <ScrollArrow direction="down" onHoverStart={startScroll} onHoverEnd={stopScroll} />
+                )}
               </>
             )}
           </ComboboxPrimitive.Popup>
