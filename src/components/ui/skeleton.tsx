@@ -3,15 +3,21 @@ import { cn } from "@/lib/utils"
 /**
  * A placeholder that holds the shape of the content still loading.
  *
- * TINT. Brand purple rather than neutral grey: the body is --primary at 0.22
- * and the crest of the sweep is the same hue at 0.06, so the highlight falls
+ * TINT. Brand purple rather than neutral grey: the body is --primary at 0.15
+ * and the crest of the sweep is the same hue at 0.04, so the highlight falls
  * back to near-white page and the whole thing reads purple-to-white. Those two
  * alphas are the dial if it wants to be stronger or softer.
  *
- * The alphas are higher than the grey version's 0.10/0.033 because they have
- * to be. --primary sits at 57.8% lightness where --foreground sits at 4.1%, so
- * the same alpha over the same page is far weaker; 0.22 lands the body at
- * roughly the contrast the grey version had.
+ * It is the SAME token the sidebar and the buttons paint with - there is no
+ * hardcoded purple anywhere in this codebase. It looks like a different shade
+ * because alpha over a near-white page dilutes it: --primary at 1.0 is
+ * hsl(262 83% 58%), at 0.15 it composites to hsl(262 66% 92%). The hue is
+ * identical at every alpha; saturation and lightness are what move.
+ *
+ * That also means the two dials pull against each other. Raising the alpha
+ * makes this read closer to the vivid sidebar purple; lowering it makes the
+ * placeholder calmer but paler. 0.15 is the calmer end, chosen deliberately -
+ * a placeholder should not compete with the content that replaces it.
  *
  * They must stay written out in full. Tailwind finds classes by scanning the
  * source for complete strings, so building this from constants - `${BASE}` -
@@ -45,7 +51,7 @@ function Skeleton({
       aria-hidden="true"
       className={cn(
         "rounded-md",
-        "bg-[linear-gradient(90deg,hsl(var(--primary)/0.22)_25%,hsl(var(--primary)/0.06)_50%,hsl(var(--primary)/0.22)_75%)]",
+        "bg-[linear-gradient(90deg,hsl(var(--primary)/0.15)_25%,hsl(var(--primary)/0.04)_50%,hsl(var(--primary)/0.15)_75%)]",
         "bg-[length:200%_100%] animate-shimmer motion-reduce:animate-none",
         className
       )}
