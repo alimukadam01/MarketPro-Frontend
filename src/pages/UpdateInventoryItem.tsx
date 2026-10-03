@@ -21,14 +21,14 @@ import {
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
-import { FormSkeleton } from "@/components/ui/form-skeleton";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdateInventoryItem = () => {
   const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
-    // True until the record arrives. The form is not rendered before
-    // then, because reset() would overwrite anything typed into it.
+    // True until the record arrives, which the spinner beside the title
+    // reports. A failure is the only thing that toasts.
     const [detailLoading, setDetailLoading] = useState(true);
     const [productName, setProductName] = useState("")
     const [locations, setLocations] = useState([])
@@ -152,90 +152,86 @@ const UpdateInventoryItem = () => {
 
                     <div className="flex items-center justify-between">
 
-                        {detailLoading ? (
-                            <FormSkeleton fields={8} className="flex flex-row w-[48%] gap-12" />
-                        ) : (
-                            <form onSubmit={handleSubmit(run(onInventoryItemUpdate))} className="flex flex-row w-[48%] gap-12">
-    
-                                {/* Second Column */}
-                                <div className="flex flex-col flex-wrap flex-1">
-                                    <h2 className="text-lg font-semibold mb-6">Update Inventory Item</h2>
-    
-                                    <div className="flex gap-6 mb-6">
-                                        <div className="w-[50%] space-y-1">
-                                            <Label htmlFor="product">Product</Label>
-                                            <Input
-                                                id="product"
-                                                disabled={true}
-                                                value={productName}
-                                            />
-                                        </div>
-    
-                                        <div className="w-[50%] space-y-1">
-                                            <Label htmlFor="location">Location</Label>
-                                            <Controller
-                                                name="location"
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
-                                                        <SelectContent>
-                                                            {locations && Object.keys(locations).length > 0 && Object.entries(locations).map(([key, item]) => (
-                                                                <SelectItem key={key} value={key}>
-                                                                    {item.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            />
-                                        </div>
-    
+                        <form onSubmit={handleSubmit(run(onInventoryItemUpdate))} className="flex flex-row w-[48%] gap-12">
+
+                            {/* Second Column */}
+                            <div className="flex flex-col flex-wrap flex-1">
+                                <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Update Inventory Item{detailLoading && <Spinner size={18} label="Loading" />}</h2>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="w-[50%] space-y-1">
+                                        <Label htmlFor="product">Product</Label>
+                                        <Input
+                                            id="product"
+                                            disabled={true}
+                                            value={productName}
+                                        />
                                     </div>
-    
-                                    <div className="flex gap-6 mb-6">
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="quantity">Quantity</Label>
-                                            <Input id="quantity" type="number" {...register("quantity")} />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="unit_cost">Unit Cost</Label>
-                                            <Input id="unit_cost" type="number" {...register("unit_cost")} />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="unit_price">Unit Price</Label>
-                                            <Input id="unit_price" type="number" {...register("unit_price")} />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="reorder_level">Reorder Level</Label>
-                                            <Input id="reorder_level" type="number" {...register("reorder_level")} />
-                                        </div>
+
+                                    <div className="w-[50%] space-y-1">
+                                        <Label htmlFor="location">Location</Label>
+                                        <Controller
+                                            name="location"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger><SelectValue placeholder="Select location" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {locations && Object.keys(locations).length > 0 && Object.entries(locations).map(([key, item]) => (
+                                                            <SelectItem key={key} value={key}>
+                                                                {item.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
                                     </div>
-    
-                                    <div className="flex gap-6 mb-6">
-                                        <div className="w-[50%] space-y-1">
-                                            <Label htmlFor="quantity_on_hand">On Hand Quantity</Label>
-                                            <Input id="quantity_on_hand" type="number" {...register("quantity_on_hand")} />
-                                        </div>
-                                        <div className="w-[50%] space-y-1">
-                                            <Label htmlFor="quantity_reserved">Reserved Quantity</Label>
-                                            <Input id="quantity_reserved" type="number" {...register("quantity_reserved")} />
-                                        </div>
+
+                                </div>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="quantity">Quantity</Label>
+                                        <Input id="quantity" type="number" {...register("quantity")} />
                                     </div>
-    
-                                    <div className="flex gap-6 mb-6">
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="notes">Notes</Label>
-                                            <Textarea id="notes" {...register("notes")} placeholder="Add notes here." rows={6} />
-                                        </div>
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="unit_cost">Unit Cost</Label>
+                                        <Input id="unit_cost" type="number" {...register("unit_cost")} />
                                     </div>
-    
-                                    <div className="flex justify-end gap-3 mt-auto">
-                                        <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Inventory Item</SubmitButton>
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="unit_price">Unit Price</Label>
+                                        <Input id="unit_price" type="number" {...register("unit_price")} />
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="reorder_level">Reorder Level</Label>
+                                        <Input id="reorder_level" type="number" {...register("reorder_level")} />
                                     </div>
                                 </div>
-                            </form>
-                        )}
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="w-[50%] space-y-1">
+                                        <Label htmlFor="quantity_on_hand">On Hand Quantity</Label>
+                                        <Input id="quantity_on_hand" type="number" {...register("quantity_on_hand")} />
+                                    </div>
+                                    <div className="w-[50%] space-y-1">
+                                        <Label htmlFor="quantity_reserved">Reserved Quantity</Label>
+                                        <Input id="quantity_reserved" type="number" {...register("quantity_reserved")} />
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="notes">Notes</Label>
+                                        <Textarea id="notes" {...register("notes")} placeholder="Add notes here." rows={6} />
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-auto">
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Inventory Item</SubmitButton>
+                                </div>
+                            </div>
+                        </form>
                     </div>
                 </main>
             </div>

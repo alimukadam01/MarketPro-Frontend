@@ -24,13 +24,13 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { createIdMap, getImageUrl } from "../../services/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
-import { FormSkeleton } from "@/components/ui/form-skeleton";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdateBacklogEntry = () => {
   const { pending, run } = usePending();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  // True until the record arrives. The form is not rendered before
-  // then, because reset() would overwrite anything typed into it.
+  // True until the record arrives, which the spinner beside the title
+  // reports. A failure is the only thing that toasts.
   const [detailLoading, setDetailLoading] = useState(true);
   const [employees, setEmployees] = useState({});
   const [imageFile, setImageFile] = useState(null);
@@ -130,138 +130,134 @@ const UpdateBacklogEntry = () => {
         <main className="flex-1 p-6 space-y-6">
           <DynamicBreadCrumb />
 
-          {detailLoading ? (
-              <FormSkeleton fields={5} className="flex flex-row w-[48%] gap-12" />
-          ) : (
-              <form
-                onSubmit={handleSubmit(run(onSubmit))}
-                className="flex flex-row w-[48%] gap-12"
-              >
-                <div className="flex flex-col flex-1">
-                  <h2 className="text-lg font-semibold mb-6">
-                    Update Backlog Entry
-                  </h2>
-    
-                  {/* Type */}
-                  <div className="flex-1 space-y-1 mb-6">
-                    <Label>Type</Label>
-                    <Controller
-                      name="type"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="sales_invoice">
-                              Sales Invoice
-                            </SelectItem>
-                            <SelectItem value="purchase_invoice">
-                              Purchase Invoice
-                            </SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
+          <form
+            onSubmit={handleSubmit(run(onSubmit))}
+            className="flex flex-row w-[48%] gap-12"
+          >
+            <div className="flex flex-col flex-1">
+              <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">
+                Update Backlog Entry
+              {detailLoading && <Spinner size={18} label="Loading" />}</h2>
+
+              {/* Type */}
+              <div className="flex-1 space-y-1 mb-6">
+                <Label>Type</Label>
+                <Controller
+                  name="type"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sales_invoice">
+                          Sales Invoice
+                        </SelectItem>
+                        <SelectItem value="purchase_invoice">
+                          Purchase Invoice
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+
+              {/* Image — preview + optional replacement */}
+              <div className="flex-1 space-y-2 mb-6">
+                <Label htmlFor="image">Image</Label>
+                {existingImageUrl && !imageFile && (
+                  <a
+                    href={existingImageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <img
+                      src={existingImageUrl}
+                      alt="current backlog"
+                      className="w-24 h-24 object-cover rounded border cursor-pointer hover:opacity-80"
                     />
-                  </div>
-    
-                  {/* Image — preview + optional replacement */}
-                  <div className="flex-1 space-y-2 mb-6">
-                    <Label htmlFor="image">Image</Label>
-                    {existingImageUrl && !imageFile && (
-                      <a
-                        href={existingImageUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <img
-                          src={existingImageUrl}
-                          alt="current backlog"
-                          className="w-24 h-24 object-cover rounded border cursor-pointer hover:opacity-80"
-                        />
-                      </a>
-                    )}
+                  </a>
+                )}
+                <input
+                  id="image"
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) =>
+                    setImageFile(e.target.files?.[0] || null)
+                  }
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to keep the existing image.
+                </p>
+              </div>
+
+              {/* Assigned To */}
+              <div className="flex-1 space-y-1 mb-6">
+                <Label>Assigned To</Label>
+                <Controller
+                  name="assigned_to"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select employee" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(employees).map(([key, emp]: any) => (
+                          <SelectItem value={String(key)} key={key}>
+                            {emp.user?.first_name} {emp.user?.last_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </div>
+
+              {/* Notes */}
+              <div className="mb-6 space-y-1">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  {...register("notes")}
+                  placeholder="Enter notes here"
+                  rows={3}
+                />
+              </div>
+
+              {/* Is Done */}
+              <div className="flex items-center space-x-3 mb-6">
+                <Controller
+                  name="is_done"
+                  control={control}
+                  render={({ field }) => (
                     <input
-                      id="image"
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) =>
-                        setImageFile(e.target.files?.[0] || null)
-                      }
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium"
+                      type="checkbox"
+                      id="is_done"
+                      checked={field.value}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                      className="w-4 h-4 cursor-pointer"
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Leave empty to keep the existing image.
-                    </p>
-                  </div>
-    
-                  {/* Assigned To */}
-                  <div className="flex-1 space-y-1 mb-6">
-                    <Label>Assigned To</Label>
-                    <Controller
-                      name="assigned_to"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          onValueChange={field.onChange}
-                          value={field.value}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select employee" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {Object.entries(employees).map(([key, emp]: any) => (
-                              <SelectItem value={String(key)} key={key}>
-                                {emp.user?.first_name} {emp.user?.last_name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
-    
-                  {/* Notes */}
-                  <div className="mb-6 space-y-1">
-                    <Label htmlFor="notes">Notes</Label>
-                    <Textarea
-                      id="notes"
-                      {...register("notes")}
-                      placeholder="Enter notes here"
-                      rows={3}
-                    />
-                  </div>
-    
-                  {/* Is Done */}
-                  <div className="flex items-center space-x-3 mb-6">
-                    <Controller
-                      name="is_done"
-                      control={control}
-                      render={({ field }) => (
-                        <input
-                          type="checkbox"
-                          id="is_done"
-                          checked={field.value}
-                          onChange={(e) => field.onChange(e.target.checked)}
-                          className="w-4 h-4 cursor-pointer"
-                        />
-                      )}
-                    />
-                    <Label htmlFor="is_done" className="cursor-pointer">
-                      Mark as Done
-                    </Label>
-                  </div>
-    
-                  <div className="flex justify-end gap-3 mt-auto">
-                    <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Entry</SubmitButton>
-                  </div>
-                </div>
-              </form>
-          )}
+                  )}
+                />
+                <Label htmlFor="is_done" className="cursor-pointer">
+                  Mark as Done
+                </Label>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-auto">
+                <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Entry</SubmitButton>
+              </div>
+            </div>
+          </form>
         </main>
       </div>
     </div>

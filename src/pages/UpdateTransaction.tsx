@@ -38,12 +38,12 @@ import {
     formatAccountOption,
 } from "../../services/utils";
 import { Combobox } from "@/components/ui/combobox";
-import { FormSkeleton } from "@/components/ui/form-skeleton";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdateTransaction = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-    // True until the record arrives. The form is not rendered before
-    // then, because reset() would overwrite anything typed into it.
+    // True until the record arrives, which the spinner beside the title
+    // reports. A failure is the only thing that toasts.
     const [detailLoading, setDetailLoading] = useState(true);
     const [accounts, setAccounts] = useState({});
     const [customers, setCustomers] = useState({});
@@ -353,265 +353,261 @@ const UpdateTransaction = () => {
                         </div>
                     )}
 
-                    {detailLoading ? (
-                        <FormSkeleton fields={8} className="flex flex-col flex-1 gap-4" />
-                    ) : (
-                        <form
-                            onSubmit={handleSubmit(onTransactionUpdate)}
-                            className="flex flex-col flex-1 gap-4"
-                        >
-                            {/* Row One — both columns start together, so Reference lines up
-                                with Type and Notes stretches to end level with Account. */}
-                            <div className="flex gap-12">
-                                {/* First Column */}
-                                <div className="flex flex-col flex-1">
-                                    <h2 className="text-lg font-semibold mb-6">Transaction Details</h2>
-    
-                                    <div className="flex gap-6 mb-6">
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="type">Type</Label>
-                                            <Controller
-                                                name="type"
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Select
-                                                        onValueChange={field.onChange}
-                                                        value={field.value}
-                                                        disabled={isSourceLinked}
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select transaction type" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {Object.entries(TransactionTypeGroups).map(
-                                                                ([group, types]) => (
-                                                                    <div key={group}>
-                                                                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
-                                                                            {group}
-                                                                        </div>
-                                                                        {types.map((type) => (
-                                                                            <SelectItem value={type} key={type}>
-                                                                                {TransactionTypeMap[type]}
-                                                                            </SelectItem>
-                                                                        ))}
+                    <form
+                        onSubmit={handleSubmit(onTransactionUpdate)}
+                        className="flex flex-col flex-1 gap-4"
+                    >
+                        {/* Row One — both columns start together, so Reference lines up
+                            with Type and Notes stretches to end level with Account. */}
+                        <div className="flex gap-12">
+                            {/* First Column */}
+                            <div className="flex flex-col flex-1">
+                                <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Transaction Details{detailLoading && <Spinner size={18} label="Loading" />}</h2>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="type">Type</Label>
+                                        <Controller
+                                            name="type"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select
+                                                    onValueChange={field.onChange}
+                                                    value={field.value}
+                                                    disabled={isSourceLinked}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select transaction type" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {Object.entries(TransactionTypeGroups).map(
+                                                            ([group, types]) => (
+                                                                <div key={group}>
+                                                                    <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                                                                        {group}
                                                                     </div>
-                                                                )
-                                                            )}
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            />
-                                        </div>
-    
-                                        {/* Same rule as the create screen: the reference
-                                            sits beside Type, or Type spans the row. */}
-                                        {renderReferenceCell()}
+                                                                    {types.map((type) => (
+                                                                        <SelectItem value={type} key={type}>
+                                                                            {TransactionTypeMap[type]}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </div>
+                                                            )
+                                                        )}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
                                     </div>
-    
-                                    <div className="flex gap-6 mb-6">
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="account">Account</Label>
-                                            <Controller
-                                                name="account"
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Select
-                                                        onValueChange={field.onChange}
-                                                        value={field.value}
-                                                        disabled={isSourceLinked}
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select account" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {selectableAccounts(field.value).map(([key, account]: any) => (
-                                                                <SelectItem value={String(key)} key={key}>
-                                                                    {formatAccountOption(account)}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            />
-                                        </div>
-                                        {/* Payment Method sits with the account it has to
-                                            agree with. Options follow the account type,
-                                            but a stored value stays selectable. */}
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="payment_method">Payment Method</Label>
-                                            <Controller
-                                                name="payment_method"
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Select
-                                                        onValueChange={field.onChange}
-                                                        value={field.value}
-                                                        disabled={isSourceLinked}
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select method" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {allowedMethods.map((key) => (
-                                                                <SelectItem value={key} key={key}>
-                                                                    {PaymentMethodMap[key]}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            />
-                                        </div>
+
+                                    {/* Same rule as the create screen: the reference
+                                        sits beside Type, or Type spans the row. */}
+                                    {renderReferenceCell()}
+                                </div>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="account">Account</Label>
+                                        <Controller
+                                            name="account"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select
+                                                    onValueChange={field.onChange}
+                                                    value={field.value}
+                                                    disabled={isSourceLinked}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select account" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {selectableAccounts(field.value).map(([key, account]: any) => (
+                                                            <SelectItem value={String(key)} key={key}>
+                                                                {formatAccountOption(account)}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
                                     </div>
-    
-                                    <div className="flex gap-6 mb-6">
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="amount">Amount (PKR)</Label>
-                                            <Input
-                                                id="amount"
-                                                type="number"
-                                                disabled={isSourceLinked}
-                                                {...register("amount")}
-                                            />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="date">Date</Label>
-                                            <Input
-                                                id="date"
-                                                type="date"
-                                                disabled={isSourceLinked}
-                                                {...register("date")}
-                                            />
-                                        </div>
+                                    {/* Payment Method sits with the account it has to
+                                        agree with. Options follow the account type,
+                                        but a stored value stays selectable. */}
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="payment_method">Payment Method</Label>
+                                        <Controller
+                                            name="payment_method"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select
+                                                    onValueChange={field.onChange}
+                                                    value={field.value}
+                                                    disabled={isSourceLinked}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select method" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {allowedMethods.map((key) => (
+                                                            <SelectItem value={key} key={key}>
+                                                                {PaymentMethodMap[key]}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
                                     </div>
                                 </div>
-    
-                                {/* Second Column */}
-                                <div className="flex flex-col flex-1">
-                                    <h2 className="text-lg font-semibold mb-6">Reference &amp; Notes</h2>
-    
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="amount">Amount (PKR)</Label>
+                                        <Input
+                                            id="amount"
+                                            type="number"
+                                            disabled={isSourceLinked}
+                                            {...register("amount")}
+                                        />
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="date">Date</Label>
+                                        <Input
+                                            id="date"
+                                            type="date"
+                                            disabled={isSourceLinked}
+                                            {...register("date")}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Second Column */}
+                            <div className="flex flex-col flex-1">
+                                <h2 className="text-lg font-semibold mb-6">Reference &amp; Notes</h2>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="reference">Reference</Label>
+                                        <Input
+                                            id="reference"
+                                            type="text"
+                                            disabled={isSourceLinked}
+                                            placeholder="Slip number, wallet transaction ID, etc."
+                                            {...register("reference")}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col flex-1 mb-6 space-y-1">
+                                    <Label htmlFor="notes">Notes</Label>
+                                    <Textarea
+                                        id="notes"
+                                        className="flex-1"
+                                        disabled={isSourceLinked}
+                                        {...register("notes")}
+                                        placeholder="Add any additional notes here..."
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Row Two — Payment Method moved up beside Account, so
+                            Status now leads this row and Photo lines up with it. */}
+                        <div className="flex gap-12">
+                            {/* First Column */}
+                            <div className="flex flex-col flex-1">
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="status">Status</Label>
+                                        <Controller
+                                            name="status"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select
+                                                    onValueChange={field.onChange}
+                                                    value={field.value}
+                                                    disabled={isSourceLinked}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select status" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {Object.entries(TransactionStatusMap).map(([key, label]) => (
+                                                            <SelectItem value={key} key={key}>
+                                                                {label}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                    </div>
+                                </div>
+
+                                {isCheque && (
                                     <div className="flex gap-6 mb-6">
                                         <div className="flex-1 space-y-1">
-                                            <Label htmlFor="reference">Reference</Label>
+                                            <Label htmlFor="cheque_number">Cheque Number</Label>
                                             <Input
-                                                id="reference"
+                                                id="cheque_number"
                                                 type="text"
                                                 disabled={isSourceLinked}
-                                                placeholder="Slip number, wallet transaction ID, etc."
-                                                {...register("reference")}
+                                                {...register("cheque_number")}
                                             />
                                         </div>
-                                    </div>
-    
-                                    <div className="flex flex-col flex-1 mb-6 space-y-1">
-                                        <Label htmlFor="notes">Notes</Label>
-                                        <Textarea
-                                            id="notes"
-                                            className="flex-1"
-                                            disabled={isSourceLinked}
-                                            {...register("notes")}
-                                            placeholder="Add any additional notes here..."
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-    
-                            {/* Row Two — Payment Method moved up beside Account, so
-                                Status now leads this row and Photo lines up with it. */}
-                            <div className="flex gap-12">
-                                {/* First Column */}
-                                <div className="flex flex-col flex-1">
-                                    <div className="flex gap-6 mb-6">
                                         <div className="flex-1 space-y-1">
-                                            <Label htmlFor="status">Status</Label>
-                                            <Controller
-                                                name="status"
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Select
-                                                        onValueChange={field.onChange}
-                                                        value={field.value}
-                                                        disabled={isSourceLinked}
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select status" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {Object.entries(TransactionStatusMap).map(([key, label]) => (
-                                                                <SelectItem value={key} key={key}>
-                                                                    {label}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
+                                            <Label htmlFor="cheque_due_date">Due Date</Label>
+                                            <Input
+                                                id="cheque_due_date"
+                                                type="date"
+                                                disabled={isSourceLinked}
+                                                {...register("cheque_due_date")}
                                             />
                                         </div>
                                     </div>
-    
-                                    {isCheque && (
-                                        <div className="flex gap-6 mb-6">
-                                            <div className="flex-1 space-y-1">
-                                                <Label htmlFor="cheque_number">Cheque Number</Label>
-                                                <Input
-                                                    id="cheque_number"
-                                                    type="text"
-                                                    disabled={isSourceLinked}
-                                                    {...register("cheque_number")}
-                                                />
-                                            </div>
-                                            <div className="flex-1 space-y-1">
-                                                <Label htmlFor="cheque_due_date">Due Date</Label>
-                                                <Input
-                                                    id="cheque_due_date"
-                                                    type="date"
-                                                    disabled={isSourceLinked}
-                                                    {...register("cheque_due_date")}
-                                                />
-                                            </div>
-                                        </div>
+                                )}
+                            </div>
+
+                            {/* Second Column */}
+                            <div className="flex flex-col flex-1">
+                                <div className="mb-6 space-y-1">
+                                    <Label htmlFor="image">Photo</Label>
+                                    {existingImageUrl && !imageFile && (
+                                        <a
+                                            href={existingImageUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            <img
+                                                src={existingImageUrl}
+                                                alt="transaction"
+                                                className="w-24 h-24 object-cover rounded border cursor-pointer hover:opacity-80"
+                                            />
+                                        </a>
                                     )}
+                                    <input
+                                        id="image"
+                                        type="file"
+                                        accept="image/*"
+                                        disabled={isSourceLinked}
+                                        onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Leave empty to keep the existing photo.
+                                    </p>
                                 </div>
-    
-                                {/* Second Column */}
-                                <div className="flex flex-col flex-1">
-                                    <div className="mb-6 space-y-1">
-                                        <Label htmlFor="image">Photo</Label>
-                                        {existingImageUrl && !imageFile && (
-                                            <a
-                                                href={existingImageUrl}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                            >
-                                                <img
-                                                    src={existingImageUrl}
-                                                    alt="transaction"
-                                                    className="w-24 h-24 object-cover rounded border cursor-pointer hover:opacity-80"
-                                                />
-                                            </a>
-                                        )}
-                                        <input
-                                            id="image"
-                                            type="file"
-                                            accept="image/*"
-                                            disabled={isSourceLinked}
-                                            onChange={(e) => setImageFile(e.target.files?.[0] || null)}
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium"
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            Leave empty to keep the existing photo.
-                                        </p>
-                                    </div>
-    
-                                    <div className="flex justify-end mt-auto">
-                                        <Button type="submit" disabled={isSourceLinked}>
-                                            Update Transaction
-                                        </Button>
-                                    </div>
+
+                                <div className="flex justify-end mt-auto">
+                                    <Button type="submit" disabled={isSourceLinked}>
+                                        Update Transaction
+                                    </Button>
                                 </div>
                             </div>
-                        </form>
-                    )}
+                        </div>
+                    </form>
                 </main>
             </div>
         </div>

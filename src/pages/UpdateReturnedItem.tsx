@@ -14,13 +14,13 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
-import { FormSkeleton } from "@/components/ui/form-skeleton";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdateReturnedItem = () => {
   const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-    // True until the record arrives. The form is not rendered before
-    // then, because reset() would overwrite anything typed into it.
+    // True until the record arrives, which the spinner beside the title
+    // reports. A failure is the only thing that toasts.
     const [detailLoading, setDetailLoading] = useState(true);
     const { token } = useAuth();
     const navigate = useNavigate();
@@ -111,62 +111,58 @@ const UpdateReturnedItem = () => {
                     <DynamicBreadCrumb />
 
                     <div className="flex items-center justify-between">
-                        {detailLoading ? (
-                            <FormSkeleton fields={5} className="flex flex-row w-[48%] gap-12" />
-                        ) : (
-                            <form
-                                onSubmit={handleSubmit(run(onReturnedItemUpdate))}
-                                className="flex flex-row w-[48%] gap-12"
-                            >
-                                {/* First Column */}
-                                <div className="flex flex-col flex-wrap flex-1">
-                                    <h2 className="text-lg font-semibold mb-6">Update Returned Item</h2>
-    
-                                    <div className="flex gap-6 mb-6">
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="sales_invoice_id">Sales Invoice</Label>
-                                            <Input id="sales_invoice_id" type="text" value={watch("invoice_no")} disabled={true} />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="invoice_item_id">Invoice Item</Label>
-                                            <Input id="invoice_item_id" type="text" value={watch("product")} disabled={true} />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="quantity">Quantity</Label>
-                                            <Input id="quantity" type="text" {...register("quantity")} />
-                                        </div>
+                        <form
+                            onSubmit={handleSubmit(run(onReturnedItemUpdate))}
+                            className="flex flex-row w-[48%] gap-12"
+                        >
+                            {/* First Column */}
+                            <div className="flex flex-col flex-wrap flex-1">
+                                <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Update Returned Item{detailLoading && <Spinner size={18} label="Loading" />}</h2>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="sales_invoice_id">Sales Invoice</Label>
+                                        <Input id="sales_invoice_id" type="text" value={watch("invoice_no")} disabled={true} />
                                     </div>
-    
-                                    <div className="flex gap-6 mb-6">
-                                        <Label htmlFor="is_damaged">Is Product Damaged?</Label>
-                                        <Controller
-                                            name="is_damaged"
-                                            control={control}
-                                            render={({ field }) => (
-                                                <Checkbox
-                                                    checked={field.value}
-                                                    onCheckedChange={field.onChange}
-                                                />
-                                            )}
-                                        />
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="invoice_item_id">Invoice Item</Label>
+                                        <Input id="invoice_item_id" type="text" value={watch("product")} disabled={true} />
                                     </div>
-    
-                                    <div className="mb-6 space-y-1">
-                                        <Label htmlFor="reason">Reason</Label>
-                                        <Textarea
-                                            id="reason"
-                                            {...register("reason")}
-                                            placeholder="Enter reason here"
-                                            rows={3}
-                                        />
-                                    </div>
-    
-                                    <div className="flex justify-end gap-3 mt-auto">
-                                        <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Returned Item</SubmitButton>
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="quantity">Quantity</Label>
+                                        <Input id="quantity" type="text" {...register("quantity")} />
                                     </div>
                                 </div>
-                            </form>
-                        )}
+
+                                <div className="flex gap-6 mb-6">
+                                    <Label htmlFor="is_damaged">Is Product Damaged?</Label>
+                                    <Controller
+                                        name="is_damaged"
+                                        control={control}
+                                        render={({ field }) => (
+                                            <Checkbox
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                            />
+                                        )}
+                                    />
+                                </div>
+
+                                <div className="mb-6 space-y-1">
+                                    <Label htmlFor="reason">Reason</Label>
+                                    <Textarea
+                                        id="reason"
+                                        {...register("reason")}
+                                        placeholder="Enter reason here"
+                                        rows={3}
+                                    />
+                                </div>
+
+                                <div className="flex justify-end gap-3 mt-auto">
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Returned Item</SubmitButton>
+                                </div>
+                            </div>
+                        </form>
                     </div>
                 </main>
             </div>

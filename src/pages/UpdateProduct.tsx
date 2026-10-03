@@ -25,14 +25,14 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
 import { SearchField } from "@/components/ui/search-field";
 import { Combobox } from "@/components/ui/combobox";
-import { FormSkeleton } from "@/components/ui/form-skeleton";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdateProduct = () => {
   const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
-    // True until the record arrives. The form is not rendered before
-    // then, because reset() would overwrite anything typed into it.
+    // True until the record arrives, which the spinner beside the title
+    // reports. A failure is the only thing that toasts.
     const [detailLoading, setDetailLoading] = useState(true);
     const [units, setUnits] = useState([])
     const [productVariantTypes, setProductVariantTypes] = useState([])
@@ -274,234 +274,230 @@ const UpdateProduct = () => {
                     {/* Breadcrumb */}
                     <DynamicBreadCrumb />
 
-                    {detailLoading ? (
-                        <FormSkeleton fields={5} className="flex flex-col flex-1 gap-4" />
-                    ) : (
-                        <form onSubmit={handleSubmit(run(onProductUpdate))} className="flex flex-col flex-1 gap-4">
-                            <div className="flex gap-12 flex-1">
-                                {/* First Column */}
-                                <div className="flex flex-col flex-1">
-                                    <h2 className="text-lg font-semibold mb-6">Update Product</h2>
-    
-                                    <div className="flex gap-6 mb-6">
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="name">Name</Label>
-                                            <Input id="name" type="text" {...register("name")} />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="unit">Unit</Label>
-                                            <Controller
-                                                name="unit"
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select Unit"></SelectValue>
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {units && Object.keys(units).length > 0 && Object.entries(units).map(([key, unit]) => (
-                                                                <SelectItem value={key} key={key}>
-                                                                    {unit.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            />
-                                        </div>
+                    <form onSubmit={handleSubmit(run(onProductUpdate))} className="flex flex-col flex-1 gap-4">
+                        <div className="flex gap-12 flex-1">
+                            {/* First Column */}
+                            <div className="flex flex-col flex-1">
+                                <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Update Product{detailLoading && <Spinner size={18} label="Loading" />}</h2>
+
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="name">Name</Label>
+                                        <Input id="name" type="text" {...register("name")} />
                                     </div>
-    
-                                    <div className="mb-6 space-y-1">
-                                        <Label htmlFor="desc">Description</Label>
-                                        <Textarea id="desc" {...register("desc")} placeholder="Add product description here..." rows={6} />
-                                    </div>
-                                </div>
-    
-                                {/* Second Column */}
-                                <div className="flex flex-col flex-1">
-                                    <h2 className="text-lg font-semibold mb-6">Update Product Variants</h2>
-    
-                                    {/* Attribute rows — the heading only appears once an attribute has been picked.
-                                        Label + space-y-1 on a block wrapper, exactly as the left column does it:
-                                        the inline <label> takes the parent's line box, so these rows land on the
-                                        same baseline as the Name and Unit fields instead of 10px above them. */}
-                                    {attributeCount > 0 && <div className="space-y-1 mb-2">
-                                        <Label className="font-semibold">Variant Configuration</Label>
-    
-                                        <div className="flex flex-col gap-2">
-                                        {Object.entries(currentAttributes).map(([key, value], entryIndex) => (
-                                            <div
-                                                key={`${entryIndex}`}
-                                                className="flex w-full gap-4"
-                                            >
-                                                <div className="w-[50%] space-y-1">
-                                                    <Input
-                                                        id="productVariantKey"
-                                                        type="text"
-                                                        disabled={true}
-                                                        value={key}
-                                                        className="bg-muted disabled:opacity-100 disabled:text-foreground"
-                                                    />
-                                                </div>
-    
-                                                <div className="w-[50%] space-y-1">
-                                                    <Input
-                                                        id="productVariantVal"
-                                                        type="text"
-                                                        value={currentAttributes[key]}
-                                                        onChange={(e) => setCurrentAttributes((prev) => ({
-                                                            ...prev,
-                                                            [key]: e.target.value,   // update only this key
-                                                        }))
-                                                        }
-                                                    />
-                                                </div>
-    
-                                                <div className="w-[5%] space-y-1">
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        onClick={() =>
-                                                            setCurrentAttributes((prev) => Object.fromEntries(
-                                                                Object.entries(prev).filter(([attrKey]) => attrKey !== key)
-                                                            ))
-                                                        }
-                                                        className="w-full"
-                                                    >
-                                                        <X />
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                        </div>
-                                    </div>}
-    
-                                    {/* Pick, build and reset all sit on one row */}
-                                    <div className="flex gap-4 mb-2 items-end">
-                                        <div className="w-[50%] space-y-1">
-                                            <Label htmlFor="productVariantAttr">Add Attribute</Label>
-                                            <Controller
-                                                name="productVariantAttr"
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Combobox
-                                                        id="productVariantAttr"
-                                                        options={variantTypeOptions}
-                                                        value={field.value}
-                                                        disabled={maxAttributesReached}
-                                                        onChange={(value) => {
-                                                            if (!value) return   // the clear path, not a pick
-                                                            addProductVariantAttr(value)
-                                                            field.onChange("")   // back to the placeholder
-                                                        }}
-                                                        loading={variantTypesLoading}
-                                                        placeholder={maxAttributesReached ? "Max. 3 attributes allowed" : "Select Attribute"}
-                                                        emptyText="No attributes defined yet."
-                                                        notFoundText="No attribute matches that."
-                                                    />
-                                                )}
-                                            />
-                                        </div>
-    
-                                        <div className="w-[50%] flex items-end">
-                                            <Button
-                                                type="button"
-                                                onClick={selectedVariant ? updateProductVariant : addProductVariant}
-                                                className="w-full"
-                                                disabled={!variantReady}
-                                            >
-                                                {selectedVariant ?
-                                                    <>
-                                                        <RefreshCcwIcon className="h-4 w-4 mr-2" />
-                                                        Update Variant
-                                                    </>
-                                                    :
-                                                    <>
-                                                        <Plus className="h-4 w-4 mr-2" />
-                                                        Create Variant
-                                                    </>
-                                                }
-                                            </Button>
-                                        </div>
-    
-                                        <div className="w-[5%] space-y-1">
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                onClick={() => {
-                                                    setSelectedVariant(null)
-                                                    setCurrentAttributes({})
-                                                }}
-                                                className="w-full"
-                                            >
-                                                <RotateCcwIcon />
-                                            </Button>
-                                        </div>
-                                    </div>
-    
-                                    {/* Ends flush with the Create Variant button, clear of the reset column */}
-                                    <div className="flex gap-4 mb-2">
-                                        <SearchField
-                                          id="variantSearch"
-                                          placeholder="Search variants"
-                                          value={variantSearchTerm}
-                                          onChange={setVariantSearchTerm}
-                                          className="w-full"
-                                          wrapperClassName="w-full"
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="unit">Unit</Label>
+                                        <Controller
+                                            name="unit"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select Unit"></SelectValue>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {units && Object.keys(units).length > 0 && Object.entries(units).map(([key, unit]) => (
+                                                            <SelectItem value={key} key={key}>
+                                                                {unit.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
                                         />
-                                        <div className="w-[5%]"></div>
                                     </div>
-    
-                                    {/* Product Variants */}
-                                    {productVariants && productVariants.length > 0 &&
-                                        <div className="mb-6">
-                                            <div className="flex flex-col gap-[2px] h-[250px] overflow-y-auto">
-    
-                                                {visibleVariants.map(({ item, index }) => (
-                                                    <div
-                                                        key={`${item.id}-${index}`}
-                                                        className="flex gap-4 items-center"
-                                                    >
-                                                        <div
-                                                            className={
-                                                                `flex-1 bg-card rounded-lg h-[35px] flex cursor-pointer items-center px-4 gap-4
-                                                                ${selectedVariant === item ? "border-2 border-[#4285F4]" : "border border-border"}`
-                                                            }
-                                                            onClick={() => handleVariantSelection(item)}
-                                                        >
-                                                            <div>{index + 1}.</div>
-                                                            {<div className="font-sm flex flex-1">
-                                                                {
-                                                                    item.attributes && Object.keys(item.attributes).length > 0 ?
-                                                                        Object.values(item.attributes).join(" / ") :
-                                                                        'default'
-                                                                }
-                                                            </div>}
-                                                        </div>
-    
-                                                        <div className="w-[5%]">
-                                                            <Button
-                                                                type="button"
-                                                                variant="unstyled"
-                                                                className="p-[0] w-full hover:text-destructive"
-                                                                onClick={() => handleVariantDeletion(index)}
-                                                            >
-                                                                <Trash2 cursor={'pointer'} />
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    }
+                                </div>
+
+                                <div className="mb-6 space-y-1">
+                                    <Label htmlFor="desc">Description</Label>
+                                    <Textarea id="desc" {...register("desc")} placeholder="Add product description here..." rows={6} />
                                 </div>
                             </div>
-    
-                            <div className="flex justify-end mt-auto">
-                                <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Product and Variants</SubmitButton>
+
+                            {/* Second Column */}
+                            <div className="flex flex-col flex-1">
+                                <h2 className="text-lg font-semibold mb-6">Update Product Variants</h2>
+
+                                {/* Attribute rows — the heading only appears once an attribute has been picked.
+                                    Label + space-y-1 on a block wrapper, exactly as the left column does it:
+                                    the inline <label> takes the parent's line box, so these rows land on the
+                                    same baseline as the Name and Unit fields instead of 10px above them. */}
+                                {attributeCount > 0 && <div className="space-y-1 mb-2">
+                                    <Label className="font-semibold">Variant Configuration</Label>
+
+                                    <div className="flex flex-col gap-2">
+                                    {Object.entries(currentAttributes).map(([key, value], entryIndex) => (
+                                        <div
+                                            key={`${entryIndex}`}
+                                            className="flex w-full gap-4"
+                                        >
+                                            <div className="w-[50%] space-y-1">
+                                                <Input
+                                                    id="productVariantKey"
+                                                    type="text"
+                                                    disabled={true}
+                                                    value={key}
+                                                    className="bg-muted disabled:opacity-100 disabled:text-foreground"
+                                                />
+                                            </div>
+
+                                            <div className="w-[50%] space-y-1">
+                                                <Input
+                                                    id="productVariantVal"
+                                                    type="text"
+                                                    value={currentAttributes[key]}
+                                                    onChange={(e) => setCurrentAttributes((prev) => ({
+                                                        ...prev,
+                                                        [key]: e.target.value,   // update only this key
+                                                    }))
+                                                    }
+                                                />
+                                            </div>
+
+                                            <div className="w-[5%] space-y-1">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        setCurrentAttributes((prev) => Object.fromEntries(
+                                                            Object.entries(prev).filter(([attrKey]) => attrKey !== key)
+                                                        ))
+                                                    }
+                                                    className="w-full"
+                                                >
+                                                    <X />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    </div>
+                                </div>}
+
+                                {/* Pick, build and reset all sit on one row */}
+                                <div className="flex gap-4 mb-2 items-end">
+                                    <div className="w-[50%] space-y-1">
+                                        <Label htmlFor="productVariantAttr">Add Attribute</Label>
+                                        <Controller
+                                            name="productVariantAttr"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Combobox
+                                                    id="productVariantAttr"
+                                                    options={variantTypeOptions}
+                                                    value={field.value}
+                                                    disabled={maxAttributesReached}
+                                                    onChange={(value) => {
+                                                        if (!value) return   // the clear path, not a pick
+                                                        addProductVariantAttr(value)
+                                                        field.onChange("")   // back to the placeholder
+                                                    }}
+                                                    loading={variantTypesLoading}
+                                                    placeholder={maxAttributesReached ? "Max. 3 attributes allowed" : "Select Attribute"}
+                                                    emptyText="No attributes defined yet."
+                                                    notFoundText="No attribute matches that."
+                                                />
+                                            )}
+                                        />
+                                    </div>
+
+                                    <div className="w-[50%] flex items-end">
+                                        <Button
+                                            type="button"
+                                            onClick={selectedVariant ? updateProductVariant : addProductVariant}
+                                            className="w-full"
+                                            disabled={!variantReady}
+                                        >
+                                            {selectedVariant ?
+                                                <>
+                                                    <RefreshCcwIcon className="h-4 w-4 mr-2" />
+                                                    Update Variant
+                                                </>
+                                                :
+                                                <>
+                                                    <Plus className="h-4 w-4 mr-2" />
+                                                    Create Variant
+                                                </>
+                                            }
+                                        </Button>
+                                    </div>
+
+                                    <div className="w-[5%] space-y-1">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => {
+                                                setSelectedVariant(null)
+                                                setCurrentAttributes({})
+                                            }}
+                                            className="w-full"
+                                        >
+                                            <RotateCcwIcon />
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Ends flush with the Create Variant button, clear of the reset column */}
+                                <div className="flex gap-4 mb-2">
+                                    <SearchField
+                                      id="variantSearch"
+                                      placeholder="Search variants"
+                                      value={variantSearchTerm}
+                                      onChange={setVariantSearchTerm}
+                                      className="w-full"
+                                      wrapperClassName="w-full"
+                                    />
+                                    <div className="w-[5%]"></div>
+                                </div>
+
+                                {/* Product Variants */}
+                                {productVariants && productVariants.length > 0 &&
+                                    <div className="mb-6">
+                                        <div className="flex flex-col gap-[2px] h-[250px] overflow-y-auto">
+
+                                            {visibleVariants.map(({ item, index }) => (
+                                                <div
+                                                    key={`${item.id}-${index}`}
+                                                    className="flex gap-4 items-center"
+                                                >
+                                                    <div
+                                                        className={
+                                                            `flex-1 bg-card rounded-lg h-[35px] flex cursor-pointer items-center px-4 gap-4
+                                                            ${selectedVariant === item ? "border-2 border-[#4285F4]" : "border border-border"}`
+                                                        }
+                                                        onClick={() => handleVariantSelection(item)}
+                                                    >
+                                                        <div>{index + 1}.</div>
+                                                        {<div className="font-sm flex flex-1">
+                                                            {
+                                                                item.attributes && Object.keys(item.attributes).length > 0 ?
+                                                                    Object.values(item.attributes).join(" / ") :
+                                                                    'default'
+                                                            }
+                                                        </div>}
+                                                    </div>
+
+                                                    <div className="w-[5%]">
+                                                        <Button
+                                                            type="button"
+                                                            variant="unstyled"
+                                                            className="p-[0] w-full hover:text-destructive"
+                                                            onClick={() => handleVariantDeletion(index)}
+                                                        >
+                                                            <Trash2 cursor={'pointer'} />
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                }
                             </div>
-                        </form>
-                    )}
+                        </div>
+
+                        <div className="flex justify-end mt-auto">
+                            <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Product and Variants</SubmitButton>
+                        </div>
+                    </form>
                 </main>
             </div>
         </div>

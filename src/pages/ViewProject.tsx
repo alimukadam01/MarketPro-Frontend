@@ -34,11 +34,15 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { ArrowLeft, ArrowRight, CheckCircle2Icon, Edit, Edit2, Plus, Trash, Trash2, X } from "lucide-react";
 import { Checkbox } from "@radix-ui/react-checkbox";
 import { Combobox } from "@/components/ui/combobox";
+import { Spinner } from "@/components/ui/spinner";
 
 const ViewProject = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [customers, setCustomers] = useState([]);
     const [customersLoading, setCustomersLoading] = useState(true);
+    // The project itself, which feeds the whole page. Reported beside the title,
+    // the same way the Update pages do it.
+    const [detailLoading, setDetailLoading] = useState(true);
     const [step, setStep] = useState(1);
     const [success, setSuccess] = useState(false);
     const [products, setProducts] = useState([]);
@@ -246,7 +250,7 @@ const ViewProject = () => {
             }
         }
 
-        fetchProject()
+        fetchProject().finally(() => setDetailLoading(false))
     }, [products, project_id])
 
     {
@@ -269,7 +273,10 @@ const ViewProject = () => {
                     <div className="grid grid-cols-2 gap-4">
                         {/* Col 1 Row 1: Project Details */}
                         <div className="flex flex-col border border-light rounded-lg bg-card px-2 py-2">
-                            <h2 className="text-xl font-semibold mb-2">Project Details</h2>
+                            <h2 className="flex items-center gap-3 text-xl font-semibold mb-2">
+                                Project Details
+                                {detailLoading && <Spinner size={18} label="Loading" />}
+                            </h2>
                             <Input id="name" className="text-xl font-semibold mb-2 w-fit" type="text" {...register("name", { required: "Name is required", onChange: (e) => handleFieldPatch(`/projects/${project_id}/`, "name", e.target.value) })} />
                             <Textarea
                                 id="desc"

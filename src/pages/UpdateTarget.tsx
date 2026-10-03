@@ -19,13 +19,13 @@ import {
 } from "../../services/api";
 import { todayForInput } from "../../services/utils";
 import { usePending } from "@/hooks/use-pending";
-import { FormSkeleton } from "@/components/ui/form-skeleton";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdateTarget = () => {
   const { pending, run } = usePending();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  // True until the record arrives. The form is not rendered before
-  // then, because reset() would overwrite anything typed into it.
+  // True until the record arrives, which the spinner beside the title
+  // reports. A failure is the only thing that toasts.
   const [detailLoading, setDetailLoading] = useState(true);
   const [step, setStep] = useState(1);
   const [catalogue, setCatalogue] = useState([]);
@@ -271,8 +271,9 @@ const UpdateTarget = () => {
               onClick={() => navigate("/targets")}
             />
             <div>
-              <h1 className="text-2xl font-semibold">
+              <h1 className="flex items-center gap-3 text-2xl font-semibold">
                 {target ? target.name : "Target"}
+                {detailLoading && <Spinner size={18} label="Loading" />}
               </h1>
               {target && (
                 <p className="text-sm text-muted-foreground">
@@ -338,32 +339,28 @@ const UpdateTarget = () => {
               </div>
             </>
           ) : (
-            detailLoading ? (
-                <FormSkeleton fields={2} className="flex flex-col flex-1" />
-            ) : (
-                <form
-                  className="flex flex-col flex-1"
-                  onSubmit={handleSubmit(run(onTargetUpdate))}
-                >
-                  <TargetForm
-                                    pending={pending}
-                    register={register}
-                    control={control}
-                    watch={watch}
-                    setValue={setValue}
-                    trigger={trigger}
-                    errors={errors}
-                    step={step}
-                    setStep={setStep}
-                    catalogue={catalogue}
-                    entities={entities}
-                    filters={filters}
-                    setFilters={setFilters}
-                    submitLabel="Save Target"
-                    success={success}
-                  />
-                </form>
-            )
+            <form
+              className="flex flex-col flex-1"
+              onSubmit={handleSubmit(run(onTargetUpdate))}
+            >
+              <TargetForm
+                                pending={pending}
+                register={register}
+                control={control}
+                watch={watch}
+                setValue={setValue}
+                trigger={trigger}
+                errors={errors}
+                step={step}
+                setStep={setStep}
+                catalogue={catalogue}
+                entities={entities}
+                filters={filters}
+                setFilters={setFilters}
+                submitLabel="Save Target"
+                success={success}
+              />
+            </form>
           )}
         </main>
       </div>
