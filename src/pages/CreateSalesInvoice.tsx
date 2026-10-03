@@ -527,7 +527,6 @@ const CreateSalesInvoice = () => {
                       emptyText="No projects yet."
                       notFoundText="No project matches that."
                       clearable
-                      clearLabel="No project"
                     />
                   )}
                 />
