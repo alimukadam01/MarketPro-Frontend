@@ -298,16 +298,18 @@ export function Combobox({
                       value={option}
                       disabled={option.disabled}
                       className={cn(
-                        // px-2, not the pl-8 a Select row uses to reserve a gutter
-                        // for its tick. The tick sits at the end here instead, so
-                        // every label starts hard against the left edge - in a
-                        // narrow dropdown an 8-unit gutter read as centred text.
-                        "flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none",
+                        // SelectItem's own padding, kept to the character: the
+                        // pl-8 reserves the left gutter the tick sits in, so rows
+                        // line up with every other dropdown in the app.
+                        "relative flex w-full cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none",
                         "data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",
                         "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
                       )}
                     >
-                      <ComboboxPrimitive.ItemIndicator className="order-last ml-auto flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                      {/* Absolute, in the gutter. Base UI mounts the indicator
+                          only for the selected row, so in the flow it would shift
+                          that row's text out of line with the rest. */}
+                      <ComboboxPrimitive.ItemIndicator className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
                         <Check className="h-4 w-4" />
                       </ComboboxPrimitive.ItemIndicator>
                       <span>{option.label}</span>
