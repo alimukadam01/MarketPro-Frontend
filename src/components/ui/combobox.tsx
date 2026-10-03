@@ -1,15 +1,8 @@
 import * as React from "react";
+import { Command as CommandPrimitive } from "cmdk";
 import { Check, ChevronsUpDown, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
@@ -18,9 +11,9 @@ export interface ComboboxOption {
   value: string;
   label: string;
   /**
-   * Extra text to match a search against, beyond the label: a business name, a
+   * Extra text a search should match, beyond the label: a business name, a
    * phone number, a variant. The id in `value` is always searchable too, so a
-   * user who knows the record number can type it.
+   * user who knows the record number can type that instead.
    */
   keywords?: string[];
   disabled?: boolean;
@@ -31,12 +24,10 @@ interface ComboboxProps {
   /** "" means nothing selected. */
   value?: string;
   onChange: (value: string) => void;
-  /** Trigger text when nothing is selected. */
   placeholder?: string;
-  searchPlaceholder?: string;
   /** Shown when the list came back empty - say what is missing, not "no results". */
   emptyText?: string;
-  /** Shown when a search matches none of the loaded options. */
+  /** Shown when what the user typed matches none of the loaded options. */
   notFoundText?: string;
   /** True while the options are still being fetched. */
   loading?: boolean;
@@ -49,34 +40,43 @@ interface ComboboxProps {
 }
 
 /**
- * A searchable picker for options that come from the API.
+ * A type-to-search picker for options that come from the API.
  *
  * Use it wherever the options are a fetched queryset - customers, suppliers,
  * products, accounts, projects. Plain Select is still right for a fixed set of
  * statuses or types: those are short, never load, and have nothing to search.
  *
- * Three things it does that Select cannot:
+ * THE FIELD IS THE SEARCH BOX. There is no separate search row inside the
+ * popup: the trigger is a real text input, so the user types straight into the
+ * field they are filling in and the list below narrows as they go.
  *
- *  - Search. A business with four hundred products cannot scroll a Select.
- *  - Say that options are still loading. An empty Select is indistinguishable
- *    from "this business has no customers", which is a different and much more
- *    alarming statement than "not loaded yet".
- *  - Say that the list is genuinely empty, in words, naming what is missing.
+ * Built on cmdk and Radix Popover, like the other 64 components here, rather
+ * than on the Base UI combobox the shadcn docs now show. Base UI is a second
+ * primitive family and a second dependency; this delivers the same behaviour
+ * with the primitives already in the project.
  *
- * FILTERING. cmdk matches the search against an item's `value` plus its
- * `keywords`, so `value` holding a numeric id would make a search for a name
- * match nothing at all. The label therefore goes into `keywords`, which is also
- * what makes the id searchable alongside it rather than instead of it.
+ * The popup is deliberately indistinguishable from a Select's: `overflow-hidden`
+ * with the scrollbar suppressed on the list, `max-h-96`, and a width that starts
+ * at the field's and grows to fit the longest option, capped at the space Radix
+ * says is available so a long product name cannot push it off screen.
  *
- * `onSelect` is deliberately ignored in favour of a closure: cmdk hands it the
- * item's value lowercased, which would corrupt any id that is not numeric.
+ * TWO PIECES OF STATE, not one. `query` is what the user has typed; the field
+ * shows the selected option's label whenever they are not typing. Keeping them
+ * separate is what lets the list show everything when the field is focused -
+ * with a single value, the field would arrive pre-filled with the current
+ * label, cmdk would filter by it, and the only option offered would be the one
+ * already chosen.
+ *
+ * FILTERING. cmdk matches a search against each item's `value` plus its
+ * `keywords`, so holding a numeric id in `value` - which is what the form
+ * stores - would make a search by name match nothing. The label goes into
+ * `keywords` instead, which also leaves the id searchable alongside it.
  */
 export function Combobox({
   options,
   value,
   onChange,
   placeholder = "Select an option",
-  searchPlaceholder = "Search…",
   emptyText = "Nothing to choose from yet.",
   notFoundText = "No match.",
   loading = false,
@@ -87,52 +87,114 @@ export function Combobox({
   className,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false);
+  const [query, setQuery] = React.useState("");
+  const [typing, setTyping] = React.useState(false);
 
   const selected = value ? options.find((o) => o.value === value) : undefined;
 
-  // A set value with no matching option means the options have not arrived yet -
+  // A set value with no matching option means the options have not arrived yet:
   // Update pages reset() the form from one request and load the list in another.
-  // Showing the placeholder there would read as "nothing selected", so the
-  // trigger waits visibly instead of making a claim.
   const awaitingLabel = Boolean(value) && !selected && loading;
 
+  const shown = typing ? query : selected?.label ?? "";
+
+  const close = React.useCallback(() => {
+    setOpen(false);
+    setTyping(false);
+    setQuery("");
+  }, []);
+
+  const commit = (option: ComboboxOption) => {
+    onChange(option.value);
+    close();
+  };
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          id={id}
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
+    <Popover open={open} onOpenChange={(next) => (next ? setOpen(true) : close())}>
+      {/* Command wraps BOTH the field and the list: cmdk needs one provider
+          around its Input and its List, and React context reaches through the
+          portal the popup renders into. */}
+      <Command
+        loop
+        className="overflow-visible bg-transparent"
+        // The field is outside the popup, so cmdk's own "jump to first item"
+        // behaviour would otherwise fight the input's cursor.
+        shouldFilter={!loading}
+      >
+        <PopoverAnchor asChild>
+          <div className={cn("relative", className)}>
+            <CommandPrimitive.Input
+              id={id}
+              value={shown}
+              disabled={disabled}
+              placeholder={placeholder}
+              onValueChange={(next) => {
+                setQuery(next);
+                setTyping(true);
+                setOpen(true);
+              }}
+              // Focusing clears the field so the whole list is offered rather
+              // than just the option already selected. Blur puts the label back.
+              onFocus={() => {
+                setTyping(true);
+                setQuery("");
+                setOpen(true);
+              }}
+              onBlur={() => {
+                setTyping(false);
+                setQuery("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  close();
+                  return;
+                }
+                if (!open && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+                  setOpen(true);
+                }
+              }}
+              className={cn(
+                // the project's Input, verbatim, so the field is
+                // indistinguishable from the ones beside it
+                "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-9 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+              )}
+            />
+            {/* Decorative: the input already opens on focus, and a focusable
+                control here would steal focus out of the field on mousedown. */}
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+              {awaitingLabel ? (
+                <Spinner size={16} label="Loading" />
+              ) : (
+                <ChevronsUpDown className="h-4 w-4 opacity-50" />
+              )}
+            </span>
+          </div>
+        </PopoverAnchor>
+
+        <PopoverContent
+          align="start"
+          // Focus stays in the field; the popup is a list the field drives.
+          onOpenAutoFocus={(event) => event.preventDefault()}
           className={cn(
-            "w-full justify-between font-normal",
-            !selected && !awaitingLabel && "text-muted-foreground",
-            className,
+            "w-auto p-0",
+            "min-w-[var(--radix-popover-trigger-width)]",
+            "max-w-[var(--radix-popover-content-available-width)]",
+            "max-h-96 overflow-hidden",
           )}
         >
-          {awaitingLabel ? (
-            <Spinner size={16} label="Loading" />
-          ) : (
-            <span className="truncate">{selected ? selected.label : placeholder}</span>
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-
-      {/* Matching the trigger's width keeps long product labels from blowing the
-          popover out to the edge of the viewport. */}
-      <PopoverContent
-        align="start"
-        className="w-[var(--radix-popover-trigger-width)] p-0"
-      >
-        <Command loop>
-          <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
+          <CommandList
+            className={cn(
+              "max-h-96",
+              // no-scrollbar is this project's own utility, already on the
+              // sidebar: the list still scrolls by wheel and cmdk still scrolls
+              // the active item into view, there is just no bar to see - which
+              // is how a Select's popup looks.
+              "no-scrollbar",
+            )}
+          >
             {loading ? (
-              // No CommandEmpty while loading, or an empty list would flash
-              // "No match" before the first option has had a chance to arrive.
+              // No CommandEmpty while loading, or an empty list would read as
+              // "no match" before the first option has had a chance to arrive.
               <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
                 <Spinner size={14} />
                 <span>Loading…</span>
@@ -147,13 +209,14 @@ export function Combobox({
                     <CommandItem
                       value="__clear__"
                       keywords={[clearLabel]}
+                      onMouseDown={(event) => event.preventDefault()}
                       onSelect={() => {
                         onChange("");
-                        setOpen(false);
+                        close();
                       }}
                       className="text-muted-foreground"
                     >
-                      <X className="mr-2 h-4 w-4" />
+                      <X className="mr-2 h-4 w-4 shrink-0" />
                       {clearLabel}
                     </CommandItem>
                   )}
@@ -163,10 +226,10 @@ export function Combobox({
                       value={option.value}
                       keywords={[option.label, ...(option.keywords ?? [])]}
                       disabled={option.disabled}
-                      onSelect={() => {
-                        onChange(option.value);
-                        setOpen(false);
-                      }}
+                      // Without this the field blurs on mousedown, which resets
+                      // the query and closes the popup before the click lands.
+                      onMouseDown={(event) => event.preventDefault()}
+                      onSelect={() => commit(option)}
                     >
                       <Check
                         className={cn(
@@ -174,15 +237,17 @@ export function Combobox({
                           option.value === value ? "opacity-100" : "opacity-0",
                         )}
                       />
-                      <span className="truncate">{option.label}</span>
+                      {/* No truncate: the popup grows to the longest option, the
+                          way a Select's does. */}
+                      <span>{option.label}</span>
                     </CommandItem>
                   ))}
                 </CommandGroup>
               </>
             )}
           </CommandList>
-        </Command>
-      </PopoverContent>
+        </PopoverContent>
+      </Command>
     </Popover>
   );
 }

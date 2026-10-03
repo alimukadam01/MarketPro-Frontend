@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner"
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -313,7 +313,6 @@ const CreateSalesInvoice = () => {
                         onChange={field.onChange}
                         loading={customersLoading}
                         placeholder="Select customer"
-                        searchPlaceholder="Search customers…"
                         emptyText="No customers yet. Add one first."
                         notFoundText="No customer matches that."
                       />
@@ -400,7 +399,6 @@ const CreateSalesInvoice = () => {
                         onChange={field.onChange}
                         loading={productsLoading}
                         placeholder="Select product"
-                        searchPlaceholder="Search products…"
                         emptyText="No stocked products yet."
                         notFoundText="No product matches that."
                       />
@@ -526,7 +524,6 @@ const CreateSalesInvoice = () => {
                       onChange={(val) => field.onChange(val || null)}
                       loading={projectsLoading}
                       placeholder="Add to project"
-                      searchPlaceholder="Search projects…"
                       emptyText="No projects yet."
                       notFoundText="No project matches that."
                       clearable
