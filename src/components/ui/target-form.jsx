@@ -19,6 +19,7 @@ import {
   productsAPIPackage,
   suppliersAPIPackage,
 } from "../../../services/api";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const TOTAL_STEPS = 5;
 
@@ -80,6 +81,9 @@ const TargetForm = ({
   setFilters,
   submitLabel = "Create Target",
   success = false,
+  // The <form> is in CreateTarget/UpdateTarget, so the flag has to come down
+  // from there; this component only renders the button.
+  pending = false,
 }) => {
   const dataPointCode = watch("data_point");
   const scopeType = watch("scope_type");
@@ -809,13 +813,15 @@ const TargetForm = ({
                 <ArrowLeft />
                 Back
               </Button>
-              <Button
+              <SubmitButton
                 type="submit"
+                pending={pending}
+                pendingLabel="Saving…"
                 className={`transition-colors duration-300 ease-in-out ${success ? "bg-[#4BB543]" : ""}`}
               >
                 <CheckCircle2Icon />
                 {submitLabel}
-              </Button>
+              </SubmitButton>
             </div>
           </div>
 

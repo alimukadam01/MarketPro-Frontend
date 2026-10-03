@@ -1,36 +1,37 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom';
 import {
-  LogOut,
-  Search
+  LogOut
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { SearchField } from "@/components/ui/search-field";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import SearchItemsProvider from "@/components/ui/search-item-provider"
 import { toast } from "sonner"
 import { getUserInfo, globalSearch } from "../../../services/api"
-import { formatSearchQuery } from "../../../services/utils"
 import { useAuth } from '../../../services/AuthProvider'
+import { useDebouncedSearch } from "@/hooks/use-debounced-search"
 
 export function Header() {
 
   const { token } = useAuth()
   const { user } = useAuth()
-  const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([])
   const [isSearchResOpen, setIsSearchResOpen] = useState(false)
   const containerRef = useRef(null)
 
+  // Receives the query the hook has already formatted, so an emptied box arrives
+  // here as null. It used to arrive as no call at all, which left the previous
+  // query's results hanging open under an empty field until a click elsewhere.
   const performGlobalSearch = async (searchQuery) => {
     if (!token) return;
 
-    if (searchQuery.length > 0) {
-      setIsSearchResOpen(true);
-    } else {
+    if (!searchQuery) {
       setIsSearchResOpen(false);
+      return;
     }
+    setIsSearchResOpen(true);
 
     try {
       const res = await globalSearch(token, searchQuery);
@@ -43,16 +44,7 @@ export function Header() {
     }
   }
 
-  useEffect(() => {
-    const delayDebounce = setTimeout(async () => {
-      if (searchTerm.trim() !== "") {
-        const query = formatSearchQuery(searchTerm);
-        await performGlobalSearch(query);
-      }
-    }, 400); // wait 400ms after user stops typing
-
-    return () => clearTimeout(delayDebounce);
-  }, [searchTerm])
+  const { searchTerm, setSearchTerm, searching } = useDebouncedSearch(performGlobalSearch);
 
   useEffect(() => {
     function handleClickOutside(event) {
@@ -81,15 +73,15 @@ export function Header() {
       <div className="flex items-center justify-between">
         <div className="flex-1 max-w-md relative" ref={containerRef}>
           <div className="relative">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
+            <SearchField
               placeholder="Search for sales invoices, purchase invoices or anything else!"
-              className="pl-9"
+              className="w-full"
+              value={searchTerm}
+              onChange={setSearchTerm}
+              pending={searching}
               onFocus={() => {
                 if (searchResults.length > 0) setIsSearchResOpen(true);
               }}
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
 

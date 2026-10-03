@@ -47,8 +47,10 @@ const ViewCustomer = () => {
     // one field on this page that cannot be edited.
     const [isWalkIn, setIsWalkIn] = useState(false);
     const [summary, setSummary] = useState(null);
+    const [summaryLoading, setSummaryLoading] = useState(true);
     const [ledger, setLedger] = useState(null);
     const [opening, setOpening] = useState(null);
+    const [openingLoading, setOpeningLoading] = useState(true);
     const [openingAmount, setOpeningAmount] = useState("");
     const [openingDate, setOpeningDate] = useState(todayForInput());
     const [savingOpening, setSavingOpening] = useState(false);
@@ -123,6 +125,8 @@ const ViewCustomer = () => {
         } catch (error) {
             console.log("Error fetching customer summary:", error);
             toast.error("Failed to fetch customer summary.");
+        } finally {
+            setSummaryLoading(false);
         }
     };
 
@@ -150,6 +154,8 @@ const ViewCustomer = () => {
             }
         } catch (error) {
             console.log("Error fetching opening balance:", error);
+        } finally {
+            setOpeningLoading(false);
         }
     };
 
@@ -291,16 +297,19 @@ const ViewCustomer = () => {
                         <MetricCard
                             title="Outstanding Balance"
                             value={formatCurrency(summary?.balance)}
+                            loading={summaryLoading}
                         />
                         <MetricCard
                             title="Total Business"
                             value={formatCurrency(summary?.total_business)}
+                            loading={summaryLoading}
                         />
                         {canSeeAccounting && (
                             <MetricCard
                                 title="Opening Balance"
                                 value={formatCurrency(opening?.amount)}
                                 hint={openingHint}
+                                loading={openingLoading}
                             />
                         )}
                     </div>
@@ -332,7 +341,7 @@ const ViewCustomer = () => {
                                             onChange: (e) =>
                                                 patchField(endpoint, "name", e.target.value),
                                         })}
-                                    />
+                            />
                                     {isWalkIn && (
                                         <p className="text-xs text-muted-foreground">
                                             The counter-sale customer. Its name is fixed so
@@ -350,7 +359,7 @@ const ViewCustomer = () => {
                                             onChange: (e) =>
                                                 patchField(endpoint, "phone", e.target.value),
                                         })}
-                                    />
+                        />
                                 </div>
 
                                 <div className="space-y-1">
@@ -363,7 +372,7 @@ const ViewCustomer = () => {
                                             onChange: (e) =>
                                                 patchField(endpoint, "email", e.target.value),
                                         })}
-                                    />
+                        />
                                 </div>
                                 <div className="space-y-1">
                                     <Label>City</Label>

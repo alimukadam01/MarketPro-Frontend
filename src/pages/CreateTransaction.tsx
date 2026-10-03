@@ -38,6 +38,8 @@ import {
     pendingInvoicesOnly,
     todayForInput,
 } from "../../services/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 // Dropdown rows keyed by id, as createIdMap returns them. Typed loosely
 // because each picker holds a different shape - an account, a party or an
@@ -46,6 +48,7 @@ type PickerOption = Record<string, unknown>;
 type PickerOptions = Record<string, PickerOption>;
 
 const CreateTransaction = () => {
+  const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [accounts, setAccounts] = useState({});
     const [customers, setCustomers] = useState({});
@@ -398,7 +401,7 @@ const CreateTransaction = () => {
                     </div>
 
                     <form
-                        onSubmit={handleSubmit(onTransactionCreate)}
+                        onSubmit={handleSubmit(run(onTransactionCreate))}
                         className="flex flex-col flex-1 gap-4"
                     >
                         {/* Row One — both columns start together, so Reference lines up
@@ -585,7 +588,7 @@ const CreateTransaction = () => {
                                 </div>
 
                                 <div className="flex justify-end mt-auto">
-                                    <Button type="submit">Record Transaction</Button>
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Record Transaction</SubmitButton>
                                 </div>
                             </div>
                         </div>

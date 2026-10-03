@@ -62,8 +62,12 @@ const supplierCols = [
 const Ledgers = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [receivables, setReceivables] = useState(null);
+    // customerRows/supplierRows below are derived, so the flag tracks the
+    // two fetches that feed them rather than the arrays themselves.
+    const [loading, setLoading] = useState(true);
     const [payables, setPayables] = useState(null);
     const [profit, setProfit] = useState(null);
+    const [profitLoading, setProfitLoading] = useState(true);
     const { token, getPermissions } = useAuth();
     const permissions = getPermissions("accounting");
     const navigate = useNavigate();
@@ -101,6 +105,14 @@ const Ledgers = () => {
     useEffect(() => {
         if (!token) return;
 
+        // Two fetches feed the two tables; the tables stop shimmering when
+        // BOTH have answered, so neither can un-shimmer over missing data.
+        let outstanding = 2;
+        const settle = () => {
+            outstanding -= 1;
+            if (outstanding <= 0) setLoading(false);
+        };
+
         const fetchReceivables = async () => {
             try {
                 const res = await getReceivables(token);
@@ -112,6 +124,8 @@ const Ledgers = () => {
             } catch (error) {
                 console.log("Error fetching receivables:", error);
                 toast.error("Failed to fetch receivables.");
+            } finally {
+                settle();
             }
         };
 
@@ -126,6 +140,8 @@ const Ledgers = () => {
             } catch (error) {
                 console.log("Error fetching payables:", error);
                 toast.error("Failed to fetch payables.");
+            } finally {
+                settle();
             }
         };
 
@@ -140,6 +156,8 @@ const Ledgers = () => {
             } catch (error) {
                 console.log("Error fetching profit estimate:", error);
                 toast.error("Failed to fetch profit estimate.");
+            } finally {
+              setProfitLoading(false);
             }
         };
 
@@ -188,14 +206,17 @@ const Ledgers = () => {
                                 <MetricCard
                                     title="Receivable"
                                     value={formatCurrency(receivables?.total)}
+                                    loading={loading}
                                 />
                                 <MetricCard
                                     title="Payable"
                                     value={formatCurrency(payables?.total)}
+                                    loading={loading}
                                 />
                                 <MetricCard
                                     title="Profit this month (estimated)"
                                     value={formatCurrency(profit?.this_month?.profit)}
+                                    loading={profitLoading}
                                 />
                             </div>
 
@@ -206,30 +227,21 @@ const Ledgers = () => {
                             </p>
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="bg-card rounded-lg p-6 border">
-                                    <div className="text-sm text-muted-foreground mb-2">
-                                        Receivable 0&ndash;30 days
-                                    </div>
-                                    <div className="text-3xl font-bold">
-                                        {formatCurrency(receivables?.aging?.current)}
-                                    </div>
-                                </div>
-                                <div className="bg-card rounded-lg p-6 border">
-                                    <div className="text-sm text-muted-foreground mb-2">
-                                        Receivable 31&ndash;60 days
-                                    </div>
-                                    <div className="text-3xl font-bold">
-                                        {formatCurrency(receivables?.aging?.days_31_60)}
-                                    </div>
-                                </div>
-                                <div className="bg-card rounded-lg p-6 border">
-                                    <div className="text-sm text-muted-foreground mb-2">
-                                        Receivable over 60 days
-                                    </div>
-                                    <div className="text-3xl font-bold">
-                                        {formatCurrency(receivables?.aging?.days_over_60)}
-                                    </div>
-                                </div>
+                                <MetricCard
+                                  title="Receivable 0&ndash;30 days"
+                                  value={formatCurrency(receivables?.aging?.current)}
+                                  loading={loading}
+                                />
+                                <MetricCard
+                                  title="Receivable 31&ndash;60 days"
+                                  value={formatCurrency(receivables?.aging?.days_31_60)}
+                                  loading={loading}
+                                />
+                                <MetricCard
+                                  title="Receivable over 60 days"
+                                  value={formatCurrency(receivables?.aging?.days_over_60)}
+                                  loading={loading}
+                                />
                             </div>
 
                             {/* Customers who owe money */}
@@ -237,12 +249,13 @@ const Ledgers = () => {
                                 <h2 className="text-xl font-semibold">
                                     Customers with Outstanding Balance
                                 </h2>
-                                {customerRows.length > 0 ? (
+                                {loading || customerRows.length > 0 ? (
                                     <DataTable
                                         columns={customerCols}
                                         data={customerRows}
                                         selectedRows={[]}
                                         onRowClick={openCustomerLedger}
+                                        loading={loading}
                                     />
                                 ) : (
                                     <div className="bg-card rounded-lg p-6 border">
@@ -256,12 +269,13 @@ const Ledgers = () => {
                             {/* Suppliers we owe */}
                             <div className="space-y-4">
                                 <h2 className="text-xl font-semibold">Suppliers Owed</h2>
-                                {supplierRows.length > 0 ? (
+                                {loading || supplierRows.length > 0 ? (
                                     <DataTable
                                         columns={supplierCols}
                                         data={supplierRows}
                                         selectedRows={[]}
                                         onRowClick={openSupplierLedger}
+                                        loading={loading}
                                     />
                                 ) : (
                                     <div className="bg-card rounded-lg p-6 border">

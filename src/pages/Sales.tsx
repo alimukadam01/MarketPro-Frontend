@@ -4,13 +4,13 @@ import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   getStatusColor,
   getPaymentStatusColor,
   SalesInvoiceStatusMap,
   PaymentStatusMap,
-  formatSearchQuery,
   listCountLabel,
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
@@ -27,17 +27,18 @@ import {
   ArrowLeft,
   Plus,
   Filter,
-  Search,
   Edit,
   Trash2,
   Lock,
   Send,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import WalkInCustomer from "@/components/ui/walk-in-customer";
 import { useInvoiceActions } from "@/hooks/use-invoice-actions";
+import { Spinner } from "@/components/ui/spinner";
+import { SearchField } from "@/components/ui/search-field";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each customer.
 
@@ -139,10 +140,16 @@ const Sales = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [salesData, setSalesData] = useState(null);
-  const [totalSalesDaily, setTotalSalesDaily] = useState(0);
-  const [totalItemsSoldDaily, setTotalItemsSoldDaily] = useState(0);
-  const [totalInvoicesDaily, setTotalInvoicesDaily] = useState(0);
-  const [searchTerm, setSearchTerm] = useState("");
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
+  const [totalSalesDaily, setTotalSalesDaily] = useState(null);
+  const [totalSalesDailyLoading, setTotalSalesDailyLoading] = useState(true);
+  const [totalItemsSoldDaily, setTotalItemsSoldDaily] = useState(null);
+  const [totalItemsSoldDailyLoading, setTotalItemsSoldDailyLoading] = useState(true);
+  const [totalInvoicesDaily, setTotalInvoicesDaily] = useState(null);
+  const [totalInvoicesDailyLoading, setTotalInvoicesDailyLoading] = useState(true);
   const { token } = useAuth() || null;
   const { getPermissions } = useAuth()
   const permissions = getPermissions("sales")
@@ -162,28 +169,42 @@ const Sales = () => {
     );
   };
 
+  // Guards the delete the same way usePending guards a submit:
+
+  // the button stayed live through the request, so a bulk delete
+
+  // could be fired twice.
+
+  const [deleting, setDeleting] = useState(false);
+
   const handleDeletion = async () => {
-    if (selectedRows.length <= 0) return;
-
-    let is_deleted = false;
+    setDeleting(true);
     try {
-      if (selectedRows.length > 1) {
-        is_deleted = await bulkDeleteSalesInvoice(token, selectedRows);
-      } else {
-        console.log("Deleting single invoice with ID:", selectedRows[0]);
-        is_deleted = await deleteSalesInvoice(token, selectedRows[0]);
-      }
+      if (selectedRows.length <= 0) return;
 
-      if (is_deleted) {
-        toast.success("Sales invoices deleted successfully.");
-        setIsDeleted(!isDeleted);
-        setSelectedRows([]);
-      } else {
+      let is_deleted = false;
+      try {
+        if (selectedRows.length > 1) {
+          is_deleted = await bulkDeleteSalesInvoice(token, selectedRows);
+        } else {
+          console.log("Deleting single invoice with ID:", selectedRows[0]);
+          is_deleted = await deleteSalesInvoice(token, selectedRows[0]);
+        }
+
+        if (is_deleted) {
+          toast.success("Sales invoices deleted successfully.");
+          setIsDeleted(!isDeleted);
+          setSelectedRows([]);
+        } else {
+          toast.error("Failed to delete sales invoices.");
+        }
+      } catch (error) {
         toast.error("Failed to delete sales invoices.");
+        console.error(error);
       }
-    } catch (error) {
-      toast.error("Failed to delete sales invoices.");
-      console.error(error);
+  
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -207,6 +228,8 @@ const Sales = () => {
     } catch (error) {
       toast.error("Failed to fetch sales invoices.");
       console.error("Error fetching sales invoices:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -214,6 +237,8 @@ const Sales = () => {
     e.preventDefault();
     setFilterWindowOpen(!filterWindowOpen);
   };
+
+  const { searchTerm, setSearchTerm, searching } = useDebouncedSearch(fetchSalesInvoices);
 
   useEffect(() => {
 
@@ -230,6 +255,8 @@ const Sales = () => {
       } catch (error) {
         toast.error("Failed to fetch total sales data.");
         console.error("Error fetching total sales data:", error);
+      } finally {
+        setTotalSalesDailyLoading(false);
       }
     }
 
@@ -246,6 +273,8 @@ const Sales = () => {
       } catch (error) {
         toast.error("Failed to fetch total items sold data.");
         console.error("Error fetching total items sold data:", error);
+      } finally {
+        setTotalItemsSoldDailyLoading(false);
       }
     }
 
@@ -262,6 +291,8 @@ const Sales = () => {
       } catch (error) {
         toast.error("Failed to fetch total invoices data.");
         console.error("Error fetching total invoices data:", error);
+      } finally {
+        setTotalInvoicesDailyLoading(false);
       }
     }
 
@@ -271,18 +302,6 @@ const Sales = () => {
     fetchSalesInvoices();
   }, [token, isDeleted])
 
-  useEffect(() => {
-    const delayDebounce = setTimeout(async () => {
-      if (searchTerm.trim() !== "") {
-        const query = formatSearchQuery(searchTerm);
-        await fetchSalesInvoices(query);
-      } else {
-        await fetchSalesInvoices();
-      }
-    }, 400); // wait 400ms after user stops typing
-
-    return () => clearTimeout(delayDebounce);
-  }, [searchTerm])
 
   return (
     <div className="min-h-screen bg-background">
@@ -318,35 +337,23 @@ const Sales = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Sales Today
-              </div>
-              <div className="text-3xl font-bold">PKR {totalSalesDaily}</div>
-              {/* <div className="text-sm text-green-600 mt-1">
-                +12% from last yesterday
-              </div> */}
-            </div>
+            <MetricCard
+              title="Total Sales Today"
+              value={`PKR ${totalSalesDaily}`}
+              loading={totalSalesDailyLoading}
+            />
             
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Invoices Today
-              </div>
-              <div className="text-3xl font-bold">{totalInvoicesDaily}</div>
-              {/* <div className="text-sm text-green-600 mt-1">
-                +12% from last month
-              </div> */}
-            </div>
+            <MetricCard
+              title="Total Invoices Today"
+              value={totalInvoicesDaily}
+              loading={totalInvoicesDailyLoading}
+            />
             
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Items Sold Today
-              </div>
-              <div className="text-3xl font-bold">{totalItemsSoldDaily}</div>
-              {/* <div className="text-sm text-green-600 mt-1">
-                +12% from last year
-              </div> */}
-            </div>
+            <MetricCard
+              title="Total Items Sold Today"
+              value={totalItemsSoldDaily}
+              loading={totalItemsSoldDailyLoading}
+            />
             
           </div>
 
@@ -367,15 +374,12 @@ const Sales = () => {
             {/* Search and Filter */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input
-                    placeholder="Search sales by customer name or ID..."
-                    className="pl-10 w-80"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
+                <SearchField
+                  placeholder="Search sales by customer name or ID..."
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  pending={searching}
+                />
                 <Button
                   variant="outline"
                   className="flex items-center space-x-2"
@@ -435,26 +439,27 @@ const Sales = () => {
                   size="sm"
                   className="flex items-center space-x-2"
                   onClick={handleDeletion}
-                  disabled={selectedRows.length === 0 || !permissions["delete"]}
+                  disabled={deleting || selectedRows.length === 0 || !permissions["delete"]}
                 >
-                  {permissions["delete"] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                  {deleting ? <Spinner size={16} /> : permissions["delete"] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>Delete</span>
                 </Button>
               </div>
             </div>
 
-            {salesData && salesData.length > 0 ? (
+            {loading || (salesData && salesData.length > 0) ? (
               <DataTable columns={cols} headerOnly />
             ) : null}
           </div>
 
-          {salesData && salesData.length > 0 ? (
+          {loading || (salesData && salesData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? salesData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

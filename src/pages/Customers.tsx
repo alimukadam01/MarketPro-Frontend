@@ -7,9 +7,9 @@ import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
-  formatSearchQuery,
   transformCustomer,
   listCountLabel,
 } from "../../services/utils";
@@ -24,14 +24,15 @@ import {
   ArrowLeft,
   Plus,
   Filter,
-  Search,
   Edit,
   Trash2,
   Lock,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Spinner } from "@/components/ui/spinner";
+import { SearchField } from "@/components/ui/search-field";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -59,8 +60,14 @@ const Customers = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [customersData, setCustomersData] = useState(null);
-  const [totalCustomers, setTotalCustomers] = useState(0);
-  const [searchTerm, setSearchTerm] = useState("");
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
+  const [totalCustomers, setTotalCustomers] = useState(null);
+  // Its own flag: this counter and the table are separate
+  // requests, and one must not speak for the other.
+  const [totalCustomersLoading, setTotalCustomersLoading] = useState(true);
   const { token } = useAuth() || null;
   const { getPermissions } = useAuth()
   const permissions = getPermissions("customers")
@@ -74,28 +81,42 @@ const Customers = () => {
     );
   };
 
+  // Guards the delete the same way usePending guards a submit:
+
+  // the button stayed live through the request, so a bulk delete
+
+  // could be fired twice.
+
+  const [deleting, setDeleting] = useState(false);
+
   const handleDeletion = async () => {
-    if (selectedRows.length <= 0) return;
-
-    let is_deleted = false;
+    setDeleting(true);
     try {
-      if (selectedRows.length > 1) {
-        is_deleted = await bulkDeleteCustomers(token, selectedRows);
-      } else {
-        console.log("Deleting single invoice with ID:", selectedRows[0]);
-        is_deleted = await deleteCustomer(token, selectedRows[0]);
-      }
+      if (selectedRows.length <= 0) return;
 
-      if (is_deleted) {
-        toast.success("Customers deleted successfully.");
-        setIsDeleted(!isDeleted);
-        setSelectedRows([]);
-      } else {
+      let is_deleted = false;
+      try {
+        if (selectedRows.length > 1) {
+          is_deleted = await bulkDeleteCustomers(token, selectedRows);
+        } else {
+          console.log("Deleting single invoice with ID:", selectedRows[0]);
+          is_deleted = await deleteCustomer(token, selectedRows[0]);
+        }
+
+        if (is_deleted) {
+          toast.success("Customers deleted successfully.");
+          setIsDeleted(!isDeleted);
+          setSelectedRows([]);
+        } else {
+          toast.error("Failed to delete customers.");
+        }
+      } catch (error) {
         toast.error("Failed to delete customers.");
+        console.error(error);
       }
-    } catch (error) {
-      toast.error("Failed to delete customers.");
-      console.error(error);
+  
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -119,6 +140,8 @@ const Customers = () => {
     } catch (error) {
       toast.error("Failed to fetch customers.");
       console.error("Error fetching customers:", error);
+    } finally {
+        setLoading(false);
     }
   }
 
@@ -126,6 +149,8 @@ const Customers = () => {
     e.preventDefault();
     setFilterWindowOpen(!filterWindowOpen);
   };
+
+  const { searchTerm, setSearchTerm, searching } = useDebouncedSearch(fetchCustomers);
 
   useEffect(() => {
 
@@ -142,6 +167,8 @@ const Customers = () => {
       } catch (error) {
         toast.error("Failed to fetch total customers.");
         console.error("Error fetching total customers:", error);
+      } finally {
+        setTotalCustomersLoading(false);
       }
     }
 
@@ -149,18 +176,6 @@ const Customers = () => {
     fetchCustomers();
   }, [token, isDeleted])
 
-  useEffect(() => {
-    const delayDebounce = setTimeout(async () => {
-      if (searchTerm.trim() !== "") {
-        const query = formatSearchQuery(searchTerm);
-        await fetchCustomers(query);
-      } else {
-        await fetchCustomers();
-      }
-    }, 400); // wait 400ms after user stops typing
-
-    return () => clearTimeout(delayDebounce);
-  }, [searchTerm])
 
   return (
     <div className="min-h-screen bg-background">
@@ -195,12 +210,11 @@ const Customers = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Customers
-              </div>
-              <div className="text-3xl font-bold">{ totalCustomers }</div>
-            </div>
+            <MetricCard
+              title="Total Customers"
+              value={totalCustomers}
+              loading={totalCustomersLoading}
+            />
           </div>
 
           {/* Sales Records Section */}
@@ -219,15 +233,12 @@ const Customers = () => {
             {/* Search and Filter */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input
-                    placeholder="Search Customers"
-                    className="pl-10 w-80"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
+                <SearchField
+                  placeholder="Search Customers"
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  pending={searching}
+                />
                 <Button
                   variant="outline"
                   className="flex items-center space-x-2"
@@ -268,26 +279,27 @@ const Customers = () => {
                   size="sm"
                   className="flex items-center space-x-2"
                   onClick={handleDeletion}
-                  disabled={selectedRows.length === 0 || !permissions['delete']}
+                  disabled={deleting || selectedRows.length === 0 || !permissions['delete']}
                 >
-                  {permissions['delete']? <Trash2 className="w-4 h-4" />: <Lock className="w-4 h-4" />}
+                  {deleting ? <Spinner size={16} /> : permissions['delete'] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>Delete</span>
                 </Button>
               </div>
             </div>
 
-            {customersData && customersData.length > 0 ? (
+            {loading || (customersData && customersData.length > 0) ? (
               <DataTable columns={cols} headerOnly />
             ) : null}
           </div>
 
-          {customersData && customersData.length > 0 ? (
+          {loading || (customersData && customersData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"]? customersData: null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

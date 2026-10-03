@@ -18,8 +18,10 @@ import {
   targetsAPIPackage,
 } from "../../services/api";
 import { todayForInput } from "../../services/utils";
+import { usePending } from "@/hooks/use-pending";
 
 const UpdateTarget = () => {
+  const { pending, run } = usePending();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [step, setStep] = useState(1);
   const [catalogue, setCatalogue] = useState([]);
@@ -334,9 +336,10 @@ const UpdateTarget = () => {
           ) : (
             <form
               className="flex flex-col flex-1"
-              onSubmit={handleSubmit(onTargetUpdate)}
+              onSubmit={handleSubmit(run(onTargetUpdate))}
             >
               <TargetForm
+                                pending={pending}
                 register={register}
                 control={control}
                 watch={watch}

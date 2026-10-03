@@ -12,8 +12,10 @@ import { useForm } from "react-hook-form";
 import { useAuth } from "../../services/AuthProvider";
 import { getTargetCatalogue, targetsAPIPackage } from "../../services/api";
 import { todayForInput } from "../../services/utils";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateTarget = () => {
+  const { pending, run } = usePending();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [step, setStep] = useState(1);
   const [catalogue, setCatalogue] = useState([]);
@@ -170,9 +172,10 @@ const CreateTarget = () => {
 
           <form
             className="flex flex-col flex-1"
-            onSubmit={handleSubmit(onTargetCreate)}
+            onSubmit={handleSubmit(run(onTargetCreate))}
           >
             <TargetForm
+                                pending={pending}
               register={register}
               control={control}
               watch={watch}

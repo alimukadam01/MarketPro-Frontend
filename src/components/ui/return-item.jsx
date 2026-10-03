@@ -3,6 +3,7 @@ import * as DialogUI from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner";
@@ -22,27 +23,35 @@ function ReturnItem({
   const [isDamaged, setIsDamaged] = useState(false);
   const [reason, setReason] = useState("");
 
+  const [returning, setReturning] = useState(false);
+
   const onReturnItemClick = async () => {
+    setReturning(true);
     try {
-      const isReturned = await returnSalesInvoiceItem(
-        token,
-        invoiceId,
-        invoiceItem.id,
-        quantity,
-        reason
-      );
+      try {
+        const isReturned = await returnSalesInvoiceItem(
+          token,
+          invoiceId,
+          invoiceItem.id,
+          quantity,
+          reason
+        );
 
-      if (isReturned) {
-        toast.success("Item returned successfully!");
-        if (setOpen) setOpen(false);
-        if (setItemReturned) setItemReturned(true);
-        return;
+        if (isReturned) {
+          toast.success("Item returned successfully!");
+          if (setOpen) setOpen(false);
+          if (setItemReturned) setItemReturned(true);
+          return;
+        }
+
+        toast.error("There was an error returning the item. Try Again.");
+      } catch (error) {
+        console.log("There was an error returning the item: ", error);
+        toast.error("There was an error returning the item. Try Again.");
       }
-
-      toast.error("There was an error returning the item. Try Again.");
-    } catch (error) {
-      console.log("There was an error returning the item: ", error);
-      toast.error("There was an error returning the item. Try Again.");
+  
+    } finally {
+      setReturning(false);
     }
   };
 
@@ -85,9 +94,14 @@ function ReturnItem({
         </div>
 
         <DialogUI.DialogFooter className="flex gap-2">
-          <Button onClick={onReturnItemClick} type="button">
+          <SubmitButton
+            onClick={onReturnItemClick}
+            type="button"
+            pending={returning}
+            pendingLabel="Returning…"
+          >
             Return Item
-          </Button>
+          </SubmitButton>
         </DialogUI.DialogFooter>
       </DialogUI.DialogContent>
     </DialogUI.Dialog>

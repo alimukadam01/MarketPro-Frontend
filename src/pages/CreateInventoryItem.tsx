@@ -22,8 +22,11 @@ import {
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { set } from "date-fns";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateInventoryItem = () => {
+  const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [productCreated, setProductCreated] = useState(false)
@@ -235,7 +238,7 @@ const CreateInventoryItem = () => {
                     <DynamicBreadCrumb />
 
                     <div className="flex items-center justify-between">
-                        {/*<form onSubmit={handleSubmit(onProductCreate)} className="flex flex-row w-[48%] gap-12">
+                        {/*<form onSubmit={handleSubmit(run(onProductCreate))} className="flex flex-row w-[48%] gap-12">
                             First Column
                              <div className="flex flex-col flex-wrap flex-1">
                                 <h2 className="text-lg font-semibold mb-6">Add New Product (Optional)</h2>
@@ -438,13 +441,13 @@ const CreateInventoryItem = () => {
                                 </div>
 
                                 <div className="flex justify-end gap-3 mt-auto">
-                                    <Button type="submit">Create Product And Variants</Button>
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Product And Variants</SubmitButton>
                                 </div>
                             </div>
                                 
                         </form> */}
 
-                        <form onSubmit={handleSubmit(onInventoryItemCreate)} className="flex flex-row w-[48%] gap-12">
+                        <form onSubmit={handleSubmit(run(onInventoryItemCreate))} className="flex flex-row w-[48%] gap-12">
 
                             {/* Second Column */}
                             <div className="flex flex-col flex-wrap flex-1">
@@ -539,7 +542,7 @@ const CreateInventoryItem = () => {
                                 </div>
 
                                 <div className="flex justify-end gap-3 mt-auto">
-                                    <Button type="submit">Create Inventory Item</Button>
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Inventory Item</SubmitButton>
                                 </div>
                             </div>
                         </form>

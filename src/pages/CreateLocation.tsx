@@ -11,8 +11,11 @@ import { useForm, Controller } from "react-hook-form";
 import { locationsAPIPackage } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateLocation = () => {
+  const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const { token } = useAuth()
     const navigate = useNavigate();
@@ -57,7 +60,7 @@ const CreateLocation = () => {
 
                     <div className="flex items-center justify-between">
                         <form
-                            onSubmit={handleSubmit(onLocationCreate)}
+                            onSubmit={handleSubmit(run(onLocationCreate))}
                             className="flex flex-row w-[48%] gap-12"
                         >
                             {/* First Column */}
@@ -83,7 +86,7 @@ const CreateLocation = () => {
                                 </div>
 
                                 <div className="flex justify-end gap-3 mt-auto">
-                                    <Button type="submit">Create Location</Button>
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Location</SubmitButton>
                                 </div>
                             </div>
                         </form>

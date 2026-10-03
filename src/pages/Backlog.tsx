@@ -4,24 +4,25 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
-import { formatSearchQuery, formatDate, getImageUrl, listCountLabel } from "../../services/utils";
+import { formatDate, getImageUrl, listCountLabel } from "../../services/utils";
 import {
   backlogEntriesAPIPackage,
   toggleBacklogEntryStatus,
 } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider";
+import { SearchField } from "@/components/ui/search-field";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import {
   ArrowLeft,
   Plus,
-  Search,
   Edit,
   Trash2,
   Lock,
   CheckCircle2,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Spinner } from "@/components/ui/spinner";
 
 const cols = [
   { key: "id", label: "ID" },
@@ -94,7 +95,10 @@ const Backlog = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [backlogData, setBacklogData] = useState(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
   const [isDeleted, setIsDeleted] = useState(false);
   const { token, user, getPermissions } = useAuth();
   const permissions = getPermissions("backlog_entries");
@@ -120,37 +124,53 @@ const Backlog = () => {
     } catch (error) {
       toast.error("Failed to fetch backlog entries.");
       console.log("Error fetching backlog:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
+  // Guards the delete the same way usePending guards a submit:
+
+  // the button stayed live through the request, so a bulk delete
+
+  // could be fired twice.
+
+  const [deleting, setDeleting] = useState(false);
+
   const handleDeletion = async () => {
-    if (selectedRows.length <= 0) return;
-
-    let is_deleted = false;
+    setDeleting(true);
     try {
-      if (selectedRows.length > 1) {
-        is_deleted = await backlogEntriesAPIPackage.bulkDelete(
-          token,
-          selectedRows,
-          "entry"
-        );
-      } else {
-        is_deleted = await backlogEntriesAPIPackage.delete(
-          token,
-          selectedRows[0]
-        );
-      }
+      if (selectedRows.length <= 0) return;
 
-      if (is_deleted) {
-        toast.success("Backlog entries deleted successfully.");
-        setIsDeleted(!isDeleted);
-        setSelectedRows([]);
-      } else {
+      let is_deleted = false;
+      try {
+        if (selectedRows.length > 1) {
+          is_deleted = await backlogEntriesAPIPackage.bulkDelete(
+            token,
+            selectedRows,
+            "entry"
+          );
+        } else {
+          is_deleted = await backlogEntriesAPIPackage.delete(
+            token,
+            selectedRows[0]
+          );
+        }
+
+        if (is_deleted) {
+          toast.success("Backlog entries deleted successfully.");
+          setIsDeleted(!isDeleted);
+          setSelectedRows([]);
+        } else {
+          toast.error("Failed to delete backlog entries.");
+        }
+      } catch (error) {
         toast.error("Failed to delete backlog entries.");
+        console.log(error);
       }
-    } catch (error) {
-      toast.error("Failed to delete backlog entries.");
-      console.log(error);
+  
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -178,20 +198,11 @@ const Backlog = () => {
     });
   };
 
+  const { searchTerm, setSearchTerm, searching } = useDebouncedSearch(fetchBacklog);
+
   useEffect(() => {
     fetchBacklog();
   }, [token, isDeleted]);
-
-  useEffect(() => {
-    const delay = setTimeout(async () => {
-      if (searchTerm.trim() !== "") {
-        await fetchBacklog(formatSearchQuery(searchTerm));
-      } else {
-        await fetchBacklog();
-      }
-    }, 400);
-    return () => clearTimeout(delay);
-  }, [searchTerm]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -236,15 +247,12 @@ const Backlog = () => {
 
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input
-                    placeholder="Search Backlog"
-                    className="pl-10 w-80"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
+                <SearchField
+                  placeholder="Search Backlog"
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  pending={searching}
+                />
               </div>
 
               <div className="flex items-center space-x-3">
@@ -292,8 +300,11 @@ const Backlog = () => {
                   className="flex items-center space-x-2"
                   disabled={selectedRows.length === 0 || !isAdmin}
                   onClick={handleDeletion}
+                  disabled={deleting}
                 >
-                  {isAdmin ? (
+                  {deleting ? (
+                    <Spinner size={16} />
+                  ) : isAdmin ? (
                     <Trash2 className="w-4 h-4" />
                   ) : (
                     <Lock className="w-4 h-4" />
@@ -303,18 +314,19 @@ const Backlog = () => {
               </div>
             </div>
 
-            {backlogData && backlogData.length > 0 ? (
+            {loading || (backlogData && backlogData.length > 0) ? (
               <DataTable columns={cols} headerOnly />
             ) : null}
           </div>
 
-          {backlogData && backlogData.length > 0 ? (
+          {loading || (backlogData && backlogData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions?.["view"] ? backlogData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

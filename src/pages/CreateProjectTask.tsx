@@ -11,8 +11,11 @@ import { useForm } from "react-hook-form";
 import { useAuth } from "../../services/AuthProvider";
 import { CreateTask } from "../../services/api";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateProjectTask = () => {
+  const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const { token } = useAuth();
@@ -52,7 +55,7 @@ const CreateProjectTask = () => {
                 <main className="flex-1 p-6 space-y-6">
                     <DynamicBreadCrumb />
 
-                    <form onSubmit={handleSubmit(onTaskCreate)} className="flex flex-row gap-12">
+                    <form onSubmit={handleSubmit(run(onTaskCreate))} className="flex flex-row gap-12">
                         <div className="flex flex-col flex-wrap flex-1">
                             <h2 className="text-lg font-semibold mb-6">Create New Task</h2>
 
@@ -80,7 +83,7 @@ const CreateProjectTask = () => {
                             </div>
 
                             <div className="flex justify-end gap-3 mt-auto">
-                                <Button type="submit">Create Task</Button>
+                                <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Task</SubmitButton>
                             </div>
                         </div>
                     </form>

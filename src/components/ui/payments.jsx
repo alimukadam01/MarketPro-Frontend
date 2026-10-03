@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import * as DialogUI from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { Spinner } from "@/components/ui/spinner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -115,42 +117,56 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
     setPaymentDate(todayForInput());
   };
 
+  // Recording a payment and removing one both mutate money, and
+
+  // both buttons stayed live through the request.
+
+  const [saving, setSaving] = useState(false);
+
+  const [removingId, setRemovingId] = useState(null);
+
   const handleCreate = async () => {
-    if (!amount) return toast.error("Amount is required.");
-    if (chequeIncomplete) {
-      return toast.error("A cheque needs both a number and a due date.");
-    }
+    setSaving(true);
     try {
-      const payload = {
-        amount: parseFloat(amount),
-        desc: description,
-      };
-
-      // Money details only mean something once accounting is enabled.
-      if (hasAccounting) {
-        if (account) payload.account = Number(account);
-        payload.payment_method = paymentMethod;
-        payload.date = paymentDate;
-
-        if (isCheque) {
-          payload.cheque_number = chequeNumber;
-          payload.cheque_due_date = chequeDueDate;
-        }
+      if (!amount) return toast.error("Amount is required.");
+      if (chequeIncomplete) {
+        return toast.error("A cheque needs both a number and a due date.");
       }
+      try {
+        const payload = {
+          amount: parseFloat(amount),
+          desc: description,
+        };
 
-      const success = await createPayment(token, invoiceId, isSalesPayment, payload);
-      if (success) {
-        toast.success("Payment created successfully!");
-        resetForm();
-        fetchPayments();
-        // Payment status is derived server-side — let the invoice refresh.
-        if (onPaymentsChanged) onPaymentsChanged();
-      } else {
+        // Money details only mean something once accounting is enabled.
+        if (hasAccounting) {
+          if (account) payload.account = Number(account);
+          payload.payment_method = paymentMethod;
+          payload.date = paymentDate;
+
+          if (isCheque) {
+            payload.cheque_number = chequeNumber;
+            payload.cheque_due_date = chequeDueDate;
+          }
+        }
+
+        const success = await createPayment(token, invoiceId, isSalesPayment, payload);
+        if (success) {
+          toast.success("Payment created successfully!");
+          resetForm();
+          fetchPayments();
+          // Payment status is derived server-side — let the invoice refresh.
+          if (onPaymentsChanged) onPaymentsChanged();
+        } else {
+          toast.error("Failed to create payment.");
+        }
+      } catch (error) {
+        console.log("Error creating payment:", error);
         toast.error("Failed to create payment.");
       }
-    } catch (error) {
-      console.log("Error creating payment:", error);
-      toast.error("Failed to create payment.");
+  
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -167,18 +183,24 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
   const isFullyRecorded = invoiceTotal > 0 && totalRecorded >= invoiceTotal;
 
   const handleDelete = async (paymentId) => {
+    setRemovingId(paymentId);
     try {
-      const success = await deletePayment(token, invoiceId, isSalesPayment, paymentId);
-      if (success) {
-        toast.success("Payment deleted.");
-        fetchPayments();
-        if (onPaymentsChanged) onPaymentsChanged();
-      } else {
+      try {
+        const success = await deletePayment(token, invoiceId, isSalesPayment, paymentId);
+        if (success) {
+          toast.success("Payment deleted.");
+          fetchPayments();
+          if (onPaymentsChanged) onPaymentsChanged();
+        } else {
+          toast.error("Failed to delete payment.");
+        }
+      } catch (error) {
+        console.log("Error deleting payment:", error);
         toast.error("Failed to delete payment.");
       }
-    } catch (error) {
-      console.log("Error deleting payment:", error);
-      toast.error("Failed to delete payment.");
+  
+    } finally {
+      setRemovingId(null);
     }
   };
 
@@ -285,8 +307,10 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
             />
           </div>
 
-          <Button
+          <SubmitButton
             type="button"
+            pending={saving}
+            pendingLabel="Recording…"
             onClick={handleCreate}
             className={`w-full ${isPaidInFull ? "bg-green-600 text-white hover:bg-green-600" : ""}`}
             disabled={
@@ -300,7 +324,7 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
               : isFullyRecorded
                 ? "Awaiting clearance"
                 : "Create Payment"}
-          </Button>
+          </SubmitButton>
         </div>
 
         <div className="mt-2 flex flex-col gap-1">
@@ -332,8 +356,13 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
                 variant="unstyled"
                 className="p-0 hover:text-red-500 h-[10px]"
                 onClick={() => handleDelete(payment.id)}
+                disabled={removingId === payment.id}
               >
-                <Trash cursor="pointer" />
+                {/* Keyed to the row, not a single flag: removing one payment
+                    must not spin every other row's button. */}
+                {removingId === payment.id
+                  ? <Spinner size={16} />
+                  : <Trash cursor="pointer" />}
               </Button>
             </div>
           ))}

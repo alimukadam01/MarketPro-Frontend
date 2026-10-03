@@ -90,6 +90,10 @@ const MoneyAccounts = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [selectedRows, setSelectedRows] = useState([]);
     const [accountsData, setAccountsData] = useState(null);
+    // true until the first response lands, so the table never flashes
+    // "no records" before it has asked. Cleared in a finally, never on
+    // the success path alone, or a failed load shimmers for ever.
+    const [loading, setLoading] = useState(true);
     const [isDeleted, setIsDeleted] = useState(false);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
@@ -122,6 +126,8 @@ const MoneyAccounts = () => {
         } catch (error) {
             console.log("Error fetching money accounts:", error);
             toast.error("Failed to fetch money accounts.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -322,12 +328,13 @@ const MoneyAccounts = () => {
                         </Button>
                     </div>
 
-                    {accountsData && accountsData.length > 0 ? (
+                    {loading || (accountsData && accountsData.length > 0) ? (
                         <DataTable
                             columns={cols}
                             data={permissions?.["view"] ? accountsData : null}
                             selectedRows={selectedRows}
                             onRowClick={toggleRowSelection}
+                            loading={loading}
                         />
                     ) : null}
 

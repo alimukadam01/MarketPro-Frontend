@@ -20,8 +20,11 @@ import { createIdMap } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider";
 import { getCitiesList, postCustomer } from "../../services/api";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateCustomer = () => {
+  const { pending, run } = usePending();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [cities, setCities] = useState([]);
   const { token } = useAuth()
@@ -89,7 +92,7 @@ const CreateCustomer = () => {
 
           <div className="flex items-center justify-between">
             <form
-              onSubmit={handleSubmit(onCustomerCreate)}
+              onSubmit={handleSubmit(run(onCustomerCreate))}
               className="flex flex-row w-[48%] gap-12"
             >
               {/* First Column */}
@@ -161,7 +164,7 @@ const CreateCustomer = () => {
                 </div>
 
                 <div className="flex justify-end gap-3 mt-auto">
-                  <Button type="submit">Create Customer</Button>
+                  <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Customer</SubmitButton>
                 </div>
               </div>
             </form>
