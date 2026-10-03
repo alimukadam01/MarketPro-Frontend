@@ -90,15 +90,18 @@ const Ledgers = () => {
         balance: party.balance,
     }));
 
+    // The party screen, not the old accounting-only ledger: it carries the same
+    // khaata plus the balance, the opening balance and the payment dialog. `from`
+    // is what lets its back arrow return here rather than to the party list.
     const openCustomerLedger = (id) => {
-        navigate("/accounting/party-ledger", {
-            state: { customer_id: id },
+        navigate("/customers/view-customer", {
+            state: { customer_id: id, from: "/accounting/ledgers" },
         });
     };
 
     const openSupplierLedger = (id) => {
-        navigate("/accounting/party-ledger", {
-            state: { supplier_id: id },
+        navigate("/suppliers/view-supplier", {
+            state: { supplier_id: id, from: "/accounting/ledgers" },
         });
     };
 

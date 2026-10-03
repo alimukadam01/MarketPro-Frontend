@@ -61,7 +61,6 @@ import CreateTransaction from "./pages/CreateTransaction";
 import UpdateTransaction from "./pages/UpdateTransaction";
 import DailyBook from "./pages/DailyBook";
 import Ledgers from "./pages/Ledgers";
-import PartyLedger from "./pages/PartyLedger";
 import MoneyAccounts from "./pages/MoneyAccounts";
 import Cheques from "./pages/Cheques";
 import Targets from "./pages/Targets";
@@ -150,7 +149,6 @@ const App = () => {
           <Route path="/accounting/update-transaction" element={<ProtectedRoute module="accounting" action="edit"><UpdateTransaction /></ProtectedRoute>} />
           <Route path="/accounting/daily-book" element={<ProtectedRoute module="accounting"><DailyBook /></ProtectedRoute>} />
           <Route path="/accounting/ledgers" element={<ProtectedRoute module="accounting"><Ledgers /></ProtectedRoute>} />
-          <Route path="/accounting/party-ledger" element={<ProtectedRoute module="accounting"><PartyLedger /></ProtectedRoute>} />
           <Route path="/accounting/accounts" element={<ProtectedRoute module="accounting"><MoneyAccounts /></ProtectedRoute>} />
           <Route path="/accounting/cheques" element={<ProtectedRoute module="accounting"><Cheques /></ProtectedRoute>} />
 
