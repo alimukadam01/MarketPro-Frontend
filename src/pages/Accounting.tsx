@@ -6,20 +6,18 @@ import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { ChartCard } from "@/components/dashboard/ChartCard";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import {
-    ArrowLeft,
-    BookOpen,
-    Landmark,
-    Users,
-    Wallet2,
-    Plus,
-    Edit,
-    Trash2,
-    Search,
-    Filter,
-    Lock,
+  ArrowLeft,
+  BookOpen,
+  Landmark,
+  Users,
+  Wallet2,
+  Plus,
+  Edit,
+  Trash2,
+  Filter,
+  Lock,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -31,15 +29,17 @@ import {
     transactionsAPIPackage,
 } from "../../services/api";
 import {
-    AccountTypeMap,
-    formatSearchQuery,
-    transformTransaction,
-    TransactionTypeMap,
-    TransactionStatusMap,
-    getTransactionStatusColor,
-    listCountLabel,
+  AccountTypeMap,
+  transformTransaction,
+  TransactionTypeMap,
+  TransactionStatusMap,
+  getTransactionStatusColor,
+  listCountLabel,
   ACCESS_DENIED_MESSAGE,
 } from "../../services/utils";
+import { Spinner } from "@/components/ui/spinner";
+import { SearchField } from "@/components/ui/search-field";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 
 const subModules = [
     { label: "Daily Book", icon: BookOpen, actionLink: "/accounting/daily-book" },
@@ -142,7 +142,6 @@ const Accounting = () => {
     // the success path alone, or a failed load shimmers for ever.
     const [loading, setLoading] = useState(true);
     const [selectedRows, setSelectedRows] = useState([]);
-    const [searchTerm, setSearchTerm] = useState("");
     const [isDeleted, setIsDeleted] = useState(false);
     const [filterWindowOpen, setFilterWindowOpen] = useState(false);
     const { token, getPermissions } = useAuth();
@@ -172,33 +171,47 @@ const Accounting = () => {
         }
     };
 
+    // Guards the delete the same way usePending guards a submit:
+
+    // the button stayed live through the request, so a bulk delete
+
+    // could be fired twice.
+
+    const [deleting, setDeleting] = useState(false);
+
     const handleDeletion = async () => {
-        if (selectedRows.length <= 0) return;
+    setDeleting(true);
+    try {
+          if (selectedRows.length <= 0) return;
 
-        let is_deleted = false;
-        try {
-            if (selectedRows.length > 1) {
-                is_deleted = await transactionsAPIPackage.bulkDelete(
-                    token,
-                    selectedRows,
-                    "transaction"
-                );
-            } else {
-                is_deleted = await transactionsAPIPackage.delete(token, selectedRows[0]);
-            }
+          let is_deleted = false;
+          try {
+              if (selectedRows.length > 1) {
+                  is_deleted = await transactionsAPIPackage.bulkDelete(
+                      token,
+                      selectedRows,
+                      "transaction"
+                  );
+              } else {
+                  is_deleted = await transactionsAPIPackage.delete(token, selectedRows[0]);
+              }
 
-            if (is_deleted) {
-                toast.success("Transactions deleted successfully.");
-                setIsDeleted(!isDeleted);
-                setSelectedRows([]);
-            } else {
-                toast.error("Failed to delete transactions.");
-            }
-        } catch (error) {
-            toast.error("Failed to delete transactions.");
-            console.log(error);
-        }
-    };
+              if (is_deleted) {
+                  toast.success("Transactions deleted successfully.");
+                  setIsDeleted(!isDeleted);
+                  setSelectedRows([]);
+              } else {
+                  toast.error("Failed to delete transactions.");
+              }
+          } catch (error) {
+              toast.error("Failed to delete transactions.");
+              console.log(error);
+          }
+    
+    } finally {
+      setDeleting(false);
+    }
+  };
 
     const handleUpdateClick = () => {
         if (selectedRows.length !== 1) return;
@@ -206,6 +219,8 @@ const Accounting = () => {
             state: { transaction_id: selectedRows[0] },
         });
     };
+
+    const { searchTerm, setSearchTerm, searching } = useDebouncedSearch(fetchTransactions);
 
     useEffect(() => {
         if (!token) return;
@@ -250,16 +265,6 @@ const Accounting = () => {
         fetchTransactions();
     }, [token, isDeleted]);
 
-    useEffect(() => {
-        const delayDebounce = setTimeout(async () => {
-            if (searchTerm.trim() !== "") {
-                await fetchTransactions(formatSearchQuery(searchTerm));
-            } else {
-                await fetchTransactions();
-            }
-        }, 400);
-        return () => clearTimeout(delayDebounce);
-    }, [searchTerm]);
 
     return (
         <div className="min-h-screen bg-background">
@@ -394,15 +399,12 @@ const Accounting = () => {
 
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center space-x-4">
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                                        <Input
-                                            placeholder="Search Transactions"
-                                            className="pl-10 w-80"
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
-                                        />
-                                    </div>
+                                    <SearchField
+                                      placeholder="Search Transactions"
+                                      value={searchTerm}
+                                      onChange={setSearchTerm}
+                                      pending={searching}
+                                    />
                                     <Button
                                         variant="outline"
                                         onClick={() => setFilterWindowOpen(!filterWindowOpen)}
@@ -447,8 +449,11 @@ const Accounting = () => {
                                         className="flex items-center space-x-2"
                                         disabled={selectedRows.length === 0 || !permissions?.["delete"]}
                                         onClick={handleDeletion}
+                                        disabled={deleting}
                                     >
-                                        {permissions?.["delete"] ? (
+                                        {deleting ? (
+                                            <Spinner size={16} />
+                                        ) : permissions?.["delete"] ? (
                                             <Trash2 className="w-4 h-4" />
                                         ) : (
                                             <Lock className="w-4 h-4" />

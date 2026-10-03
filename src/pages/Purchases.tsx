@@ -11,7 +11,6 @@ import {
   getPaymentStatusColor,
   PurchaseInvoiceStatusMap,
   PaymentStatusMap,
-  formatSearchQuery,
   listCountLabel,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
@@ -25,10 +24,12 @@ import {
   getTotalPendingPayment
 
 } from "../../services/api"
-import { Eye, ArrowLeft, Plus, Filter, Search, Edit, Trash2, Lock } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Eye, ArrowLeft, Plus, Filter, Edit, Trash2, Lock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Spinner } from "@/components/ui/spinner";
+import { SearchField } from "@/components/ui/search-field";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 
 const cols = [
   { key: "id", label: "ID" },
@@ -131,7 +132,6 @@ const Purchases = () => {
   const [totalPendingPurchaseInvoicesLoading, setTotalPendingPurchaseInvoicesLoading] = useState(true);
   const [totalPendingPayment, setTotalPendingPayment] = useState(null);
   const [totalPendingPaymentLoading, setTotalPendingPaymentLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState(null)
   const { token } = useAuth() || null
   const { getPermissions } = useAuth()
   const permissions = getPermissions("purchases")
@@ -147,28 +147,42 @@ const Purchases = () => {
     );
   }
 
+  // Guards the delete the same way usePending guards a submit:
+
+  // the button stayed live through the request, so a bulk delete
+
+  // could be fired twice.
+
+  const [deleting, setDeleting] = useState(false);
+
   const handleDeletion = async () => {
-    if (selectedRows.length <= 0) return
-
-    let is_deleted = false
+    setDeleting(true);
     try {
-      if (selectedRows.length > 1) {
-        is_deleted = await bulkDeletePurchaseInvoice(token, selectedRows)
+      if (selectedRows.length <= 0) return
 
-      } else {
-        is_deleted = await deletePurchaseInvoice(token, selectedRows[0])
-      }
+      let is_deleted = false
+      try {
+        if (selectedRows.length > 1) {
+          is_deleted = await bulkDeletePurchaseInvoice(token, selectedRows)
 
-      if (is_deleted) {
-        toast.success("Purchase invoices deleted successfully.")
-        setIsDeleted(!isDeleted)
-        setSelectedRows([])
-      } else {
+        } else {
+          is_deleted = await deletePurchaseInvoice(token, selectedRows[0])
+        }
+
+        if (is_deleted) {
+          toast.success("Purchase invoices deleted successfully.")
+          setIsDeleted(!isDeleted)
+          setSelectedRows([])
+        } else {
+          toast.error("Failed to delete Purchase invoices.")
+        }
+      } catch (error) {
         toast.error("Failed to delete Purchase invoices.")
+        console.error(error)
       }
-    } catch (error) {
-      toast.error("Failed to delete Purchase invoices.")
-      console.error(error)
+  
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -199,6 +213,8 @@ const Purchases = () => {
     e.preventDefault();
     setFilterWindowOpen(!filterWindowOpen);
   };
+
+  const { searchTerm, setSearchTerm, searching } = useDebouncedSearch(fetchPurchaseInvoices);
 
   useEffect(() => {
 
@@ -281,18 +297,6 @@ const Purchases = () => {
     fetchPurchaseInvoices()
   }, [token, isDeleted])
 
-  useEffect(() => {
-    const delayDebounce = setTimeout(async () => {
-      if (searchTerm && searchTerm.trim() !== "") {
-        const query = formatSearchQuery(searchTerm)
-        await fetchPurchaseInvoices(query)
-      } else {
-        await fetchPurchaseInvoices()
-      }
-    }, 400) // wait 400ms after user stops typing
-
-    return () => clearTimeout(delayDebounce);
-  }, [searchTerm]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -365,15 +369,12 @@ const Purchases = () => {
             {/* Search and Filter */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input
-                    placeholder="Search purchases by customer name or ID..."
-                    className="pl-10 w-80"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
+                <SearchField
+                  placeholder="Search purchases by customer name or ID..."
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  pending={searching}
+                />
                 <Button
                   variant="outline"
                   className="flex items-center space-x-2"
@@ -395,8 +396,8 @@ const Purchases = () => {
                   {permissions["edit"] ? <Edit className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>View/Update</span>
                 </Button>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={handleDeletion} disabled={selectedRows.length === 0 || !permissions["delete"]}>
-                  {permissions["delete"] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={handleDeletion} disabled={deleting || selectedRows.length === 0 || !permissions["delete"]}>
+                  {deleting ? <Spinner size={16} /> : permissions["delete"] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>Delete</span>
                 </Button>
               </div>

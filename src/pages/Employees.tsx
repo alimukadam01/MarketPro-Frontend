@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { toast } from "sonner"
-import { ArrowLeft, Plus, Edit, Trash2, Search } from "lucide-react"
+import { ArrowLeft, Plus, Edit, Trash2 } from "lucide-react"
 
 import { Sidebar } from "@/components/layout/Sidebar"
 import { Header } from "@/components/layout/Header"
@@ -9,6 +9,7 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb"
 import DataTable from "@/components/ui/data-table"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { SearchField } from "@/components/ui/search-field"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -309,15 +310,11 @@ const Employees = () => {
 
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                <Input
-                  placeholder="Search Employees"
-                  className="pl-10 w-80"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
+              <SearchField
+                placeholder="Search Employees"
+                value={searchTerm}
+                onChange={setSearchTerm}
+              />
             </div>
 
             <div className="flex items-center space-x-3">

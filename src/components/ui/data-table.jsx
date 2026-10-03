@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Lock } from "lucide-react";
 
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SKELETON_ANIMATION_DELAY_MS } from "@/components/ui/skeleton";
 import { ACCESS_DENIED_MESSAGE } from "../../../services/utils";
 
 /**
@@ -147,11 +147,14 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
       // of shimmering colour. It has to be a real fraction of the animation
       // cycle: at 90ms, eight rows spanned under a third of a 2.2s sweep and
       // sat at almost the same phase. 220ms spreads eight rows across a whole
-      // cycle, so each row is visibly at its own point.
+      // cycle, so each row is visibly at its own point. It is added to the
+      // shared delay, not used instead of it: an inline animation-delay
+      // overrides the class, so `idx * 220` alone would start row 0 moving
+      // immediately and bring back the blip the delay exists to remove.
       <Skeleton
         key={`skeleton-${idx}`}
         className="h-[35px] rounded-lg"
-        style={{ animationDelay: `${idx * 220}ms` }}
+        style={{ animationDelay: `${SKELETON_ANIMATION_DELAY_MS + idx * 220}ms` }}
       />
     ))
   );

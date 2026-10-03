@@ -7,7 +7,6 @@ import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
-  formatSearchQuery,
   transformReturnedItem,
   createIdMap,
   listCountLabel,
@@ -21,16 +20,17 @@ import {
 } from "../../services/api";
 import {
   ArrowLeft,
-  Search,
   Edit,
   Trash2,
   Filter,
   Undo2,
   Lock,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Spinner } from "@/components/ui/spinner";
+import { SearchField } from "@/components/ui/search-field";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -81,7 +81,6 @@ const ReturnedItems = () => {
   // Its own flag: this counter and the table are separate
   // requests, and one must not speak for the other.
   const [totalReturnedItemsLoading, setTotalReturnedItemsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("")
   const { token } = useAuth() || null
   const { getPermissions } = useAuth()
   const permissions = getPermissions("returned_items")
@@ -95,28 +94,42 @@ const ReturnedItems = () => {
     );
   };
 
+  // Guards the delete the same way usePending guards a submit:
+
+  // the button stayed live through the request, so a bulk delete
+
+  // could be fired twice.
+
+  const [deleting, setDeleting] = useState(false);
+
   const handleDeletion = async () => {
-    if (selectedRows.length <= 0) return;
-
-    let is_deleted = false;
+    setDeleting(true);
     try {
-      if (selectedRows.length > 1) {
-        is_deleted = await returnedItemsAPIPackage.bulkDelete(token, selectedRows, "returned_items");
-      } else {
-        console.log("Deleting single invoice with ID:", selectedRows[0]);
-        is_deleted = await returnedItemsAPIPackage.delete(token, selectedRows[0]);
-      }
+      if (selectedRows.length <= 0) return;
 
-      if (is_deleted) {
-        toast.success("Returned Items deleted successfully.");
-        setIsDeleted(!isDeleted);
-        setSelectedRows([]);
-      } else {
+      let is_deleted = false;
+      try {
+        if (selectedRows.length > 1) {
+          is_deleted = await returnedItemsAPIPackage.bulkDelete(token, selectedRows, "returned_items");
+        } else {
+          console.log("Deleting single invoice with ID:", selectedRows[0]);
+          is_deleted = await returnedItemsAPIPackage.delete(token, selectedRows[0]);
+        }
+
+        if (is_deleted) {
+          toast.success("Returned Items deleted successfully.");
+          setIsDeleted(!isDeleted);
+          setSelectedRows([]);
+        } else {
+          toast.error("Failed to delete returned items.");
+        }
+      } catch (error) {
         toast.error("Failed to delete returned items.");
+        console.error(error);
       }
-    } catch (error) {
-      toast.error("Failed to delete returned items.");
-      console.error(error);
+  
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -183,6 +196,8 @@ const ReturnedItems = () => {
     setFilterWindowOpen(!filterWindowOpen);
   };
 
+  const { searchTerm, setSearchTerm, searching } = useDebouncedSearch(fetchReturnedItems);
+
   useEffect(() => {
 
     const fetchTotalReturnedItems = async () => {
@@ -207,18 +222,6 @@ const ReturnedItems = () => {
     fetchReturnedItems();
   }, [token, isDeleted])
 
-  useEffect(() => {
-    const delayDebounce = setTimeout(async () => {
-      if (searchTerm.trim() !== "") {
-        const query = formatSearchQuery(searchTerm);
-        await fetchReturnedItems(query);
-      } else {
-        await fetchReturnedItems();
-      }
-    }, 400); // wait 400ms after user stops typing
-
-    return () => clearTimeout(delayDebounce);
-  }, [searchTerm])
 
   return (
     <div className="min-h-screen bg-background">
@@ -277,15 +280,12 @@ const ReturnedItems = () => {
             {/* Search and Filter */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input
-                    placeholder="Search Returned Items"
-                    className="pl-10 w-80"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
+                <SearchField
+                  placeholder="Search Returned Items"
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  pending={searching}
+                />
                 <Button
                   variant="outline"
                   className="flex items-center space-x-2"
@@ -337,9 +337,9 @@ const ReturnedItems = () => {
                   size="sm"
                   className="flex items-center space-x-2"
                   onClick={handleDeletion}
-                  disabled={selectedRows.length === 0 || !permissions["delete"]}
+                  disabled={deleting || selectedRows.length === 0 || !permissions["delete"]}
                 >
-                  {permissions["delete"] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                  {deleting ? <Spinner size={16} /> : permissions["delete"] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>Delete</span>
                 </Button>
               </div>

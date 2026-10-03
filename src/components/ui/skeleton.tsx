@@ -37,6 +37,24 @@ import { cn } from "@/lib/utils"
  * movement is a real vestibular problem. The gradient still reads as a
  * placeholder when it is standing still.
  */
+/**
+ * How long after mount the shimmer starts, in ms.
+ *
+ * The sweep is defined with this delay baked into the `shimmer` shorthand in
+ * tailwind.config.ts; this constant exists so that callers which stagger their
+ * own placeholders can add their offset ON TOP of it instead of replacing it -
+ * an inline animation-delay beats the class, so a row that sets 220ms would
+ * otherwise start before the rest.
+ *
+ * Why delay at all: most of these fetches come back in well under a second, so
+ * the placeholder was often on screen just long enough to start moving and then
+ * vanish. A sweep that begins and is cut off mid-travel reads as a flinch
+ * rather than as loading. Through the delay the gradient is on screen and
+ * perfectly still, so a fast load now shows a calm block that appears and goes,
+ * and only a load slow enough to be worth signalling ever animates.
+ */
+export const SKELETON_ANIMATION_DELAY_MS = 700;
+
 function Skeleton({
   className,
   ...props

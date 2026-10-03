@@ -21,6 +21,7 @@ import {
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
+import { SearchField } from "@/components/ui/search-field";
 
 const CreateProduct = () => {
   const { pending, run } = usePending();
@@ -389,17 +390,14 @@ const CreateProduct = () => {
 
                                 {/* Ends flush with the Create Variant button, clear of the reset column */}
                                 <div className="flex gap-4 mb-2">
-                                    <div className="w-[100%] relative">
-                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                                        <Input
-                                            id="variantSearch"
-                                            type="text"
-                                            placeholder="Search variants"
-                                            className="pl-10"
-                                            value={variantSearchTerm}
-                                            onChange={(e) => setVariantSearchTerm(e.target.value)}
-                                        />
-                                    </div>
+                                    <SearchField
+                                      id="variantSearch"
+                                      placeholder="Search variants"
+                                      value={variantSearchTerm}
+                                      onChange={setVariantSearchTerm}
+                                      className="w-full"
+                                      wrapperClassName="w-full"
+                                    />
                                     <div className="w-[5%]"></div>
                                 </div>
 
