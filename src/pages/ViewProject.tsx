@@ -275,7 +275,7 @@ const ViewProject = () => {
                         <div className="flex flex-col border border-light rounded-lg bg-card px-2 py-2">
                             <h2 className="flex items-center gap-3 text-xl font-semibold mb-2">
                                 Project Details
-                                {detailLoading && <Spinner size={18} label="Loading" />}
+                                {detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}
                             </h2>
                             <Input id="name" className="text-xl font-semibold mb-2 w-fit" type="text" {...register("name", { required: "Name is required", onChange: (e) => handleFieldPatch(`/projects/${project_id}/`, "name", e.target.value) })} />
                             <Textarea

@@ -213,7 +213,7 @@ const UpdatePurchaseQuotation = () => {
                     <DynamicBreadCrumb />
 
                     <form onSubmit={handleSubmit(run(onPurchaseQuotationUpdate))} className="flex flex-col flex-1">
-                        <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Update Project Quotation{detailLoading && <Spinner size={18} label="Loading" />}</h2>
+                        <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Update Project Quotation{detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
                         <div
                             className="flex flex-row gap-12 h-auto"
                         >

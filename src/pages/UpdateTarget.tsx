@@ -273,7 +273,7 @@ const UpdateTarget = () => {
             <div>
               <h1 className="flex items-center gap-3 text-2xl font-semibold">
                 {target ? target.name : "Target"}
-                {detailLoading && <Spinner size={18} label="Loading" />}
+                {detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}
               </h1>
               {target && (
                 <p className="text-sm text-muted-foreground">

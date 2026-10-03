@@ -156,7 +156,7 @@ const UpdateInventoryItem = () => {
 
                             {/* Second Column */}
                             <div className="flex flex-col flex-wrap flex-1">
-                                <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Update Inventory Item{detailLoading && <Spinner size={18} label="Loading" />}</h2>
+                                <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Update Inventory Item{detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
 
                                 <div className="flex gap-6 mb-6">
                                     <div className="w-[50%] space-y-1">

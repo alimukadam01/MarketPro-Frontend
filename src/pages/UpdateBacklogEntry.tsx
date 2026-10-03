@@ -137,7 +137,7 @@ const UpdateBacklogEntry = () => {
             <div className="flex flex-col flex-1">
               <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">
                 Update Backlog Entry
-              {detailLoading && <Spinner size={18} label="Loading" />}</h2>
+              {detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
 
               {/* Type */}
               <div className="flex-1 space-y-1 mb-6">
