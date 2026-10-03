@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner"
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -30,7 +30,8 @@ import {
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import Payments from "@/components/ui/payments";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { Combobox } from "@/components/ui/combobox";
 
 const UpdatePurchaseInvoice = () => {
   const { pending, run } = usePending();
@@ -41,6 +42,11 @@ const UpdatePurchaseInvoice = () => {
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [projects, setProjects] = useState([])
+  // One flag per list - see the note on UpdateSalesInvoice: reset() lands before
+  // the options do.
+  const [productsLoading, setProductsLoading] = useState(true)
+  const [suppliersLoading, setSuppliersLoading] = useState(true)
+  const [projectsLoading, setProjectsLoading] = useState(true)
   const [amountPaid, setAmountPaid] = useState(0)
   const { token } = useAuth()
   const navigate = useNavigate()
@@ -169,6 +175,28 @@ const UpdatePurchaseInvoice = () => {
     setTaxType(data.tax?.type)
   }
 
+  const supplierOptions = useMemo(
+    () => Object.entries(suppliers).map(([value, supplier]) => ({
+      value,
+      label: formatPartyLabel(supplier),
+      keywords: [supplier.name, supplier.business_name].filter(Boolean),
+    })),
+    [suppliers])
+
+  const productOptions = useMemo(
+    () => Object.entries(products).map(([value, item]) => ({
+      value,
+      label: item.name,
+    })),
+    [products])
+
+  const projectOptions = useMemo(
+    () => Object.entries(projects).map(([value, project]) => ({
+      value,
+      label: project.name,
+    })),
+    [projects])
+
   const fetchPurchaseInvoice = async () => {
     if (!token) return
     try {
@@ -200,6 +228,8 @@ const UpdatePurchaseInvoice = () => {
       } catch (error) {
         console.log("Error fetching products:", error)
         toast.error("Failed to fetch products")
+      } finally {
+        setProductsLoading(false)
       }
     }
 
@@ -215,6 +245,8 @@ const UpdatePurchaseInvoice = () => {
       } catch (error) {
         console.log("Error fetching suppliers:", error)
         toast.error("Failed to fetch suppliers")
+      } finally {
+        setSuppliersLoading(false)
       }
     }
 
@@ -229,6 +261,8 @@ const UpdatePurchaseInvoice = () => {
       } catch (error) {
         console.log("Error fetching projects:", error)
         toast.error("Failed to fetch projects")
+      } finally {
+        setProjectsLoading(false)
       }
     }
 
@@ -277,18 +311,16 @@ const UpdatePurchaseInvoice = () => {
                     name="supplier"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select supplier"></SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, supplier]) => (
-                            <SelectItem value={key} key={key}>
-                              {formatPartyLabel(supplier)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Combobox
+                        id="supplier"
+                        options={supplierOptions}
+                        value={field.value}
+                        onChange={field.onChange}
+                        loading={suppliersLoading}
+                        placeholder="Select supplier"
+                        emptyText="No suppliers yet. Add one first."
+                        notFoundText="No supplier matches that."
+                      />
                     )}
                   />
                 </div>
@@ -357,16 +389,16 @@ const UpdatePurchaseInvoice = () => {
                     name="newItemProduct"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                        <SelectContent>
-                          {products && Object.keys(products).length > 0 && Object.entries(products).map(([key, item]) => (
-                            <SelectItem key={key} value={key}>
-                              {item.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Combobox
+                        id="newItemProduct"
+                        options={productOptions}
+                        value={field.value}
+                        onChange={field.onChange}
+                        loading={productsLoading}
+                        placeholder="Select product"
+                        emptyText="No products yet."
+                        notFoundText="No product matches that."
+                      />
                     )}
                   />
                 </div>
@@ -492,19 +524,18 @@ const UpdatePurchaseInvoice = () => {
                     name="project"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={(val) => field.onChange(val === "none" ? null : val)} value={field.value ?? "none"}>
-                        <SelectTrigger className="w-36">
-                          <SelectValue placeholder="Add to project" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No project</SelectItem>
-                          {projects && Object.keys(projects).length > 0 && Object.entries(projects).map(([key, project]) => (
-                            <SelectItem value={key} key={key}>
-                              {project.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <Combobox
+                        id="project"
+                        className="w-36"
+                        options={projectOptions}
+                        value={field.value ?? ""}
+                        onChange={(val) => field.onChange(val || null)}
+                        loading={projectsLoading}
+                        placeholder="Add to project"
+                        emptyText="No projects yet."
+                        notFoundText="No project matches that."
+                        clearable
+                      />
                     )}
                   />
                   <Button type="button" variant="outline" className="w-36" onClick={() => setPaymentsOpen(true)}>Add Payment</Button>

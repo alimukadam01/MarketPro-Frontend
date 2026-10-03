@@ -447,9 +447,8 @@ const Accounting = () => {
                                         variant="outline"
                                         size="sm"
                                         className="flex items-center space-x-2"
-                                        disabled={selectedRows.length === 0 || !permissions?.["delete"]}
+                                        disabled={deleting || selectedRows.length === 0 || !permissions?.["delete"]}
                                         onClick={handleDeletion}
-                                        disabled={deleting}
                                     >
                                         {deleting ? (
                                             <Spinner size={16} />

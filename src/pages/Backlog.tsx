@@ -298,9 +298,8 @@ const Backlog = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length === 0 || !isAdmin}
+                  disabled={deleting || selectedRows.length === 0 || !isAdmin}
                   onClick={handleDeletion}
-                  disabled={deleting}
                 >
                   {deleting ? (
                     <Spinner size={16} />
