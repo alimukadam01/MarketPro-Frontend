@@ -57,8 +57,14 @@ function ScrollArrow({
 
 interface ComboboxProps {
   options: ComboboxOption[];
-  /** "" means nothing selected. */
-  value?: string;
+  /**
+   * "" means nothing selected.
+   *
+   * Numbers are accepted because that is what actually arrives: an Update page
+   * reset()s the form straight from the API, where ids are numbers, so the field
+   * holds 5 while the options are keyed "5".
+   */
+  value?: string | number;
   onChange: (value: string) => void;
   placeholder?: string;
   /** Shown when the list came back empty - say what is missing, not "no results". */
@@ -118,10 +124,16 @@ export function Combobox({
   id,
   className,
 }: ComboboxProps) {
-  const selected = React.useMemo(
-    () => (value ? options.find((o) => o.value === value) ?? null : null),
-    [options, value],
-  );
+  // Compared as strings on both sides. Object.entries always yields string keys,
+  // while the form's value comes back from the API as a number, so a strict ===
+  // matched nothing and the field sat on its placeholder with a value set. The
+  // page right above this one had already hit it and wrapped one field in
+  // String() to get around it; doing it here fixes every picker at once.
+  const selected = React.useMemo(() => {
+    if (value === undefined || value === null || value === "") return null;
+    const key = String(value);
+    return options.find((o) => String(o.value) === key) ?? null;
+  }, [options, value]);
 
   // A set value with no matching option means the options have not arrived yet:
   // Update pages reset() the form from one request and load the list in another.
