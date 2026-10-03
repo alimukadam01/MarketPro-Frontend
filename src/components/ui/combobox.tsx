@@ -44,9 +44,11 @@ function ScrollArrow({
       aria-hidden="true"
       onPointerEnter={() => onHoverStart(direction)}
       onPointerLeave={onHoverEnd}
-      // shrink-0 so the flex column gives the list the rest, and bg-popover so
-      // rows scrolling past read as going under the chevron rather than through it
-      className="flex shrink-0 cursor-default items-center justify-center bg-popover py-1 text-muted-foreground"
+      // No colour class: SelectScrollUpButton/DownButton inherit the popover's
+      // foreground, so these have to as well. shrink-0 keeps the flex column
+      // giving the list the remaining height, and bg-popover makes rows scrolling
+      // past read as going under the chevron rather than through it.
+      className="flex shrink-0 cursor-default items-center justify-center bg-popover py-1"
     >
       <Icon className="h-4 w-4" />
     </div>
@@ -259,9 +261,12 @@ export function Combobox({
               // and grows to the longest option, capped at the space Base UI
               // reports so a long product name cannot push it off screen
               "relative flex flex-col overflow-hidden rounded-md border bg-popover text-popover-foreground shadow-md",
-              "max-h-96 w-auto min-w-[var(--anchor-width)] max-w-[var(--available-width)]",
+              "max-h-96 w-auto min-w-[max(8rem,var(--anchor-width))] max-w-[var(--available-width)]",
               "origin-[var(--transform-origin)]",
               "data-[open]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[open]:fade-in-0 data-[closed]:zoom-out-95 data-[open]:zoom-in-95",
+              // Base UI puts data-side on the Popup just as Radix does on
+              // SelectContent, so the slide carries over unchanged.
+              "data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
             )}
           >
             {loading ? (
