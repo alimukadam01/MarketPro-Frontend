@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner"
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -23,7 +23,8 @@ import {
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { set } from "date-fns";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { Combobox } from "@/components/ui/combobox";
 
 const CreateInventoryItem = () => {
   const { pending, run } = usePending();
@@ -32,6 +33,7 @@ const CreateInventoryItem = () => {
     const [productCreated, setProductCreated] = useState(false)
     const [products, setProducts] = useState([])
     const [productVariants, setProductVariants] = useState([])
+    const [variantsLoading, setVariantsLoading] = useState(true)
     const [productVariantTypes, setProductVariantTypes] = useState([])
     const [newProductVariants, setNewProductVariants] = useState([])
     const [currentAttributes, setCurrentAttributes] = useState({})
@@ -178,8 +180,17 @@ const CreateInventoryItem = () => {
         } catch (error) {
             console.log("Error fetching product variants:", error)
             toast.error("Failed to fetch product  variants.")
+        } finally {
+            setVariantsLoading(false)
         }
     }
+
+    const variantOptions = useMemo(
+        () => Object.entries(productVariants || {}).map(([value, item]) => ({
+            value,
+            label: item.name,
+        })),
+        [productVariants])
 
     useEffect(() => {
 
@@ -460,32 +471,26 @@ const CreateInventoryItem = () => {
                                             name="newItemProduct"
                                             control={control}
                                             render={({ field }) => (
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <SelectTrigger>
-                                                        {/* The list is filtered to unstocked variants, so
-                                                            empty means every product already has an item -
-                                                            normal, and it has to say so rather than open
-                                                            onto nothing. */}
-                                                        <SelectValue placeholder={
-                                                            Object.keys(productVariants || {}).length === 0
-                                                                ? "Every product already has an inventory item"
-                                                                : "Select product"
-                                                        } />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {Object.keys(productVariants || {}).length === 0 ? (
-                                                            <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                                                Every product already has an inventory item
-                                                            </div>
-                                                        ) : (
-                                                            Object.entries(productVariants).map(([key, item]) => (
-                                                                <SelectItem key={key} value={key}>
-                                                                    {item.name}
-                                                                </SelectItem>
-                                                            ))
-                                                        )}
-                                                    </SelectContent>
-                                                </Select>
+                                                <Combobox
+                                                    id="newItemProduct"
+                                                    options={variantOptions}
+                                                    value={field.value}
+                                                    onChange={field.onChange}
+                                                    loading={variantsLoading}
+                                                    /* The list is filtered to unstocked variants, so empty
+                                                       is a real answer rather than a failure - every product
+                                                       already has an item. It is said in the field and again
+                                                       in the popup, because the field is what a user reads
+                                                       before clicking and the popup is what they read
+                                                       after. */
+                                                    placeholder={
+                                                        variantsLoading || variantOptions.length > 0
+                                                            ? "Select product"
+                                                            : "Every product already has an inventory item"
+                                                    }
+                                                    emptyText="Every product already has an inventory item"
+                                                    notFoundText="No product matches that."
+                                                />
                                             )}
                                         />
                                     </div>
