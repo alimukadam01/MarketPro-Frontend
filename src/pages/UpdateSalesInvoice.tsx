@@ -77,7 +77,7 @@ const UpdateSalesInvoice = () => {
       setPdfData(invoice)
       setCustomers((prev) => ({ ...prev, [invoice.customer.id]: invoice.customer }))
       setValue("customer", invoice.customer.id)
-      fetchSalesInvoice().finally(() => setDetailLoading(false));
+      fetchSalesInvoice()
     },
   })
 
@@ -249,6 +249,8 @@ const UpdateSalesInvoice = () => {
     } catch (error) {
       console.log(error)
       toast.error("Failed to fetch sales invoice")
+    } finally {
+      setDetailLoading(false)
     }
   }
 
