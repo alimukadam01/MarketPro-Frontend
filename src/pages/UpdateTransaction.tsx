@@ -36,13 +36,18 @@ import {
     SourceKindMap,
     methodsForAccount,
     formatAccountOption,
-} from "../../services/utils";
+} from "../../services/utils";
+import { Combobox } from "@/components/ui/combobox";
 
 const UpdateTransaction = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [accounts, setAccounts] = useState({});
     const [customers, setCustomers] = useState({});
     const [suppliers, setSuppliers] = useState({});
+    // One per list: two independent requests feeding one picker, whichever the
+    // transaction type calls for.
+    const [customersLoading, setCustomersLoading] = useState(true);
+    const [suppliersLoading, setSuppliersLoading] = useState(true);
     const [imageFile, setImageFile] = useState(null);
     const [existingImageUrl, setExistingImageUrl] = useState(null);
     const [isSourceLinked, setIsSourceLinked] = useState(false);
@@ -202,6 +207,8 @@ const UpdateTransaction = () => {
                 if (res) setCustomers(createIdMap(res));
             } catch (error) {
                 console.log("Error fetching customers:", error);
+            } finally {
+                setCustomersLoading(false);
             }
         };
 
@@ -211,6 +218,8 @@ const UpdateTransaction = () => {
                 if (res) setSuppliers(createIdMap(res));
             } catch (error) {
                 console.log("Error fetching suppliers:", error);
+            } finally {
+                setSuppliersLoading(false);
             }
         };
 
@@ -269,6 +278,7 @@ const UpdateTransaction = () => {
                 placeholder: "Select customer",
                 empty: "No customers on this business yet",
                 options: customers,
+                loading: customersLoading,
             },
             supplier: {
                 name: "supplier" as const,
@@ -276,6 +286,7 @@ const UpdateTransaction = () => {
                 placeholder: "Select supplier",
                 empty: "No suppliers on this business yet",
                 options: suppliers,
+                loading: suppliersLoading,
             },
         }[referenceKind];
 
@@ -285,6 +296,10 @@ const UpdateTransaction = () => {
         // carries the FULL list so a party already on the transaction stays
         // selectable, so empty here means the business has none at all.
         const isEmpty = Object.keys(config.options).length === 0;
+        const referenceOptions = Object.entries(config.options).map(([key, party]) => ({
+            value: String(key),
+            label: formatPartyLabel(party as Record<string, unknown>),
+        }));
 
         return (
             <div className="flex-1 space-y-1">
@@ -293,30 +308,18 @@ const UpdateTransaction = () => {
                     name={config.name}
                     control={control}
                     render={({ field }) => (
-                        <Select
-                            onValueChange={field.onChange}
+                        <Combobox
+                            options={referenceOptions}
                             value={field.value}
+                            onChange={field.onChange}
                             disabled={isSourceLinked}
-                        >
-                            <SelectTrigger>
-                                <SelectValue
-                                    placeholder={isEmpty ? config.empty : config.placeholder}
-                                />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {isEmpty ? (
-                                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                        {config.empty}
-                                    </div>
-                                ) : (
-                                    Object.entries(config.options).map(([key, party]) => (
-                                        <SelectItem value={String(key)} key={key}>
-                                            {formatPartyLabel(party as Record<string, unknown>)}
-                                        </SelectItem>
-                                    ))
-                                )}
-                            </SelectContent>
-                        </Select>
+                            loading={config.loading}
+                            placeholder={
+                                config.loading || !isEmpty ? config.placeholder : config.empty
+                            }
+                            emptyText={config.empty}
+                            notFoundText="No match."
+                        />
                     )}
                 />
             </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -32,11 +32,13 @@ import {
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { ArrowLeft, ArrowRight, CheckCircle2Icon, Edit, Edit2, Plus, Trash, Trash2, X } from "lucide-react";
-import { Checkbox } from "@radix-ui/react-checkbox";
+import { Checkbox } from "@radix-ui/react-checkbox";
+import { Combobox } from "@/components/ui/combobox";
 
 const ViewProject = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [customers, setCustomers] = useState([]);
+    const [customersLoading, setCustomersLoading] = useState(true);
     const [step, setStep] = useState(1);
     const [success, setSuccess] = useState(false);
     const [products, setProducts] = useState([]);
@@ -176,6 +178,14 @@ const ViewProject = () => {
         }
     }
 
+    const customerOptions = useMemo(
+        () => Object.entries(customers).map(([value, customer]) => ({
+            value,
+            label: customer.name,
+            keywords: [customer.phone_number, customer.city?.name].filter(Boolean),
+        })),
+        [customers]);
+
     useEffect(() => {
         const fetchCustomers = async () => {
             try {
@@ -189,6 +199,8 @@ const ViewProject = () => {
             } catch (error) {
                 console.log("Error fetching customers:", error)
                 toast.error("Failed to fetch customers")
+            } finally {
+                setCustomersLoading(false)
             }
         }
 
@@ -275,21 +287,19 @@ const ViewProject = () => {
                                         control={control}
                                         rules={{ required: "Customer is required" }}
                                         render={({ field }) => (
-                                            <Select onValueChange={(val) => { 
-                                                field.onChange(val) 
-                                                handleFieldPatch(`/projects/${project_id}/`, "customer", val, 0) 
-                                            }} value={field.value}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select customer"></SelectValue>
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {customers && Object.keys(customers).length > 0 && Object.entries(customers).map(([key, customer]) => (
-                                                        <SelectItem value={key} key={key}>
-                                                            {customer.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
+                                            <Combobox
+                                                id="customer"
+                                                options={customerOptions}
+                                                value={field.value}
+                                                onChange={(val) => {
+                                                    field.onChange(val)
+                                                    handleFieldPatch(`/projects/${project_id}/`, "customer", val, 0)
+                                                }}
+                                                loading={customersLoading}
+                                                placeholder="Select customer"
+                                                emptyText="No customers yet. Add one first."
+                                                notFoundText="No customer matches that."
+                                            />
                                         )}
                                     />
                                     {errors.customer && <span className="text-red-500 text-sm">{errors.customer.message}</span>}

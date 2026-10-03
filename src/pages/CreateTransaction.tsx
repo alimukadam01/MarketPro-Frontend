@@ -39,7 +39,8 @@ import {
     todayForInput,
 } from "../../services/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { Combobox } from "@/components/ui/combobox";
 
 // Dropdown rows keyed by id, as createIdMap returns them. Typed loosely
 // because each picker holds a different shape - an account, a party or an
@@ -55,6 +56,11 @@ const CreateTransaction = () => {
     const [suppliers, setSuppliers] = useState({});
     const [salesInvoices, setSalesInvoices] = useState({});
     const [purchaseInvoices, setPurchaseInvoices] = useState({});
+    const [accountsLoading, setAccountsLoading] = useState(true);
+    const [customersLoading, setCustomersLoading] = useState(true);
+    const [suppliersLoading, setSuppliersLoading] = useState(true);
+    const [salesInvoicesLoading, setSalesInvoicesLoading] = useState(true);
+    const [purchaseInvoicesLoading, setPurchaseInvoicesLoading] = useState(true);
     const [imageFile, setImageFile] = useState(null);
     const { token } = useAuth();
     const navigate = useNavigate();
@@ -187,6 +193,8 @@ const CreateTransaction = () => {
             } catch (error) {
                 console.log("Error fetching money accounts:", error);
                 toast.error("Failed to fetch money accounts.");
+            } finally {
+                setAccountsLoading(false);
             }
         };
 
@@ -202,6 +210,8 @@ const CreateTransaction = () => {
                 }
             } catch (error) {
                 console.log("Error fetching customers:", error);
+            } finally {
+                setCustomersLoading(false);
             }
         };
 
@@ -218,6 +228,8 @@ const CreateTransaction = () => {
                 }
             } catch (error) {
                 console.log("Error fetching suppliers:", error);
+            } finally {
+                setSuppliersLoading(false);
             }
         };
 
@@ -229,6 +241,8 @@ const CreateTransaction = () => {
                 if (res) setSalesInvoices(pendingInvoicesOnly(createIdMap(res)));
             } catch (error) {
                 console.log("Error fetching sales invoices:", error);
+            } finally {
+                setSalesInvoicesLoading(false);
             }
         };
 
@@ -238,6 +252,8 @@ const CreateTransaction = () => {
                 if (res) setPurchaseInvoices(pendingInvoicesOnly(createIdMap(res)));
             } catch (error) {
                 console.log("Error fetching purchase invoices:", error);
+            } finally {
+                setPurchaseInvoicesLoading(false);
             }
         };
 
@@ -303,6 +319,7 @@ const CreateTransaction = () => {
                 placeholder: "Select customer",
                 empty: "No customers with pending balances",
                 options: customers as PickerOptions,
+                loading: customersLoading,
                 render: formatPartyBalanceOption,
             },
             supplier: {
@@ -311,6 +328,7 @@ const CreateTransaction = () => {
                 placeholder: "Select supplier",
                 empty: "No suppliers with pending balances",
                 options: suppliers as PickerOptions,
+                loading: suppliersLoading,
                 render: formatPartyBalanceOption,
             },
             sales_invoice: {
@@ -319,6 +337,7 @@ const CreateTransaction = () => {
                 placeholder: "Select invoice",
                 empty: "No sales invoices with pending payments",
                 options: salesInvoices as PickerOptions,
+                loading: salesInvoicesLoading,
                 render: formatInvoiceOption,
             },
             purchase_invoice: {
@@ -327,6 +346,7 @@ const CreateTransaction = () => {
                 placeholder: "Select invoice",
                 empty: "No purchase invoices with pending payments",
                 options: purchaseInvoices as PickerOptions,
+                loading: purchaseInvoicesLoading,
                 render: formatInvoiceOption,
             },
             transfer_account: {
@@ -335,6 +355,7 @@ const CreateTransaction = () => {
                 placeholder: "Select destination account",
                 empty: "No other accounts to transfer to",
                 options: accounts as PickerOptions,
+                loading: accountsLoading,
                 render: formatAccountOption,
             },
         }[referenceKind];
@@ -344,6 +365,10 @@ const CreateTransaction = () => {
         // Shown on the trigger, so the reason is visible without opening the
         // dropdown onto an empty box.
         const isEmpty = Object.keys(config.options).length === 0;
+        const referenceOptions = Object.entries(config.options).map(([key, item]) => ({
+            value: String(key),
+            label: config.render(item),
+        }));
 
         return (
             <div className="flex-1 space-y-1">
@@ -352,28 +377,22 @@ const CreateTransaction = () => {
                     name={config.name}
                     control={control}
                     render={({ field }) => (
-                        <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger>
-                                <SelectValue
-                                    placeholder={isEmpty ? config.empty : config.placeholder}
-                                />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {isEmpty ? (
-                                    // A plain div, not a SelectItem: an item would
-                                    // look pickable and Radix rejects an empty value.
-                                    <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                                        {config.empty}
-                                    </div>
-                                ) : (
-                                    Object.entries(config.options).map(([key, item]) => (
-                                        <SelectItem value={String(key)} key={key}>
-                                            {config.render(item)}
-                                        </SelectItem>
-                                    ))
-                                )}
-                            </SelectContent>
-                        </Select>
+                        <Combobox
+                            options={referenceOptions}
+                            value={field.value}
+                            onChange={field.onChange}
+                            loading={config.loading}
+                            // Still loading is not the same as nothing to pick, and
+                            // these lists are filtered to what can actually be
+                            // settled - so an empty one is a real answer and says
+                            // which. The reason shows on the field as well as in the
+                            // popup, because it decides whether to open it at all.
+                            placeholder={
+                                config.loading || !isEmpty ? config.placeholder : config.empty
+                            }
+                            emptyText={config.empty}
+                            notFoundText="No match."
+                        />
                     )}
                 />
             </div>
