@@ -30,8 +30,11 @@ import {
   projectsAPIPackage
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateSalesInvoice = () => {
+  const { pending, run } = usePending();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [invoiceItems, setInvoiceItems] = useState([])
@@ -239,7 +242,7 @@ const CreateSalesInvoice = () => {
           {/* Breadcrumb */}
           <DynamicBreadCrumb />
 
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-row gap-12">
+          <form onSubmit={handleSubmit(run(onSubmit))} className="flex flex-row gap-12">
             {/* First Column */}
             <div className="flex flex-col flex-wrap flex-1">
               <h2 className="text-lg font-semibold mb-6">Invoice Details</h2>
@@ -491,7 +494,7 @@ const CreateSalesInvoice = () => {
                     </Select>
                   )}
                 />
-                <Button type="submit">Create Invoice</Button>
+                <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Invoice</SubmitButton>
               </div>
             </div>
           </form>

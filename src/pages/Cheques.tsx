@@ -2,6 +2,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import DataTable from "@/components/ui/data-table";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { ArrowLeft, CheckCircle2, XCircle, Lock } from "lucide-react";
@@ -56,6 +57,10 @@ const Cheques = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [selectedRows, setSelectedRows] = useState([]);
     const [chequesData, setChequesData] = useState(null);
+    // true until the first response lands, so the table never flashes
+    // "no records" before it has asked. Cleared in a finally, never on
+    // the success path alone, or a failed load shimmers for ever.
+    const [loading, setLoading] = useState(true);
     const { token, getPermissions } = useAuth();
     const permissions = getPermissions("accounting");
     const navigate = useNavigate();
@@ -95,6 +100,8 @@ const Cheques = () => {
         } catch (error) {
             console.log("Error fetching cheques:", error);
             toast.error("Failed to fetch pending cheques.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -164,22 +171,16 @@ const Cheques = () => {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                        <div className="bg-card rounded-lg p-6 border">
-                            <div className="text-sm text-muted-foreground mb-2">
-                                Pending Cheques
-                            </div>
-                            <div className="text-3xl font-bold">
-                                {chequesData?.length || 0}
-                            </div>
-                        </div>
-                        <div className="bg-card rounded-lg p-6 border">
-                            <div className="text-sm text-muted-foreground mb-2">
-                                Pending Value
-                            </div>
-                            <div className="text-3xl font-bold">
-                                {formatCurrency(totalPending)}
-                            </div>
-                        </div>
+                        <MetricCard
+                          title="Pending Cheques"
+                          value={chequesData?.length || 0}
+                          loading={loading}
+                        />
+                        <MetricCard
+                          title="Pending Value"
+                          value={formatCurrency(totalPending)}
+                          loading={loading}
+                        />
                     </div>
 
                     <div className="flex items-center justify-end space-x-3">
@@ -213,12 +214,13 @@ const Cheques = () => {
                         </Button>
                     </div>
 
-                    {chequesData && chequesData.length > 0 ? (
+                    {loading || (chequesData && chequesData.length > 0) ? (
                         <DataTable
                             columns={cols}
                             data={permissions?.["view"] ? chequesData : null}
                             selectedRows={selectedRows}
                             onRowClick={toggleRowSelection}
+                            loading={loading}
                         />
                     ) : (
                         <div className="bg-card rounded-lg p-6 border">

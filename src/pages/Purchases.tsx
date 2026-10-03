@@ -3,6 +3,7 @@ import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner"
 import DataTable from "@/components/ui/data-table";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import CustomFilter from "@/components/layout/CustomFilter";
 import {
@@ -10,7 +11,6 @@ import {
   getPaymentStatusColor,
   PurchaseInvoiceStatusMap,
   PaymentStatusMap,
-  formatSearchQuery,
   listCountLabel,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
@@ -24,10 +24,12 @@ import {
   getTotalPendingPayment
 
 } from "../../services/api"
-import { Eye, ArrowLeft, Plus, Filter, Search, Edit, Trash2, Lock } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Eye, ArrowLeft, Plus, Filter, Edit, Trash2, Lock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Spinner } from "@/components/ui/spinner";
+import { SearchField } from "@/components/ui/search-field";
+import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 
 const cols = [
   { key: "id", label: "ID" },
@@ -118,11 +120,18 @@ const Purchases = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [selectedRows, setSelectedRows] = useState([])
   const [purchasesData, setPurchasesData] = useState(null)
-  const [totalPurchasesMonthly, setTotalPurchasesMonthly] = useState(0)
-  const [totalPurchaseInvoicesMonthly, setTotalPurchaseInvoicesMonthly] = useState(0)
-  const [totalPendingPurchaseInvoices, setTotalPendingPurchaseInvoices] = useState(0)
-  const [totalPendingPayment, setTotalPendingPayment] = useState(0)
-  const [searchTerm, setSearchTerm] = useState(null)
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
+  const [totalPurchasesMonthly, setTotalPurchasesMonthly] = useState(null);
+  const [totalPurchasesMonthlyLoading, setTotalPurchasesMonthlyLoading] = useState(true);
+  const [totalPurchaseInvoicesMonthly, setTotalPurchaseInvoicesMonthly] = useState(null);
+  const [totalPurchaseInvoicesMonthlyLoading, setTotalPurchaseInvoicesMonthlyLoading] = useState(true);
+  const [totalPendingPurchaseInvoices, setTotalPendingPurchaseInvoices] = useState(null);
+  const [totalPendingPurchaseInvoicesLoading, setTotalPendingPurchaseInvoicesLoading] = useState(true);
+  const [totalPendingPayment, setTotalPendingPayment] = useState(null);
+  const [totalPendingPaymentLoading, setTotalPendingPaymentLoading] = useState(true);
   const { token } = useAuth() || null
   const { getPermissions } = useAuth()
   const permissions = getPermissions("purchases")
@@ -138,28 +147,42 @@ const Purchases = () => {
     );
   }
 
+  // Guards the delete the same way usePending guards a submit:
+
+  // the button stayed live through the request, so a bulk delete
+
+  // could be fired twice.
+
+  const [deleting, setDeleting] = useState(false);
+
   const handleDeletion = async () => {
-    if (selectedRows.length <= 0) return
-
-    let is_deleted = false
+    setDeleting(true);
     try {
-      if (selectedRows.length > 1) {
-        is_deleted = await bulkDeletePurchaseInvoice(token, selectedRows)
+      if (selectedRows.length <= 0) return
 
-      } else {
-        is_deleted = await deletePurchaseInvoice(token, selectedRows[0])
-      }
+      let is_deleted = false
+      try {
+        if (selectedRows.length > 1) {
+          is_deleted = await bulkDeletePurchaseInvoice(token, selectedRows)
 
-      if (is_deleted) {
-        toast.success("Purchase invoices deleted successfully.")
-        setIsDeleted(!isDeleted)
-        setSelectedRows([])
-      } else {
+        } else {
+          is_deleted = await deletePurchaseInvoice(token, selectedRows[0])
+        }
+
+        if (is_deleted) {
+          toast.success("Purchase invoices deleted successfully.")
+          setIsDeleted(!isDeleted)
+          setSelectedRows([])
+        } else {
+          toast.error("Failed to delete Purchase invoices.")
+        }
+      } catch (error) {
         toast.error("Failed to delete Purchase invoices.")
+        console.error(error)
       }
-    } catch (error) {
-      toast.error("Failed to delete Purchase invoices.")
-      console.error(error)
+  
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -181,6 +204,8 @@ const Purchases = () => {
     } catch (error) {
       toast.error("Failed to fetch purchase invoices.")
       console.error("Error fetching purchase invoices:", error)
+    } finally {
+        setLoading(false);
     }
   }
 
@@ -188,6 +213,8 @@ const Purchases = () => {
     e.preventDefault();
     setFilterWindowOpen(!filterWindowOpen);
   };
+
+  const { searchTerm, setSearchTerm, searching } = useDebouncedSearch(fetchPurchaseInvoices);
 
   useEffect(() => {
 
@@ -204,6 +231,8 @@ const Purchases = () => {
       } catch (error) {
         toast.error("Failed to fetch purchase data.")
         console.error("Error fetching purchase data:", error)
+      } finally {
+        setTotalPurchasesMonthlyLoading(false);
       }
     }
 
@@ -220,6 +249,8 @@ const Purchases = () => {
       } catch (error) {
         toast.error("Failed to fetch monthly purchase invoices.")
         console.error("Error fetching monthly purchase invoices:", error)
+      } finally {
+        setTotalPurchaseInvoicesMonthlyLoading(false);
       }
     }
 
@@ -236,6 +267,8 @@ const Purchases = () => {
       } catch (error) {
         toast.error("Failed to fetch pending purchase invoices.")
         console.error("Error fetching pending purchase invoices:", error)
+      } finally {
+        setTotalPendingPurchaseInvoicesLoading(false);
       }
     }
 
@@ -252,6 +285,8 @@ const Purchases = () => {
       } catch (error) {
         toast.error("Failed to fetch pending payment.")
         console.error("Error fetching pending payment:", error)
+      } finally {
+        setTotalPendingPaymentLoading(false);
       }
     }
 
@@ -262,18 +297,6 @@ const Purchases = () => {
     fetchPurchaseInvoices()
   }, [token, isDeleted])
 
-  useEffect(() => {
-    const delayDebounce = setTimeout(async () => {
-      if (searchTerm && searchTerm.trim() !== "") {
-        const query = formatSearchQuery(searchTerm)
-        await fetchPurchaseInvoices(query)
-      } else {
-        await fetchPurchaseInvoices()
-      }
-    }, 400) // wait 400ms after user stops typing
-
-    return () => clearTimeout(delayDebounce);
-  }, [searchTerm]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -304,24 +327,30 @@ const Purchases = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Purchase Expense this month</div>
-              <div className="text-3xl font-bold">PKR {totalPurchasesMonthly}</div>
-              {/* <div className="text-sm text-green-600 mt-1">+12% from last month</div> */}
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Purchase Invoices this month</div>
-              <div className="text-3xl font-bold text-black-600">{totalPurchaseInvoicesMonthly}</div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Pending Invoices</div>
-              <div className="text-3xl font-bold text-black-600">{totalPendingPurchaseInvoices}</div>
-              <div className="text-sm text-muted-foreground mt-1">Awaiting payment</div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Pending Payment</div>
-              <div className="text-3xl font-bold text-red-600">PKR {totalPendingPayment}</div>
-            </div>
+            <MetricCard
+              title="Total Purchase Expense this month"
+              value={`PKR ${totalPurchasesMonthly}`}
+              loading={totalPurchasesMonthlyLoading}
+            />
+            <MetricCard
+              title="Total Purchase Invoices this month"
+              value={totalPurchaseInvoicesMonthly}
+              valueClassName="text-black-600"
+              loading={totalPurchaseInvoicesMonthlyLoading}
+            />
+            <MetricCard
+              title="Total Pending Invoices"
+              value={totalPendingPurchaseInvoices}
+              hint="Awaiting payment"
+              valueClassName="text-black-600"
+              loading={totalPendingPurchaseInvoicesLoading}
+            />
+            <MetricCard
+              title="Total Pending Payment"
+              value={`PKR ${totalPendingPayment}`}
+              valueClassName="text-red-600"
+              loading={totalPendingPaymentLoading}
+            />
           </div>
 
           {/* Purchases Records Section */}
@@ -340,15 +369,12 @@ const Purchases = () => {
             {/* Search and Filter */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                  <Input
-                    placeholder="Search purchases by customer name or ID..."
-                    className="pl-10 w-80"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
+                <SearchField
+                  placeholder="Search purchases by customer name or ID..."
+                  value={searchTerm}
+                  onChange={setSearchTerm}
+                  pending={searching}
+                />
                 <Button
                   variant="outline"
                   className="flex items-center space-x-2"
@@ -370,25 +396,26 @@ const Purchases = () => {
                   {permissions["edit"] ? <Edit className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>View/Update</span>
                 </Button>
-                <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={handleDeletion} disabled={selectedRows.length === 0 || !permissions["delete"]}>
-                  {permissions["delete"] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                <Button variant="outline" size="sm" className="flex items-center space-x-2" onClick={handleDeletion} disabled={deleting || selectedRows.length === 0 || !permissions["delete"]}>
+                  {deleting ? <Spinner size={16} /> : permissions["delete"] ? <Trash2 className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>Delete</span>
                 </Button>
               </div>
             </div>
 
-            {purchasesData && purchasesData.length > 0 ? (
+            {loading || (purchasesData && purchasesData.length > 0) ? (
               <DataTable columns={cols} headerOnly />
             ) : null}
           </div>
 
-          {purchasesData && purchasesData.length > 0 ? (
+          {loading || (purchasesData && purchasesData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? purchasesData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

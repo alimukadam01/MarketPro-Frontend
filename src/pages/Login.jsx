@@ -6,12 +6,13 @@ import { useAuth } from '../../services/AuthProvider'
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner"
 import * as z from "zod";
-import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { formatConfig } from "../../services/utils";
+import { usePending } from "@/hooks/use-pending";
 
 const loginSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -21,7 +22,7 @@ const loginSchema = z.object({
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const { pending, run } = usePending()
   const navigate = useNavigate()
   const { login: authLogIn } = useAuth()
   const form = useForm({
@@ -43,14 +44,11 @@ const Login = () => {
         
         authLogIn(accessToken, userData, business.id, config, business.name)
         
-        setIsLoading(false)
         navigate('/')
       }else{
-        setIsLoading(false)
         toast.error("Please provide correct credentials.")
       }
     }catch(error){
-      setIsLoading(false)
       console.log(error)
       toast.error("There was an error logging in. Please try again.")
     }
@@ -65,7 +63,7 @@ const Login = () => {
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(run(onSubmit))} className="space-y-6">
             <FormField
               control={form.control}
               name="email"
@@ -157,9 +155,9 @@ const Login = () => {
               </Link>
             </div>
 
-            <Button type="submit" className="w-full">
+            <SubmitButton type="submit" className="w-full" pending={pending} pendingLabel="Signing in…">
               Sign In
-            </Button>
+            </SubmitButton>
           </form>
         </Form>
 

@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Controller } from "react-hook-form";
 import { ArrowLeft, ArrowRight, CheckCircle2Icon, Plus, X } from "lucide-react";
-import { TargetPeriodTypeMap } from "../../../services/utils";
+import { formatPartyLabel, TargetPeriodTypeMap } from "../../../services/utils";
 import {
   getCustomersList,
   getEmployeesList,
@@ -19,6 +19,7 @@ import {
   productsAPIPackage,
   suppliersAPIPackage,
 } from "../../../services/api";
+import { SubmitButton } from "@/components/ui/submit-button";
 
 export const TOTAL_STEPS = 5;
 
@@ -80,6 +81,9 @@ const TargetForm = ({
   setFilters,
   submitLabel = "Create Target",
   success = false,
+  // The <form> is in CreateTarget/UpdateTarget, so the flag has to come down
+  // from there; this component only renders the button.
+  pending = false,
 }) => {
   const dataPointCode = watch("data_point");
   const scopeType = watch("scope_type");
@@ -809,13 +813,15 @@ const TargetForm = ({
                 <ArrowLeft />
                 Back
               </Button>
-              <Button
+              <SubmitButton
                 type="submit"
+                pending={pending}
+                pendingLabel="Saving…"
                 className={`transition-colors duration-300 ease-in-out ${success ? "bg-[#4BB543]" : ""}`}
               >
                 <CheckCircle2Icon />
                 {submitLabel}
-              </Button>
+              </SubmitButton>
             </div>
           </div>
 
@@ -877,7 +883,11 @@ export const loadTargetEntities = async (token, businessId, owner) => {
     ]);
 
   entities.customer = (customers || []).map((c) => ({ id: c.id, name: c.name }));
-  entities.supplier = (suppliers || []).map((s) => ({ id: s.id, name: s.name }));
+  // Lookup is by id, so `name` here is purely the label.
+  entities.supplier = (suppliers || []).map((s) => ({
+    id: s.id,
+    name: formatPartyLabel(s),
+  }));
   entities.product = (products || []).map((p) => ({ id: p.id, name: p.name }));
   entities.product_variant = (variants || []).map((v) => ({
     id: v.id,

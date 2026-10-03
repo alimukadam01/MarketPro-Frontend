@@ -350,12 +350,23 @@ export const pendingInvoicesOnly = (invoices) =>
  * pickers read the same way. The business name is dropped rather than repeated
  * when a party has none.
  */
-export const formatPartyBalanceOption = (party) => {
-  const label = party.business_name
+export const formatPartyBalanceOption = (party) =>
+  `${formatPartyLabel(party)} · PKR ${Number(party.balance || 0).toLocaleString()}`;
+
+/**
+ * How a party reads in any picker: "Ali Traders (Ali & Sons)".
+ *
+ * Suppliers are chosen by who you actually buy from, and a contact's name on
+ * its own often does not say which business that is - two suppliers can share
+ * a contact name. So the business name is part of the identity here, not
+ * decoration. It is optional on the model, so a supplier without one reads as
+ * a bare name rather than trailing empty brackets, and customers (which have
+ * no business_name at all) are unaffected.
+ */
+export const formatPartyLabel = (party) =>
+  party?.business_name
     ? `${party.name} (${party.business_name})`
-    : party.name;
-  return `${label} · PKR ${Number(party.balance || 0).toLocaleString()}`;
-};
+    : party?.name || "";
 
 /**
  * What each transaction type refers to, which decides the input shown beside

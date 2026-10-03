@@ -2,6 +2,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import PartyLedgerSection from "@/components/ui/party-ledger";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import PartyActions from "@/components/ui/party-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,9 @@ const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`
 const PartyLedger = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [ledger, setLedger] = useState(null);
+    // Feeds the Outstanding Balance card and the khaata below it, both of
+    // which come from this one request.
+    const [loading, setLoading] = useState(true);
     const [openingAmount, setOpeningAmount] = useState("");
     const [openingDate, setOpeningDate] = useState(
         todayForInput()
@@ -58,6 +62,8 @@ const PartyLedger = () => {
         } catch (error) {
             console.log("Error fetching ledger:", error);
             toast.error("Failed to fetch the ledger.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -147,17 +153,15 @@ const PartyLedger = () => {
                     ) : (
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                                <div className="bg-card rounded-lg p-6 border">
-                                    <div className="text-sm text-muted-foreground mb-2">
-                                        Outstanding Balance
-                                    </div>
-                                    <div className="text-3xl font-bold">
-                                        {formatCurrency(ledger?.closing_balance)}
-                                    </div>
-                                </div>
+                                <MetricCard
+                                  title="Outstanding Balance"
+                                  value={formatCurrency(ledger?.closing_balance)}
+                                  loading={loading}
+                                />
                             </div>
 
                             <PartyLedgerSection
+                                loading={loading}
                                 ledger={ledger}
                                 onRangeApply={fetchLedger}
                                 actions={partyActions}

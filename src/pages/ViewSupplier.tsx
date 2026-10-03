@@ -29,8 +29,10 @@ import { useFieldPatch } from "@/hooks/use-field-patch";
 const ViewSupplier = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [summary, setSummary] = useState(null);
+    const [summaryLoading, setSummaryLoading] = useState(true);
     const [ledger, setLedger] = useState(null);
     const [opening, setOpening] = useState(null);
+    const [openingLoading, setOpeningLoading] = useState(true);
     const [openingAmount, setOpeningAmount] = useState("");
     const [openingDate, setOpeningDate] = useState(todayForInput());
     const [savingOpening, setSavingOpening] = useState(false);
@@ -102,6 +104,8 @@ const ViewSupplier = () => {
         } catch (error) {
             console.log("Error fetching supplier summary:", error);
             toast.error("Failed to fetch supplier summary.");
+        } finally {
+            setSummaryLoading(false);
         }
     };
 
@@ -129,6 +133,8 @@ const ViewSupplier = () => {
             }
         } catch (error) {
             console.log("Error fetching opening balance:", error);
+        } finally {
+            setOpeningLoading(false);
         }
     };
 
@@ -255,16 +261,19 @@ const ViewSupplier = () => {
                         <MetricCard
                             title="Outstanding Balance"
                             value={formatCurrency(summary?.balance)}
+                            loading={summaryLoading}
                         />
                         <MetricCard
                             title="Total Business"
                             value={formatCurrency(summary?.total_business)}
+                            loading={summaryLoading}
                         />
                         {canSeeAccounting && (
                             <MetricCard
                                 title="Opening Balance"
                                 value={formatCurrency(opening?.amount)}
                                 hint={openingHint}
+                                loading={openingLoading}
                             />
                         )}
                     </div>
@@ -296,7 +305,7 @@ const ViewSupplier = () => {
                                             onChange: (e) =>
                                                 patchField(endpoint, "name", e.target.value),
                                         })}
-                                    />
+                            />
                                 </div>
                                 <div className="space-y-1">
                                     <Label htmlFor="phone">Phone</Label>
@@ -308,7 +317,7 @@ const ViewSupplier = () => {
                                             onChange: (e) =>
                                                 patchField(endpoint, "phone", e.target.value),
                                         })}
-                                    />
+                        />
                                 </div>
 
                                 <div className="space-y-1">
@@ -321,7 +330,7 @@ const ViewSupplier = () => {
                                             onChange: (e) =>
                                                 patchField(endpoint, "email", e.target.value),
                                         })}
-                                    />
+                        />
                                 </div>
                                 <div className="space-y-1">
                                     <Label htmlFor="business_name">Business name</Label>

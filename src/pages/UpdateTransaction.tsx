@@ -25,6 +25,7 @@ import {
 import { useAuth } from "../../services/AuthProvider";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
+    formatPartyLabel,
     createIdMap,
     getImageUrl,
     TransactionTypeGroups,
@@ -310,7 +311,7 @@ const UpdateTransaction = () => {
                                 ) : (
                                     Object.entries(config.options).map(([key, party]) => (
                                         <SelectItem value={String(key)} key={key}>
-                                            {String((party as Record<string, unknown>).name ?? "")}
+                                            {formatPartyLabel(party as Record<string, unknown>)}
                                         </SelectItem>
                                     ))
                                 )}

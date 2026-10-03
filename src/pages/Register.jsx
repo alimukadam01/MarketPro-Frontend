@@ -4,7 +4,8 @@ import { useForm } from "react-hook-form"
 import { register } from "../../services/api"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { usePending } from "@/hooks/use-pending"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -40,6 +41,8 @@ const Register = () => {
     },
   });
 
+  const { pending, run } = usePending()
+
   const onSubmit = async (data) => {
     try{
       const isCreated = await register(data)
@@ -65,7 +68,7 @@ const Register = () => {
         </div>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(run(onSubmit))} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -229,9 +232,9 @@ const Register = () => {
               )}
             />
 
-            <Button type="submit" className="w-full">
+            <SubmitButton type="submit" className="w-full" pending={pending} pendingLabel="Creating account…">
               Create Account
-            </Button>
+            </SubmitButton>
           </form>
         </Form>
 

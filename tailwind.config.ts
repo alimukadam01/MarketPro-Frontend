@@ -125,12 +125,32 @@ export default {
 					'85%, 100%': {
 						transform: 'translateX(var(--marquee-shift, 0px))'
 					}
+				},
+				// Skeleton placeholders. The sweep moves the BACKGROUND rather
+				// than a child element, so Skeleton stays a single div that
+				// cn() can restyle - a translating inner element would need a
+				// wrapper and would break every `className` a caller passes.
+				'shimmer': {
+					'0%': {
+						backgroundPosition: '140% 0'
+					},
+					'100%': {
+						backgroundPosition: '-40% 0'
+					}
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
-				'marquee': 'marquee 6s ease-in-out infinite alternate'
+				'marquee': 'marquee 6s ease-in-out infinite alternate',
+				// 700ms delay, and `backwards` so the delay renders the 0% keyframe
+				// instead of the unanimated default - without it the sweep would snap
+				// from position 0% to 140% the moment it started. Both live in the
+				// shorthand rather than as fill-mode-*/[animation-delay:] utilities
+				// because those are longhands in the same layer as this shorthand, so
+				// which one wins depends on stylesheet order. Keep the delay in step
+				// with SKELETON_ANIMATION_DELAY_MS in src/components/ui/skeleton.tsx.
+				'shimmer': 'shimmer 2.2s ease-in-out 700ms infinite alternate backwards'
 			}
 		}
 	},

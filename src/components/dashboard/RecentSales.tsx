@@ -8,8 +8,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useNavigate } from "react-router-dom";
+import { Skeleton } from "@/components/ui/skeleton";
 
-export function RecentSales( { recentSales } ) {
+export function RecentSales({ recentSales, loading = false }) {
 
   const navigate = useNavigate()
 
@@ -29,7 +30,24 @@ export function RecentSales( { recentSales } ) {
           </TableHeader>
           
           <TableBody>
-            {recentSales.map((sale, index) => (
+            {loading || !recentSales ? (
+              // One placeholder per row, spanning the row, rather than a bar
+              // per cell - the row is the unit the reader is waiting on.
+              Array.from({ length: 5 }).map((_, index) => (
+                <TableRow key={`skeleton-${index}`}>
+                  <TableCell colSpan={2} className="py-2">
+                    <Skeleton className="h-6 w-full rounded-md" />
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : recentSales.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={2} className="text-sm text-muted-foreground">
+                  No sales recorded yet.
+                </TableCell>
+              </TableRow>
+            ) : (
+            recentSales.map((sale, index) => (
               <TableRow key={index} style = {{cursor: "pointer",}} onClick={()=>navigate(
                   'sales/update-invoice', {
                     state: {
@@ -40,7 +58,7 @@ export function RecentSales( { recentSales } ) {
                 <TableCell className="font-medium">{sale.product} x {sale.quantity}</TableCell>
                 <TableCell className="text-right">PKR {sale.quantity * sale.price}</TableCell>
               </TableRow>
-            ))}
+            )))}
           </TableBody>
         
         </Table>

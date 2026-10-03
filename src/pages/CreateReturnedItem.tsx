@@ -15,8 +15,11 @@ import {
     returnedItemsAPIPackage
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateReturnedItem = () => {
+  const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [units, setUnits] = useState([])
@@ -61,7 +64,7 @@ const CreateReturnedItem = () => {
                     <DynamicBreadCrumb />
 
                     <div className="flex items-center justify-between">
-                        <form onSubmit={handleSubmit(onReturnedItemCreate)} className="flex flex-row w-[48%] gap-12">
+                        <form onSubmit={handleSubmit(run(onReturnedItemCreate))} className="flex flex-row w-[48%] gap-12">
                             {/* First Column */}
                             <div className="flex flex-col flex-wrap flex-1">
                                 <h2 className="text-lg font-semibold mb-6">Add New Returned Item (Optional)</h2>
@@ -100,7 +103,7 @@ const CreateReturnedItem = () => {
                                 </div>
 
                                 <div className="flex justify-end gap-3 mt-auto">
-                                    <Button type="submit">Create Returned Item</Button>
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Returned Item</SubmitButton>
                                 </div>
                             </div>
                         </form>

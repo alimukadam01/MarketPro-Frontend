@@ -11,6 +11,7 @@ import { Plus, X, RotateCcwIcon, RefreshCcwIcon, CheckCircle2Icon } from "lucide
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
+    formatPartyLabel,
     createIdMap,
     PQStatusMap
 } from "../../services/utils"
@@ -24,8 +25,11 @@ import {
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { ReadStream } from "fs";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const UpdatePurchaseQuotation = () => {
+  const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [quotationItems, setQuotationItems] = useState([])
@@ -177,7 +181,7 @@ const UpdatePurchaseQuotation = () => {
                     {/* Breadcrumb */}
                     <DynamicBreadCrumb />
 
-                    <form onSubmit={handleSubmit(onPurchaseQuotationUpdate)} className="flex flex-col flex-1">
+                    <form onSubmit={handleSubmit(run(onPurchaseQuotationUpdate))} className="flex flex-col flex-1">
                         <h2 className="text-lg font-semibold mb-6">Update Project Quotation</h2>
                         <div
                             className="flex flex-row gap-12 h-auto"
@@ -256,7 +260,7 @@ const UpdatePurchaseQuotation = () => {
                                                     <SelectContent>
                                                         {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, item]) => (
                                                             <SelectItem key={key} value={key}>
-                                                                {item.name}
+                                                                {formatPartyLabel(item)}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
@@ -320,10 +324,8 @@ const UpdatePurchaseQuotation = () => {
                         </div>
 
                         <div className="mt-[20px] flex justify-end">
-                            <Button type="submit">
-                                <CheckCircle2Icon />
-                                Update Purchase Quotation
-                            </Button>
+                            <SubmitButton type="submit" pending={pending} pendingLabel="Updating…"><CheckCircle2Icon />
+                                Update Purchase Quotation</SubmitButton>
                         </div>
                     </form>
                 </main>

@@ -12,8 +12,11 @@ import { returnedItemsAPIPackage } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { Checkbox } from "@/components/ui/checkbox";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const UpdateReturnedItem = () => {
+  const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const { token } = useAuth();
     const navigate = useNavigate();
@@ -105,7 +108,7 @@ const UpdateReturnedItem = () => {
 
                     <div className="flex items-center justify-between">
                         <form
-                            onSubmit={handleSubmit(onReturnedItemUpdate)}
+                            onSubmit={handleSubmit(run(onReturnedItemUpdate))}
                             className="flex flex-row w-[48%] gap-12"
                         >
                             {/* First Column */}
@@ -152,7 +155,7 @@ const UpdateReturnedItem = () => {
                                 </div>
 
                                 <div className="flex justify-end gap-3 mt-auto">
-                                    <Button type="submit">Update Returned Item</Button>
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Returned Item</SubmitButton>
                                 </div>
                             </div>
                         </form>

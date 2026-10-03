@@ -11,6 +11,7 @@ import { CheckCircle2Icon, Plus, Trash2, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
+    formatPartyLabel,
     PaymentStatusMap,
     PQStatusMap,
     createIdMap,
@@ -23,8 +24,11 @@ import {
     postPurchaseQuotationAndItems
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreatePurchaseQuotation = () => {
+  const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [quotationItems, setQuotationItems] = useState([])
@@ -135,7 +139,7 @@ const CreatePurchaseQuotation = () => {
                     {/* Breadcrumb */}
                     <DynamicBreadCrumb />
 
-                    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1">
+                    <form onSubmit={handleSubmit(run(onSubmit))} className="flex flex-col flex-1">
                         <h2 className="text-lg font-semibold mb-6">Add Project Quotation</h2>
                         <div
                             className="flex flex-row gap-12 h-auto"
@@ -214,7 +218,7 @@ const CreatePurchaseQuotation = () => {
                                                     <SelectContent>
                                                         {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, item]) => (
                                                             <SelectItem key={key} value={key}>
-                                                                {item.name}
+                                                                {formatPartyLabel(item)}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
@@ -278,10 +282,8 @@ const CreatePurchaseQuotation = () => {
                         </div>
 
                         <div className="mt-[20px] flex justify-end">
-                            <Button type="submit">
-                                <CheckCircle2Icon />
-                                Create Purchase Quotation
-                            </Button>
+                            <SubmitButton type="submit" pending={pending} pendingLabel="Creating…"><CheckCircle2Icon />
+                                Create Purchase Quotation</SubmitButton>
                         </div>
                     </form>
                 </main>

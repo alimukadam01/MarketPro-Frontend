@@ -11,6 +11,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
+  formatPartyLabel,
   PaymentStatusMap,
   PurchaseInvoiceStatusMap,
   createIdMap,
@@ -28,8 +29,11 @@ import {
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import Payments from "@/components/ui/payments";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const UpdatePurchaseInvoice = () => {
+  const { pending, run } = usePending();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [paymentsOpen, setPaymentsOpen] = useState(false)
@@ -257,7 +261,7 @@ const UpdatePurchaseInvoice = () => {
           {/* Breadcrumb */}
           <DynamicBreadCrumb />
 
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-row gap-12">
+          <form onSubmit={handleSubmit(run(onSubmit))} className="flex flex-row gap-12">
             {/* First Column */}
             <div className="flex flex-col flex-wrap flex-1">
               <h2 className="text-lg font-semibold mb-6">Invoice Details</h2>
@@ -280,7 +284,7 @@ const UpdatePurchaseInvoice = () => {
                         <SelectContent>
                           {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, supplier]) => (
                             <SelectItem value={key} key={key}>
-                              {supplier.name}
+                              {formatPartyLabel(supplier)}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -506,7 +510,7 @@ const UpdatePurchaseInvoice = () => {
                   <Button type="button" variant="outline" className="w-36" onClick={() => setPaymentsOpen(true)}>Add Payment</Button>
                 </div>
                 <div className="flex justify-end gap-3">
-                  <Button type="submit" className="w-36">Update Invoice</Button>
+                  <SubmitButton type="submit" className="w-36" pending={pending} pendingLabel="Updating…">Update Invoice</SubmitButton>
                 </div>
               </div>
             </div>

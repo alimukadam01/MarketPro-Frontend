@@ -21,8 +21,12 @@ import {
     updateProductAndVariants,
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
+import { SearchField } from "@/components/ui/search-field";
 
 const UpdateProduct = () => {
+  const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [units, setUnits] = useState([])
@@ -255,7 +259,7 @@ const UpdateProduct = () => {
                     {/* Breadcrumb */}
                     <DynamicBreadCrumb />
 
-                    <form onSubmit={handleSubmit(onProductUpdate)} className="flex flex-col flex-1 gap-4">
+                    <form onSubmit={handleSubmit(run(onProductUpdate))} className="flex flex-col flex-1 gap-4">
                         <div className="flex gap-12 flex-1">
                             {/* First Column */}
                             <div className="flex flex-col flex-1">
@@ -423,17 +427,14 @@ const UpdateProduct = () => {
 
                                 {/* Ends flush with the Create Variant button, clear of the reset column */}
                                 <div className="flex gap-4 mb-2">
-                                    <div className="w-[100%] relative">
-                                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
-                                        <Input
-                                            id="variantSearch"
-                                            type="text"
-                                            placeholder="Search variants"
-                                            className="pl-10"
-                                            value={variantSearchTerm}
-                                            onChange={(e) => setVariantSearchTerm(e.target.value)}
-                                        />
-                                    </div>
+                                    <SearchField
+                                      id="variantSearch"
+                                      placeholder="Search variants"
+                                      value={variantSearchTerm}
+                                      onChange={setVariantSearchTerm}
+                                      className="w-full"
+                                      wrapperClassName="w-full"
+                                    />
                                     <div className="w-[5%]"></div>
                                 </div>
 
@@ -483,7 +484,7 @@ const UpdateProduct = () => {
                         </div>
 
                         <div className="flex justify-end mt-auto">
-                            <Button type="submit">Update Product and Variants</Button>
+                            <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Product and Variants</SubmitButton>
                         </div>
                     </form>
                 </main>

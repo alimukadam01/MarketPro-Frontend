@@ -62,7 +62,12 @@ const DailyBook = () => {
         todayForInput()
     );
     const [dayBook, setDayBook] = useState(null);
+    // Every surface fed by fetchDayBook shares this: the two figures above the
+    // fold and the per-account tables, which are nested inside dayBook rather
+    // than fetched separately.
+    const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
+    const [summaryLoading, setSummaryLoading] = useState(true);
     const [accountIndex, setAccountIndex] = useState(0);
     const { token, getPermissions } = useAuth();
     const permissions = getPermissions("accounting");
@@ -79,6 +84,7 @@ const DailyBook = () => {
 
     const fetchDayBook = async () => {
         if (!token) return;
+        setLoading(true);
         try {
             const res = await getDayBook(token, selectedDate);
             if (res) {
@@ -89,11 +95,14 @@ const DailyBook = () => {
         } catch (error) {
             console.log("Error fetching day book:", error);
             toast.error("Failed to fetch the day book.");
+        } finally {
+            setLoading(false);
         }
     };
 
     const fetchSummary = async () => {
         if (!token) return;
+        setSummaryLoading(true);
         try {
             const res = await getDailySummary(token, selectedDate);
             if (res) {
@@ -104,6 +113,8 @@ const DailyBook = () => {
         } catch (error) {
             console.log("Error fetching daily summary:", error);
             toast.error("Failed to fetch the daily summary.");
+        } finally {
+          setSummaryLoading(false);
         }
     };
 
@@ -167,35 +178,43 @@ const DailyBook = () => {
                                 <MetricCard
                                     title="Money In"
                                     value={formatCurrency(dayBook?.total_money_in)}
-                                />
+                                    loading={loading}
+                                  />
                                 <MetricCard
                                     title="Money Out"
                                     value={formatCurrency(dayBook?.total_money_out)}
-                                />
+                                    loading={loading}
+                                  />
                                 <MetricCard
                                     title="Credit Extended"
                                     value={formatCurrency(summary?.credit_extended)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                                 <MetricCard
                                     title="Credit Recovered"
                                     value={formatCurrency(summary?.money_in?.udhaar_recovered)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                                 <MetricCard
                                     title="Total Receivable"
                                     value={formatCurrency(summary?.total_receivable)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                                 <MetricCard
                                     title="Total Payable"
                                     value={formatCurrency(summary?.total_payable)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                                 <MetricCard
                                     title="Cheques Due"
                                     value={String(summary?.pending_cheques?.length || 0)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                                 <MetricCard
                                     title="Profit (estimated)"
                                     value={formatCurrency(summary?.profit?.profit)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                             </div>
 
                             <p className="text-xs text-muted-foreground">
@@ -340,12 +359,13 @@ const DailyBook = () => {
                                             </div>
                                         </div>
 
-                                        {account.rows?.length > 0 ? (
+                                        {loading || account.rows?.length > 0 ? (
                                             <DataTable
                                                 columns={cols}
                                                 data={account.rows}
                                                 selectedRows={[]}
                                                 onRowClick={() => { }}
+                                                loading={loading}
                                             />
                                         ) : (
                                             <div className="bg-card rounded-lg p-6 border">
