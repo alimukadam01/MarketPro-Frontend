@@ -74,6 +74,10 @@ const Expenses = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [expensesData, setExpensesData] = useState(null);
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [totalExpenseAmount, setTotalExpenseAmount] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
@@ -136,6 +140,8 @@ const Expenses = () => {
     } catch (error) {
       toast.error("Failed to fetch expenses.");
       console.error("Error fetching expenses:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -317,18 +323,19 @@ const Expenses = () => {
               </div>
             </div>
 
-            {expensesData && expensesData.length > 0 ? (
+            {loading || (expensesData && expensesData.length > 0) ? (
               <DataTable columns={cols} headerOnly />
             ) : null}
           </div>
 
-          {expensesData && expensesData.length > 0 ? (
+          {loading || (expensesData && expensesData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? expensesData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

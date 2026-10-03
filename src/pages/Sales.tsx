@@ -139,6 +139,10 @@ const Sales = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [salesData, setSalesData] = useState(null);
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
   const [totalSalesDaily, setTotalSalesDaily] = useState(0);
   const [totalItemsSoldDaily, setTotalItemsSoldDaily] = useState(0);
   const [totalInvoicesDaily, setTotalInvoicesDaily] = useState(0);
@@ -207,6 +211,8 @@ const Sales = () => {
     } catch (error) {
       toast.error("Failed to fetch sales invoices.");
       console.error("Error fetching sales invoices:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -443,18 +449,19 @@ const Sales = () => {
               </div>
             </div>
 
-            {salesData && salesData.length > 0 ? (
+            {loading || (salesData && salesData.length > 0) ? (
               <DataTable columns={cols} headerOnly />
             ) : null}
           </div>
 
-          {salesData && salesData.length > 0 ? (
+          {loading || (salesData && salesData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? salesData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

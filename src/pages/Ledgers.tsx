@@ -62,6 +62,9 @@ const supplierCols = [
 const Ledgers = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [receivables, setReceivables] = useState(null);
+    // customerRows/supplierRows below are derived, so the flag tracks the
+    // two fetches that feed them rather than the arrays themselves.
+    const [loading, setLoading] = useState(true);
     const [payables, setPayables] = useState(null);
     const [profit, setProfit] = useState(null);
     const { token, getPermissions } = useAuth();
@@ -101,6 +104,14 @@ const Ledgers = () => {
     useEffect(() => {
         if (!token) return;
 
+        // Two fetches feed the two tables; the tables stop shimmering when
+        // BOTH have answered, so neither can un-shimmer over missing data.
+        let outstanding = 2;
+        const settle = () => {
+            outstanding -= 1;
+            if (outstanding <= 0) setLoading(false);
+        };
+
         const fetchReceivables = async () => {
             try {
                 const res = await getReceivables(token);
@@ -112,6 +123,8 @@ const Ledgers = () => {
             } catch (error) {
                 console.log("Error fetching receivables:", error);
                 toast.error("Failed to fetch receivables.");
+            } finally {
+                settle();
             }
         };
 
@@ -126,6 +139,8 @@ const Ledgers = () => {
             } catch (error) {
                 console.log("Error fetching payables:", error);
                 toast.error("Failed to fetch payables.");
+            } finally {
+                settle();
             }
         };
 
@@ -237,12 +252,13 @@ const Ledgers = () => {
                                 <h2 className="text-xl font-semibold">
                                     Customers with Outstanding Balance
                                 </h2>
-                                {customerRows.length > 0 ? (
+                                {loading || customerRows.length > 0 ? (
                                     <DataTable
                                         columns={customerCols}
                                         data={customerRows}
                                         selectedRows={[]}
                                         onRowClick={openCustomerLedger}
+                                        loading={loading}
                                     />
                                 ) : (
                                     <div className="bg-card rounded-lg p-6 border">
@@ -256,12 +272,13 @@ const Ledgers = () => {
                             {/* Suppliers we owe */}
                             <div className="space-y-4">
                                 <h2 className="text-xl font-semibold">Suppliers Owed</h2>
-                                {supplierRows.length > 0 ? (
+                                {loading || supplierRows.length > 0 ? (
                                     <DataTable
                                         columns={supplierCols}
                                         data={supplierRows}
                                         selectedRows={[]}
                                         onRowClick={openSupplierLedger}
+                                        loading={loading}
                                     />
                                 ) : (
                                     <div className="bg-card rounded-lg p-6 border">

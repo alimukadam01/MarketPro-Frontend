@@ -55,6 +55,10 @@ const Products = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [productsData, setProductsData] = useState(null);
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
   const [totalProducts, setTotalProducts] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
@@ -116,6 +120,8 @@ const Products = () => {
     } catch (error) {
       toast.error("Failed to fetch products.");
       console.error("Error fetching products:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -272,18 +278,19 @@ const Products = () => {
               </div>
             </div>
 
-            {productsData && productsData.length > 0 ? (
+            {loading || (productsData && productsData.length > 0) ? (
               <DataTable columns={cols} headerOnly />
             ) : null}
           </div>
 
-          {productsData && productsData.length > 0 ? (
+          {loading || (productsData && productsData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? productsData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

@@ -58,6 +58,10 @@ const Projects = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [selectedRows, setSelectedRows] = useState([])
   const [projectsData, setProjectsData] = useState(null)
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
   const [projectsIdMap, setProjectsIdMap] = useState([])
   const [totalProjects, setTotalProjects] = useState(0)
   const [searchTerm, setSearchTerm] = useState("")
@@ -123,6 +127,8 @@ const Projects = () => {
     } catch (error) {
       toast.error("Failed to fetch projects.");
       console.error("Error fetching projects:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -282,18 +288,19 @@ const Projects = () => {
               </div>
             </div>
 
-            {projectsData && projectsData.length > 0 ? (
+            {loading || (projectsData && projectsData.length > 0) ? (
               <DataTable columns={cols} headerOnly />
             ) : null}
           </div>
 
-          {projectsData && projectsData.length > 0 ? (
+          {loading || (projectsData && projectsData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? projectsData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

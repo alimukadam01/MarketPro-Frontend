@@ -135,6 +135,10 @@ const Accounting = () => {
     const [summary, setSummary] = useState(null);
     const [cashTrend, setCashTrend] = useState(Array(30).fill(0));
     const [transactionsData, setTransactionsData] = useState(null);
+    // true until the first response lands, so the table never flashes
+    // "no records" before it has asked. Cleared in a finally, never on
+    // the success path alone, or a failed load shimmers for ever.
+    const [loading, setLoading] = useState(true);
     const [selectedRows, setSelectedRows] = useState([]);
     const [searchTerm, setSearchTerm] = useState("");
     const [isDeleted, setIsDeleted] = useState(false);
@@ -161,6 +165,8 @@ const Accounting = () => {
         } catch (error) {
             console.log("Error fetching transactions:", error);
             toast.error("Failed to fetch transactions.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -443,18 +449,19 @@ const Accounting = () => {
                                 </div>
                             </div>
 
-                            {transactionsData && transactionsData.length > 0 ? (
+                            {loading || (transactionsData && transactionsData.length > 0) ? (
                                 <DataTable columns={cols} headerOnly />
                             ) : null}
                             </div>
 
-                            {transactionsData && transactionsData.length > 0 ? (
+                            {loading || (transactionsData && transactionsData.length > 0) ? (
                                 <DataTable
                                     columns={cols}
                                     data={transactionsData}
                                     selectedRows={selectedRows}
                                     onRowClick={toggleRowSelection}
                                     rowsOnly
+                                    loading={loading}
                                 />
                             ) : null}
                             </div>

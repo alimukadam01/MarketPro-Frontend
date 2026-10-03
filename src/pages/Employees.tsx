@@ -102,6 +102,8 @@ const Employees = () => {
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [employees, setEmployees] = useState([])
+  // Distinct from isLoading above, which belongs to the dialog's submit.
+  const [tableLoading, setTableLoading] = useState(true)
   const [selectedRows, setSelectedRows] = useState([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -158,6 +160,8 @@ const Employees = () => {
     } catch (error) {
       console.log("Error fetching employees:", error)
       toast.error("Failed to fetch employees.")
+    } finally {
+      setTableLoading(false)
     }
   }
 
@@ -349,10 +353,11 @@ const Employees = () => {
             </div>
           </div>
 
-          {employeesData && employeesData.length > 0 ? (
+          {tableLoading || (employeesData && employeesData.length > 0) ? (
             <DataTable
               columns={cols}
               data={employeesData}
+              loading={tableLoading}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
             />

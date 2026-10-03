@@ -7,6 +7,7 @@ import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   formatSearchQuery,
@@ -57,7 +58,12 @@ const Suppliers = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [suppliersData, setSuppliersData] = useState(null);
-  const [totalSuppliers, setTotalSuppliers] = useState(0);
+  const [totalSuppliers, setTotalSuppliers] = useState(null);
+  // true until the first response lands, so the table never flashes "no
+  // records" before it has asked. Cleared in a finally, never on the success
+  // path alone, or a failed load would shimmer for ever.
+  const [loading, setLoading] = useState(true);
+  const [totalLoading, setTotalLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const { getPermissions } = useAuth()
@@ -117,6 +123,8 @@ const Suppliers = () => {
     } catch (error) {
       toast.error("Failed to fetch suppliers.");
       console.error("Error fetching suppliers:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -140,6 +148,8 @@ const Suppliers = () => {
       } catch (error) {
         toast.error("Failed to fetch total suppliers.");
         console.error("Error fetching total suppliers:", error);
+      } finally {
+        setTotalLoading(false);
       }
     }
 
@@ -193,12 +203,11 @@ const Suppliers = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Suppliers
-              </div>
-              <div className="text-3xl font-bold">{totalSuppliers}</div>
-            </div>
+            <MetricCard
+              title="Total Suppliers"
+              value={totalSuppliers}
+              loading={totalLoading}
+            />
           </div>
 
           {/* Sales Records Section */}
@@ -272,18 +281,19 @@ const Suppliers = () => {
               </div>
             </div>
 
-            {suppliersData && suppliersData.length > 0 ? (
+            {loading || (suppliersData && suppliersData.length > 0) ? (
               <DataTable columns={cols} headerOnly />
             ) : null}
           </div>
 
-          {suppliersData && suppliersData.length > 0 ? (
+          {loading || (suppliersData && suppliersData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? suppliersData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

@@ -62,6 +62,9 @@ const DailyBook = () => {
         todayForInput()
     );
     const [dayBook, setDayBook] = useState(null);
+    // The tables are nested one per account inside dayBook, so they all
+    // share the parent fetch's flag.
+    const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
     const [accountIndex, setAccountIndex] = useState(0);
     const { token, getPermissions } = useAuth();
@@ -89,6 +92,8 @@ const DailyBook = () => {
         } catch (error) {
             console.log("Error fetching day book:", error);
             toast.error("Failed to fetch the day book.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -340,12 +345,13 @@ const DailyBook = () => {
                                             </div>
                                         </div>
 
-                                        {account.rows?.length > 0 ? (
+                                        {loading || account.rows?.length > 0 ? (
                                             <DataTable
                                                 columns={cols}
                                                 data={account.rows}
                                                 selectedRows={[]}
                                                 onRowClick={() => { }}
+                                                loading={loading}
                                             />
                                         ) : (
                                             <div className="bg-card rounded-lg p-6 border">

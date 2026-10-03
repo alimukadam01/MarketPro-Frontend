@@ -65,6 +65,10 @@ const InventoryOverview = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [selectedRows, setSelectedRows] = useState([])
   const [inventoryData, setInventoryData] = useState(null)
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
   const [totalInventoryValue, setTotalInventoryValue] = useState(0)
   const [totalRestocksReq, setTotalRestocksReq] = useState(0)
   const [searchTerm, setSearchTerm] = useState(null);
@@ -132,6 +136,8 @@ const InventoryOverview = () => {
     } catch (error) {
       toast.error("Failed to fetch Inventory items.")
       console.error("Error fetching Inventory items:", error)
+    } finally {
+        setLoading(false);
     }
   }
 
@@ -287,7 +293,7 @@ const InventoryOverview = () => {
 
             {/* Same colsConfig as the rows below, or the pinned header's tracks
                 would not line up with them. */}
-            {inventoryData && inventoryData.length > 0 ? (
+            {loading || (inventoryData && inventoryData.length > 0) ? (
               <DataTable
                 columns={cols}
                 colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"}
@@ -297,7 +303,7 @@ const InventoryOverview = () => {
           </div>
 
           {/* Inventory Data Table */}
-          {inventoryData && inventoryData.length > 0 ? (
+          {loading || (inventoryData && inventoryData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? inventoryData : null}
@@ -305,6 +311,7 @@ const InventoryOverview = () => {
               onRowClick={toggleRowSelection}
               colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

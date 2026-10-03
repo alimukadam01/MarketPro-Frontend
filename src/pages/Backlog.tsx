@@ -94,6 +94,10 @@ const Backlog = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [backlogData, setBacklogData] = useState(null);
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isDeleted, setIsDeleted] = useState(false);
   const { token, user, getPermissions } = useAuth();
@@ -120,6 +124,8 @@ const Backlog = () => {
     } catch (error) {
       toast.error("Failed to fetch backlog entries.");
       console.log("Error fetching backlog:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -303,18 +309,19 @@ const Backlog = () => {
               </div>
             </div>
 
-            {backlogData && backlogData.length > 0 ? (
+            {loading || (backlogData && backlogData.length > 0) ? (
               <DataTable columns={cols} headerOnly />
             ) : null}
           </div>
 
-          {backlogData && backlogData.length > 0 ? (
+          {loading || (backlogData && backlogData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions?.["view"] ? backlogData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

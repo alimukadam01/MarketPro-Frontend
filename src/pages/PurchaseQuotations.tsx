@@ -57,6 +57,10 @@ const PurchaseQuotations = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [selectedRows, setSelectedRows] = useState([])
   const [purchaseQuotationsData, setPurchaseQuotationsData] = useState(null)
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
   const [purchaseQuotationsIdMap, setPurchaseQuotationsIdMap] = useState([])
   const [totalPurchaseQuotations, setTotalPurchaseQuotations] = useState(0)
   const [searchTerm, setSearchTerm] = useState("")
@@ -119,6 +123,8 @@ const PurchaseQuotations = () => {
     } catch (error) {
       toast.error("Failed to fetch purchase quotations.");
       console.error("Error fetching purchase quotations:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -278,12 +284,12 @@ const PurchaseQuotations = () => {
               </div>
             </div>
 
-            {purchaseQuotationsData && purchaseQuotationsData.length > 0 ? (
+            {loading || (purchaseQuotationsData && purchaseQuotationsData.length > 0) ? (
               <DataTable columns={cols} colsConfig={"[48px_1fr_1fr_1fr_1fr_512px]"} headerOnly />
             ) : null}
           </div>
 
-          {purchaseQuotationsData && purchaseQuotationsData.length > 0 ? (
+          {loading || (purchaseQuotationsData && purchaseQuotationsData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? purchaseQuotationsData : null}
@@ -291,6 +297,7 @@ const PurchaseQuotations = () => {
               onRowClick={toggleRowSelection}
               colsConfig={"[48px_1fr_1fr_1fr_1fr_512px]"}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

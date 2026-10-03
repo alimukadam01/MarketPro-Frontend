@@ -71,6 +71,10 @@ const ReturnedItems = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [selectedRows, setSelectedRows] = useState([])
   const [returnedItemsData, setReturnedItemsData] = useState(null)
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
   const [returnedItemsIdMap, setReturnedItemsIdMap] = useState([])
   const [totalReturnedItems, setTotalReturnedItems] = useState(0)
   const [searchTerm, setSearchTerm] = useState("")
@@ -165,6 +169,8 @@ const ReturnedItems = () => {
     } catch (error) {
       toast.error("Failed to fetch returned items.");
       console.error("Error fetching returned items:", error);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -334,12 +340,12 @@ const ReturnedItems = () => {
               </div>
             </div>
 
-            {returnedItemsData && returnedItemsData.length > 0 ? (
+            {loading || (returnedItemsData && returnedItemsData.length > 0) ? (
               <DataTable columns={cols} colsConfig={"[48px_120px_512px_1fr_1fr_1fr_1fr]"} headerOnly />
             ) : null}
           </div>
 
-          {returnedItemsData && returnedItemsData.length > 0 ? (
+          {loading || (returnedItemsData && returnedItemsData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? returnedItemsData : null}
@@ -347,6 +353,7 @@ const ReturnedItems = () => {
               onRowClick={toggleRowSelection}
               colsConfig={"[48px_120px_512px_1fr_1fr_1fr_1fr]"}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

@@ -51,6 +51,10 @@ const Locations = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
   const [locationsData, setLocationsData] = useState(null);
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
   const [totalLocations, setTotalLocations] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
@@ -114,6 +118,8 @@ const Locations = () => {
     } catch (error) {
       toast.error("Failed to fetch locations.");
       console.error("Error fetching locations:", error);
+    } finally {
+        setLoading(false);
     }
   }
 
@@ -269,12 +275,12 @@ const Locations = () => {
               </div>
             </div>
 
-            {locationsData && locationsData.length > 0 ? (
+            {loading || (locationsData && locationsData.length > 0) ? (
               <DataTable columns={cols} colsConfig="[48px_512px_1fr]" headerOnly />
             ) : null}
           </div>
 
-          {locationsData && locationsData.length > 0 ? (
+          {loading || (locationsData && locationsData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? locationsData : null}
@@ -282,6 +288,7 @@ const Locations = () => {
               onRowClick={toggleRowSelection}
               colsConfig="[48px_512px_1fr]"
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>

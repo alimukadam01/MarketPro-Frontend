@@ -118,6 +118,10 @@ const Purchases = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [selectedRows, setSelectedRows] = useState([])
   const [purchasesData, setPurchasesData] = useState(null)
+  // true until the first response lands, so the table never flashes
+  // "no records" before it has asked. Cleared in a finally, never on
+  // the success path alone, or a failed load shimmers for ever.
+  const [loading, setLoading] = useState(true);
   const [totalPurchasesMonthly, setTotalPurchasesMonthly] = useState(0)
   const [totalPurchaseInvoicesMonthly, setTotalPurchaseInvoicesMonthly] = useState(0)
   const [totalPendingPurchaseInvoices, setTotalPendingPurchaseInvoices] = useState(0)
@@ -181,6 +185,8 @@ const Purchases = () => {
     } catch (error) {
       toast.error("Failed to fetch purchase invoices.")
       console.error("Error fetching purchase invoices:", error)
+    } finally {
+        setLoading(false);
     }
   }
 
@@ -377,18 +383,19 @@ const Purchases = () => {
               </div>
             </div>
 
-            {purchasesData && purchasesData.length > 0 ? (
+            {loading || (purchasesData && purchasesData.length > 0) ? (
               <DataTable columns={cols} headerOnly />
             ) : null}
           </div>
 
-          {purchasesData && purchasesData.length > 0 ? (
+          {loading || (purchasesData && purchasesData.length > 0) ? (
             <DataTable
               columns={cols}
               data={permissions["view"] ? purchasesData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               rowsOnly
+              loading={loading}
             />
           ) : null}
           </div>
