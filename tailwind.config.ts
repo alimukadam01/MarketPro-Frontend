@@ -125,12 +125,25 @@ export default {
 					'85%, 100%': {
 						transform: 'translateX(var(--marquee-shift, 0px))'
 					}
+				},
+				// Skeleton placeholders. The sweep moves the BACKGROUND rather
+				// than a child element, so Skeleton stays a single div that
+				// cn() can restyle - a translating inner element would need a
+				// wrapper and would break every `className` a caller passes.
+				'shimmer': {
+					'0%': {
+						backgroundPosition: '200% 0'
+					},
+					'100%': {
+						backgroundPosition: '-200% 0'
+					}
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
-				'marquee': 'marquee 6s ease-in-out infinite alternate'
+				'marquee': 'marquee 6s ease-in-out infinite alternate',
+				'shimmer': 'shimmer 1.6s linear infinite'
 			}
 		}
 	},

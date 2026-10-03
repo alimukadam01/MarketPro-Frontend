@@ -1,17 +1,28 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "../../../services/utils";
 
 interface ChartCardProps {
   title: string;
-  data: { day: string; value: number }[];
+  /** Null while loading. Never pass a zero-filled array - see `loading`. */
+  data: { day: string; value: number }[] | null;
   color?: string;
   valueLabel?: string;
+  /**
+   * True while the trend is still being fetched.
+   *
+   * The dashboard used to seed both trends with Array(30).fill(0), so before
+   * the data arrived it drew a confident flat line along zero for a month.
+   * That is worse than an empty card: it is a readable, wrong answer. Seed the
+   * state as null and pass loading instead.
+   */
+  loading?: boolean;
 }
 
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
 
-export function ChartCard({ title, data, color = "#8b5cf6", valueLabel = "Amount" }: ChartCardProps) {
+export function ChartCard({ title, data, color = "#8b5cf6", valueLabel = "Amount", loading = false }: ChartCardProps) {
   return (
     // overflow-hidden is the backstop: ResponsiveContainer measures its parent and
     // writes a fixed pixel width onto the chart, so if it ever lags behind a shrinking
@@ -23,6 +34,9 @@ export function ChartCard({ title, data, color = "#8b5cf6", valueLabel = "Amount
       </CardHeader>
       <CardContent>
         <div className="h-48 w-full min-w-0">
+          {loading || !data ? (
+            <Skeleton className="h-full w-full" />
+          ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} >
               <XAxis
@@ -57,6 +71,7 @@ export function ChartCard({ title, data, color = "#8b5cf6", valueLabel = "Amount
               />
             </LineChart>
           </ResponsiveContainer>
+          )}
         </div>
       </CardContent>
     </Card>

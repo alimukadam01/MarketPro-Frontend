@@ -17,6 +17,7 @@ import {
   getMonthlyExpensesTrend
 } from '../../services/api'
 import { toast } from "react-toastify";
+import { formatCurrency } from "../../services/utils";
 
 // Sample data for charts
 
@@ -25,13 +26,21 @@ const Index = () => {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [recentSales, SetRecentSales] = useState([])
-  const [totalInventoryValue, SetTotalInventoryValue] = useState(0)
-  const [totalSalesDaily, setTotalSalesDaily] = useState(0)
-  const [avgOrderValue, setAvgOrderValue] = useState(0)
-  const [totalPurchases, setTotalPurchases] = useState(0)
-  const [monthlySalesTrend, setMonthlySalesTrend] = useState(Array(30).fill(0))
-  const [monthlyExpensesTrend, setMonthlyExpensesTrend] = useState(Array(30).fill(0))
+  const [recentSales, SetRecentSales] = useState(null)
+  const [totalInventoryValue, SetTotalInventoryValue] = useState(null)
+  const [totalSalesDaily, setTotalSalesDaily] = useState(null)
+  const [avgOrderValue, setAvgOrderValue] = useState(null)
+  const [totalPurchases, setTotalPurchases] = useState(null)
+  const [monthlySalesTrend, setMonthlySalesTrend] = useState(null)
+  const [monthlyExpensesTrend, setMonthlyExpensesTrend] = useState(null)
+
+  // One flag per figure, not one for the page: these are seven independent
+  // requests, and a single flag would hold every card back for the slowest.
+  const [loading, setLoading] = useState({
+    recentSales: true, inventory: true, salesDaily: true,
+    avgOrder: true, purchases: true, salesTrend: true, expensesTrend: true,
+  })
+  const done = (key) => setLoading((prev) => ({ ...prev, [key]: false }))
 
   useEffect(() => {
 
@@ -52,6 +61,8 @@ const Index = () => {
       } catch (error) {
         console.log(error)
         toast.error("Error fetching recent sales")
+      } finally {
+        done("recentSales")
       }
     }
     
@@ -68,6 +79,8 @@ const Index = () => {
       } catch (error) {
         console.log(error)
         toast.error("Error fetching recent sales")
+      } finally {
+        done("inventory")
       }
     }
 
@@ -84,6 +97,8 @@ const Index = () => {
       } catch (error) {
         console.log(error)
         toast.error("Error fetching daily total sales")
+      } finally {
+        done("salesDaily")
       }
     }
     
@@ -100,6 +115,8 @@ const Index = () => {
       } catch (error) {
         console.log(error)
         toast.error("Error fetching average order value")
+      } finally {
+        done("avgOrder")
       }
     }
     
@@ -116,6 +133,8 @@ const Index = () => {
       } catch (error) {
         console.log(error)
         toast.error("Error fetching total purchases")
+      } finally {
+        done("purchases")
       }
     }
 
@@ -131,6 +150,8 @@ const Index = () => {
       } catch (error) {
         console.log(error)
         toast.error("Error fetching monthly sales trend")
+      } finally {
+        done("salesTrend")
       }
     }
 
@@ -146,6 +167,8 @@ const Index = () => {
       } catch (error) {
         console.log(error)
         toast.error("Error fetching monthly sales trend")
+      } finally {
+        done("expensesTrend")
       }
     }
 
@@ -190,11 +213,13 @@ const Index = () => {
                 title="Total Sales this month"
                 data={monthlySalesTrend}
                 color="#00a000"
+                loading={loading.salesTrend}
               />
               <ChartCard
-                title="Total Exepenses this month"
+                title="Total Expenses this month"
                 data={monthlyExpensesTrend}
                 color="red"
+                loading={loading.expensesTrend}
               />
             </div>
 
@@ -206,13 +231,13 @@ const Index = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Metrics Cards Column */}
             <div className="grid grid-cols-1 gap-4">
-              <MetricCard title="Net Inventory Value" value={`PKR ${totalInventoryValue? totalInventoryValue: 0}`} />
-              <MetricCard title="Total Sales Today" value={`PKR ${totalSalesDaily? totalSalesDaily: 0}`} />
-              <MetricCard title="Average Order Value" value={`PKR ${avgOrderValue? avgOrderValue: 0}`} />
-              <MetricCard title="Total Purchases" value={`PKR ${totalPurchases? totalPurchases: 0}`} />
+              <MetricCard title="Net Inventory Value" value={formatCurrency(totalInventoryValue)} loading={loading.inventory} />
+              <MetricCard title="Total Sales Today" value={formatCurrency(totalSalesDaily)} loading={loading.salesDaily} />
+              <MetricCard title="Average Order Value" value={formatCurrency(avgOrderValue)} loading={loading.avgOrder} />
+              <MetricCard title="Total Purchases" value={formatCurrency(totalPurchases)} loading={loading.purchases} />
             </div>
 
-            <RecentSales recentSales={recentSales} />
+            <RecentSales recentSales={recentSales} loading={loading.recentSales} />
           </div>
         </main>
       </div>

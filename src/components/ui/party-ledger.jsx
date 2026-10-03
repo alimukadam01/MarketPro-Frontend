@@ -43,6 +43,11 @@ const PartyLedgerSection = ({
     onRangeApply,
     actions = null,
     title = "Ledger",
+    // True on the first load and on every date-range Apply. The heading, the
+    // date inputs and the actions stay live while it is set - the filter is
+    // the control the user just operated, so it must not disappear underneath
+    // them - and only the rows are replaced by placeholders.
+    loading = false,
 }) => {
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
@@ -86,7 +91,7 @@ const PartyLedgerSection = ({
         <div>
         <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
             <h2 className="text-xl font-semibold">
-                {title} ({listCountLabel(rows)})
+                {title} {loading ? "" : `(${listCountLabel(rows)})`}
             </h2>
 
             {/* Date range on the left, any party actions on the right, so the
@@ -124,12 +129,14 @@ const PartyLedgerSection = ({
                 {actions}
             </div>
 
-            {rows.length > 0 ? (
+            {loading || rows.length > 0 ? (
                 <DataTable columns={cols} headerOnly />
             ) : null}
         </div>
 
-        {rows.length > 0 ? (
+        {loading ? (
+            <DataTable columns={cols} rowsOnly loading skeletonRows={6} />
+        ) : rows.length > 0 ? (
             <DataTable
                 columns={cols}
                 data={rows}
