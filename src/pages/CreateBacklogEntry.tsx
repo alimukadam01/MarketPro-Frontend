@@ -18,8 +18,11 @@ import { createBacklogEntry, getEmployeesList } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { createIdMap } from "../../services/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateBacklogEntry = () => {
+  const { pending, run } = usePending();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [employees, setEmployees] = useState({});
   const [imageFile, setImageFile] = useState(null);
@@ -93,7 +96,7 @@ const CreateBacklogEntry = () => {
           <DynamicBreadCrumb />
 
           <form
-            onSubmit={handleSubmit(onSubmit)}
+            onSubmit={handleSubmit(run(onSubmit))}
             className="flex flex-row w-[48%] gap-12"
           >
             <div className="flex flex-col flex-1">
@@ -180,7 +183,7 @@ const CreateBacklogEntry = () => {
               </div>
 
               <div className="flex justify-end gap-3 mt-auto">
-                <Button type="submit">Create Entry</Button>
+                <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Entry</SubmitButton>
               </div>
             </div>
           </form>

@@ -19,8 +19,11 @@ import { expensesAPIPackage, moneyAccountsAPIPackage } from "../../services/api"
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { formatAccountOption, ExpenseCategoryMap } from "../../services/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const UpdateExpense = () => {
+  const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [accounts, setAccounts] = useState([]);
     const { token, getPermissions } = useAuth();
@@ -144,7 +147,7 @@ const UpdateExpense = () => {
 
                     <div className="flex items-center justify-between">
                         <form
-                            onSubmit={handleSubmit(onExpenseUpdate)}
+                            onSubmit={handleSubmit(run(onExpenseUpdate))}
                             className="flex flex-row w-[48%] gap-12"
                         >
                             {/* First Column */}
@@ -228,7 +231,7 @@ const UpdateExpense = () => {
                                 )}
 
                                 <div className="flex justify-end gap-3 mt-auto">
-                                    <Button type="submit">Update Expense</Button>
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Expense</SubmitButton>
                                 </div>
                             </div>
                         </form>

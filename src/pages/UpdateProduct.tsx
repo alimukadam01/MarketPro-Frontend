@@ -21,8 +21,11 @@ import {
     updateProductAndVariants,
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const UpdateProduct = () => {
+  const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [units, setUnits] = useState([])
@@ -255,7 +258,7 @@ const UpdateProduct = () => {
                     {/* Breadcrumb */}
                     <DynamicBreadCrumb />
 
-                    <form onSubmit={handleSubmit(onProductUpdate)} className="flex flex-col flex-1 gap-4">
+                    <form onSubmit={handleSubmit(run(onProductUpdate))} className="flex flex-col flex-1 gap-4">
                         <div className="flex gap-12 flex-1">
                             {/* First Column */}
                             <div className="flex flex-col flex-1">
@@ -483,7 +486,7 @@ const UpdateProduct = () => {
                         </div>
 
                         <div className="flex justify-end mt-auto">
-                            <Button type="submit">Update Product and Variants</Button>
+                            <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Product and Variants</SubmitButton>
                         </div>
                     </form>
                 </main>

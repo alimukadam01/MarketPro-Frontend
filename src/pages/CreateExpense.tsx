@@ -19,8 +19,11 @@ import { expensesAPIPackage, moneyAccountsAPIPackage } from "../../services/api"
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { formatAccountOption, ExpenseCategoryMap, todayForInput } from "../../services/utils";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateExpense = () => {
+  const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [accounts, setAccounts] = useState([]);
     const { token, getPermissions } = useAuth()
@@ -103,7 +106,7 @@ const CreateExpense = () => {
 
                     <div className="flex items-center justify-between">
                         <form
-                            onSubmit={handleSubmit(onExpenseCreate)}
+                            onSubmit={handleSubmit(run(onExpenseCreate))}
                             className="flex flex-row w-[48%] gap-12"
                         >
                             {/* First Column */}
@@ -189,7 +192,7 @@ const CreateExpense = () => {
                                 )}
 
                                 <div className="flex justify-end gap-3 mt-auto">
-                                    <Button type="submit">Create Expense</Button>
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Expense</SubmitButton>
                                 </div>
                             </div>
                         </form>

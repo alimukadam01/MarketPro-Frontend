@@ -19,8 +19,11 @@ import {
     postProduct
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateProduct = () => {
+  const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [units, setUnits] = useState([])
@@ -218,7 +221,7 @@ const CreateProduct = () => {
                     {/* Breadcrumb */}
                     <DynamicBreadCrumb />
 
-                    <form onSubmit={handleSubmit(onProductCreate)} className="flex flex-col flex-1 gap-4">
+                    <form onSubmit={handleSubmit(run(onProductCreate))} className="flex flex-col flex-1 gap-4">
                         <div className="flex gap-12 flex-1">
                             {/* First Column */}
                             <div className="flex flex-col flex-1">
@@ -446,7 +449,7 @@ const CreateProduct = () => {
                         </div>
 
                         <div className="flex justify-end mt-auto">
-                            <Button type="submit">Create Product and Variants</Button>
+                            <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Product and Variants</SubmitButton>
                         </div>
                     </form>
                 </main>

@@ -19,8 +19,11 @@ import {
     getInventoryItemDetail
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const UpdateInventoryItem = () => {
+  const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [productName, setProductName] = useState("")
@@ -145,7 +148,7 @@ const UpdateInventoryItem = () => {
 
                     <div className="flex items-center justify-between">
 
-                        <form onSubmit={handleSubmit(onInventoryItemUpdate)} className="flex flex-row w-[48%] gap-12">
+                        <form onSubmit={handleSubmit(run(onInventoryItemUpdate))} className="flex flex-row w-[48%] gap-12">
 
                             {/* Second Column */}
                             <div className="flex flex-col flex-wrap flex-1">
@@ -221,7 +224,7 @@ const UpdateInventoryItem = () => {
                                 </div>
 
                                 <div className="flex justify-end gap-3 mt-auto">
-                                    <Button type="submit">Update Inventory Item</Button>
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Inventory Item</SubmitButton>
                                 </div>
                             </div>
                         </form>

@@ -18,8 +18,11 @@ import { useNavigate } from "react-router-dom";
 import { Controller, useForm } from "react-hook-form";
 import { useAuth } from "../../services/AuthProvider";
 import { manualDataPointsAPIPackage } from "../../services/api";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateManualDataPoint = () => {
+  const { pending, run } = usePending();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const { token } = useAuth();
   const navigate = useNavigate();
@@ -82,7 +85,7 @@ const CreateManualDataPoint = () => {
           </div>
 
           <form
-            onSubmit={handleSubmit(onCreate)}
+            onSubmit={handleSubmit(run(onCreate))}
             className="flex flex-row w-[48%] gap-12"
           >
             <div className="flex flex-col flex-1">
@@ -171,7 +174,7 @@ const CreateManualDataPoint = () => {
               </div>
 
               <div className="flex justify-end mt-auto">
-                <Button type="submit">Record Data Point</Button>
+                <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Record Data Point</SubmitButton>
               </div>
             </div>
           </form>

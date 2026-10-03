@@ -14,8 +14,11 @@ import { createCompleteProject, getCustomersList, suppliersAPIPackage, getProduc
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { ArrowLeft, ArrowRight, CheckCircle2Icon, Plus, Trash2, X } from "lucide-react";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const CreateProject = () => {
+  const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [customers, setCustomers] = useState([]);
     const [step, setStep] = useState(1);
@@ -223,7 +226,7 @@ const CreateProject = () => {
                     {/* Breadcrumb */}
                     <DynamicBreadCrumb />
 
-                    <form className="flex flex-col flex-1" onSubmit={handleSubmit(onProjectCreate)}>
+                    <form className="flex flex-col flex-1" onSubmit={handleSubmit(run(onProjectCreate))}>
                         {/* Step 1: Create New Project */}
                         {step === 1 && (
                             <div className="flex flex-row flex-1 gap-12 w-[48%]">
@@ -561,10 +564,8 @@ const CreateProject = () => {
                                         Back
                                     </Button>
                                     
-                                    <Button type="submit" className={`transition-colors duration-300 ease-in-out ${success ? "bg-[#4BB543]" : ""}`}>
-                                        <CheckCircle2Icon />
-                                        Complete Project Setup
-                                    </Button>
+                                    <SubmitButton type="submit" className={`transition-colors duration-300 ease-in-out ${success ? "bg-[#4BB543]" : ""}`} pending={pending} pendingLabel="Creating…"><CheckCircle2Icon />
+                                        Complete Project Setup</SubmitButton>
                                 </div>
                             </div>
                         )}
