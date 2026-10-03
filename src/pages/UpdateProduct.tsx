@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner"
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -23,7 +23,8 @@ import {
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
-import { SearchField } from "@/components/ui/search-field";
+import { SearchField } from "@/components/ui/search-field";
+import { Combobox } from "@/components/ui/combobox";
 
 const UpdateProduct = () => {
   const { pending, run } = usePending();
@@ -31,6 +32,7 @@ const UpdateProduct = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
     const [units, setUnits] = useState([])
     const [productVariantTypes, setProductVariantTypes] = useState([])
+    const [variantTypesLoading, setVariantTypesLoading] = useState(true)
     const [currentAttributes, setCurrentAttributes] = useState({})
     const [productVariants, setProductVariants] = useState([])
     const [selectedVariant, setSelectedVariant] = useState(null)
@@ -174,6 +176,13 @@ const UpdateProduct = () => {
         }
     }
 
+    const variantTypeOptions = useMemo(
+        () => Object.entries(productVariantTypes).map(([value, item]) => ({
+            value,
+            label: item.name,
+        })),
+        [productVariantTypes])
+
     // Esc drops the selection but leaves the attribute keys standing.
     useEffect(() => {
         if (!selectedVariant) return
@@ -236,6 +245,8 @@ const UpdateProduct = () => {
             } catch (error) {
                 console.log("Error fetching units:", error)
                 toast.error("Failed to fetch units")
+            } finally {
+                setVariantTypesLoading(false)
             }
         }
 
@@ -366,25 +377,21 @@ const UpdateProduct = () => {
                                             name="productVariantAttr"
                                             control={control}
                                             render={({ field }) => (
-                                                <Select
+                                                <Combobox
+                                                    id="productVariantAttr"
+                                                    options={variantTypeOptions}
                                                     value={field.value}
                                                     disabled={maxAttributesReached}
-                                                    onValueChange={(value) => {
+                                                    onChange={(value) => {
+                                                        if (!value) return   // the clear path, not a pick
                                                         addProductVariantAttr(value)
                                                         field.onChange("")   // back to the placeholder
                                                     }}
-                                                >
-                                                    <SelectTrigger>
-                                                        <SelectValue placeholder={maxAttributesReached ? "Max. 3 attributes allowed" : "Select Attribute"} />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {productVariantTypes && Object.keys(productVariantTypes).length > 0 && Object.entries(productVariantTypes).map(([key, item]) => (
-                                                            <SelectItem key={key} value={key}>
-                                                                {item.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                    loading={variantTypesLoading}
+                                                    placeholder={maxAttributesReached ? "Max. 3 attributes allowed" : "Select Attribute"}
+                                                    emptyText="No attributes defined yet."
+                                                    notFoundText="No attribute matches that."
+                                                />
                                             )}
                                         />
                                     </div>
