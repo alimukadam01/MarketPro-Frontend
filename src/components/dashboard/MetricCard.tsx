@@ -36,7 +36,11 @@ interface MetricCardProps {
 export function MetricCard({ title, value, hint, loading = false, className, valueClassName }: MetricCardProps) {
   return (
     <StatCard title={title} loading={loading} className={className}>
-      <div className={cn("text-3xl font-bold", valueClassName)}>{value}</div>
+      {/* ?? not ||: a real 0 must still render as 0. While loading the
+          value is null, and an empty block generates no line box, so the
+          placeholder would be a full text-3xl line shorter than the card
+          it stands in for. */}
+      <div className={cn("text-3xl font-bold", valueClassName)}>{value ?? " "}</div>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </StatCard>
   );

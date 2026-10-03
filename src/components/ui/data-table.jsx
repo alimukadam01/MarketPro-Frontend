@@ -84,7 +84,13 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
   // data lands.
   const skeletonBody = (
     Array.from({ length: skeletonRows }).map((_, idx) => (
-      <Skeleton key={`skeleton-${idx}`} className="h-[35px] rounded-lg" />
+      // A small per-row offset: eight rows shimmering in perfect unison reads
+      // as one flashing block, where a slight cascade reads as a list.
+      <Skeleton
+        key={`skeleton-${idx}`}
+        className="h-[35px] rounded-lg"
+        style={{ animationDelay: `${idx * 90}ms` }}
+      />
     ))
   );
 

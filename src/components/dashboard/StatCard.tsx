@@ -40,7 +40,10 @@ export function StatCard({ title, loading = false, className, children }: StatCa
 
   if (loading) {
     return (
-      <Skeleton className={cn("rounded-lg", className)}>
+      // border-transparent, not no border: the loaded card has a 1px border and
+      // box-sizing is border-box, so without it the placeholder is 2px smaller
+      // in both axes and the card visibly resizes as data lands.
+      <Skeleton className={cn("rounded-lg border border-transparent", className)}>
         <div className="invisible p-6" aria-hidden="true">
           {body}
         </div>
@@ -49,6 +52,16 @@ export function StatCard({ title, loading = false, className, children }: StatCa
   }
 
   return (
-    <div className={cn("bg-card rounded-lg p-6 border", className)}>{body}</div>
+    // fade-in on the real card: the placeholder and the content are the same
+    // size now, so the only thing left to soften is the swap itself.
+    <div
+      className={cn(
+        "bg-card rounded-lg p-6 border",
+        "animate-in fade-in duration-300",
+        className
+      )}
+    >
+      {body}
+    </div>
   );
 }

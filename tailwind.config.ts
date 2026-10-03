@@ -143,7 +143,7 @@ export default {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
 				'marquee': 'marquee 6s ease-in-out infinite alternate',
-				'shimmer': 'shimmer 1.6s linear infinite'
+				'shimmer': 'shimmer 1.6s ease-in-out infinite'
 			}
 		}
 	},
