@@ -3,34 +3,29 @@ import { cn } from "@/lib/utils"
 /**
  * A placeholder that holds the shape of the content still loading.
  *
- * TINT. Brand purple rather than neutral grey: the body is --primary at 0.15
- * and the crest of the sweep is the same hue at 0.04, so the highlight falls
- * back to near-white page and the whole thing reads purple-to-white. Those two
- * alphas are the dial if it wants to be stronger or softer.
+ * TINT. Brand purple, from --skeleton-base and --skeleton-crest in index.css.
+ * Both carry --primary's exact hue and saturation (262.1 83.3%) and differ
+ * only in lightness, which is the whole trick: the placeholder reads as the
+ * same purple the sidebar and the buttons use, while staying pale enough not
+ * to compete with the content about to replace it.
  *
- * It is the SAME token the sidebar and the buttons paint with - there is no
- * hardcoded purple anywhere in this codebase. It looks like a different shade
- * because alpha over a near-white page dilutes it: --primary at 1.0 is
- * hsl(262 83% 58%), at 0.15 it composites to hsl(262 66% 92%). The hue is
- * identical at every alpha; saturation and lightness are what move.
+ * It is deliberately NOT `hsl(var(--primary) / 0.15)`. Alpha scales chroma and
+ * lightness together, so putting the brand purple behind a low alpha drops it
+ * to 66% saturation and it reads as washed-out mauve - pale and off-brand at
+ * the same time. Setting the colour outright keeps saturation at 83.3% and
+ * lets lightness alone decide how loud it is. Lightness is the dial: raise
+ * --skeleton-base toward 98% to calm it, lower it toward 85% to strengthen it,
+ * and leave the first two numbers alone so it stays the brand hue.
  *
- * That also means the two dials pull against each other. Raising the alpha
- * makes this read closer to the vivid sidebar purple; lowering it makes the
- * placeholder calmer but paler. 0.15 is the calmer end, chosen deliberately -
- * a placeholder should not compete with the content that replaces it.
- *
- * They must stay written out in full. Tailwind finds classes by scanning the
- * source for complete strings, so building this from constants - `${BASE}` -
- * compiles fine and then silently emits no CSS at all, exactly like the
+ * The classes must stay written out in full. Tailwind finds classes by
+ * scanning the source for complete strings, so composing them from constants
+ * compiles fine and then silently emits no CSS, exactly like the
  * grid-cols-${n} case elsewhere in this codebase.
  *
- * ON DARK MODE. --primary is only purple in the light theme; the dark block in
- * index.css overrides it to a near-white 210 40% 98%. Dark mode is dormant
- * today - next-themes is referenced only inside shadcn's sonner.tsx and no
- * ThemeProvider is mounted - so this reads purple everywhere it can currently
- * be seen. If dark mode is ever switched on, the placeholder degrades to
- * white-on-dark: still legible, no longer brand-coloured. Giving it a purple
- * that survives both themes means a token that does not exist yet.
+ * Tokens rather than literals because the dark theme needs the opposite move -
+ * lightness above the page instead of below it - and because --primary itself
+ * is not purple there, so deriving from it would have gone white-on-dark the
+ * day dark mode was switched on.
  *
  * The sweep is a three-stop gradient moved by background-position (the
  * `shimmer` keyframe in tailwind.config.ts), not a translating child element,
@@ -51,7 +46,7 @@ function Skeleton({
       aria-hidden="true"
       className={cn(
         "rounded-md",
-        "bg-[linear-gradient(90deg,hsl(var(--primary)/0.15)_25%,hsl(var(--primary)/0.04)_50%,hsl(var(--primary)/0.15)_75%)]",
+        "bg-[linear-gradient(90deg,hsl(var(--skeleton-base))_25%,hsl(var(--skeleton-crest))_50%,hsl(var(--skeleton-base))_75%)]",
         "bg-[length:200%_100%] animate-shimmer motion-reduce:animate-none",
         className
       )}
