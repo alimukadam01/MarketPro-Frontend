@@ -49,7 +49,6 @@ import { useFieldPatch } from "@/hooks/use-field-patch";
 const CONFIG = {
     customer: {
         noun: "Customer",
-        listPath: "/customers",
         module: "customers",
         stateKey: "customer_id",
         endpoint: (id) => `/customers/${id}/`,
@@ -63,7 +62,6 @@ const CONFIG = {
     },
     supplier: {
         noun: "Supplier",
-        listPath: "/suppliers",
         module: "suppliers",
         stateKey: "supplier_id",
         endpoint: (id) => `/suppliers/${id}/`,
@@ -122,9 +120,13 @@ export function PartyDetail({ party }: { party: "customer" | "supplier" }) {
     const navigate = useNavigate();
     const location = useLocation();
     const party_id = location.state?.[config.stateKey] || null;
-    // Set by whoever sent the user here, so the back arrow returns to the list
-    // they actually came from rather than always to the party list.
-    const backTo = location.state?.from || config.listPath;
+    // The parent of whatever path this screen was reached by: /customers from
+    // /customers/view-customer, /accounting/ledgers from
+    // /accounting/ledgers/view-customer. Taken from the URL rather than from
+    // navigation state, which a refresh throws away - after one, a state-based
+    // back arrow would quietly start pointing at the wrong list.
+    const backTo =
+        "/" + location.pathname.split("/").filter(Boolean).slice(0, -1).join("/");
 
     const endpoint = config.endpoint(party_id);
     const { patchField, status, retry } = useFieldPatch(token);
@@ -287,7 +289,7 @@ export function PartyDetail({ party }: { party: "customer" | "supplier" }) {
         const fetchParty = async () => {
             if (!token) return;
             if (!party_id) {
-                navigate(config.listPath);
+                navigate(backTo);
                 return;
             }
 
@@ -297,12 +299,12 @@ export function PartyDetail({ party }: { party: "customer" | "supplier" }) {
                     populateFields(record);
                 } else {
                     toast.error(`Failed to fetch ${party}.`);
-                    navigate(config.listPath);
+                    navigate(backTo);
                 }
             } catch (error) {
                 console.log(error);
                 toast.error(`Failed to fetch ${party}.`);
-                navigate(config.listPath);
+                navigate(backTo);
             }
         };
 

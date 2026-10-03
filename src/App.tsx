@@ -149,6 +149,12 @@ const App = () => {
           <Route path="/accounting/update-transaction" element={<ProtectedRoute module="accounting" action="edit"><UpdateTransaction /></ProtectedRoute>} />
           <Route path="/accounting/daily-book" element={<ProtectedRoute module="accounting"><DailyBook /></ProtectedRoute>} />
           <Route path="/accounting/ledgers" element={<ProtectedRoute module="accounting"><Ledgers /></ProtectedRoute>} />
+          {/* The same screen as /customers/view-customer, addressed from the
+              accounting side. Two routes rather than one plus remembered state:
+              the URL is what the breadcrumb reads, what Back follows and what
+              survives a refresh, so the way in has to be in the path. */}
+          <Route path="/accounting/ledgers/view-customer" element={<ProtectedRoute module="accounting"><ViewCustomer /></ProtectedRoute>} />
+          <Route path="/accounting/ledgers/view-supplier" element={<ProtectedRoute module="accounting"><ViewSupplier /></ProtectedRoute>} />
           <Route path="/accounting/accounts" element={<ProtectedRoute module="accounting"><MoneyAccounts /></ProtectedRoute>} />
           <Route path="/accounting/cheques" element={<ProtectedRoute module="accounting"><Cheques /></ProtectedRoute>} />
 

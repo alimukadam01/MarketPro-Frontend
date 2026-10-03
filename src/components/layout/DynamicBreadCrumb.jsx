@@ -11,21 +11,7 @@ import {
 
 export default function DynamicBreadCrumb() {
   const location = useLocation();
-  const segments = location.pathname.split("/").filter(Boolean);
-
-  // A screen reached from somewhere else describes the route the user took, not
-  // its own URL. Opening a customer from the ledgers list reads
-  // "Home / accounting / ledgers / view customer", because that is where Back
-  // goes and where they think they are - "Home / customers / view customer"
-  // would name a list they never visited.
-  //
-  // `from` is set by whoever navigated here, the same value the back arrow uses.
-  // Only the final segment of the real path is kept: the trail in front of it is
-  // the origin's, so every link in it resolves.
-  const from = location.state?.from;
-  const pathnames = from
-    ? [...from.split("/").filter(Boolean), segments[segments.length - 1]].filter(Boolean)
-    : segments;
+  const pathnames = location.pathname.split("/").filter(Boolean);
 
   return (
     <Breadcrumb>

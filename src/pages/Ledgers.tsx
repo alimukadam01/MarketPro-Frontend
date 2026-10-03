@@ -91,17 +91,18 @@ const Ledgers = () => {
     }));
 
     // The party screen, not the old accounting-only ledger: it carries the same
-    // khaata plus the balance, the opening balance and the payment dialog. `from`
-    // is what lets its back arrow return here rather than to the party list.
+    // khaata plus the balance, the opening balance and the payment dialog. Under
+    // this path rather than /customers, so the URL and the breadcrumb both say
+    // the user came through accounting.
     const openCustomerLedger = (id) => {
-        navigate("/customers/view-customer", {
-            state: { customer_id: id, from: "/accounting/ledgers" },
+        navigate("/accounting/ledgers/view-customer", {
+            state: { customer_id: id },
         });
     };
 
     const openSupplierLedger = (id) => {
-        navigate("/suppliers/view-supplier", {
-            state: { supplier_id: id, from: "/accounting/ledgers" },
+        navigate("/accounting/ledgers/view-supplier", {
+            state: { supplier_id: id },
         });
     };
 
