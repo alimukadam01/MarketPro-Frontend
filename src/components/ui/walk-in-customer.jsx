@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import * as DialogUI from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,8 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "../../../services/AuthProvider";
 import { getCitiesList } from "../../../services/api";
-import { createIdMap } from "../../../services/utils";
+import { createIdMap } from "../../../services/utils";
+import { Combobox } from "@/components/ui/combobox";
 
 const emptyForm = () => ({ name: "", phone: "", city: "", email: "" });
 
@@ -27,17 +28,25 @@ const emptyForm = () => ({ name: "", phone: "", city: "", email: "" });
 function WalkInCustomer({ open, setOpen, defaultCityId, onSubmit }) {
   const { token } = useAuth();
   const [cities, setCities] = useState({});
+  const [citiesLoading, setCitiesLoading] = useState(true);
   const [form, setForm] = useState(emptyForm());
   const [isSaving, setIsSaving] = useState(false);
 
   // Fetch on open rather than on mount: the dialog is rendered on every list
   // page load but opened rarely.
+  const cityOptions = useMemo(
+    () => Object.entries(cities).map(([value, city]) => ({ value, label: city.name })),
+    [cities]);
+
   useEffect(() => {
     if (!open) return;
 
     setForm({ ...emptyForm(), city: defaultCityId ? String(defaultCityId) : "" });
 
     const fetchCities = async () => {
+      // re-armed, not just initialised: this effect re-runs every time the
+      // dialog is opened
+      setCitiesLoading(true);
       try {
         const res = await getCitiesList(token);
         if (res) {
@@ -48,6 +57,8 @@ function WalkInCustomer({ open, setOpen, defaultCityId, onSubmit }) {
       } catch (error) {
         console.log("Error fetching cities:", error);
         toast.error("Failed to fetch cities.");
+      } finally {
+        setCitiesLoading(false);
       }
     };
     fetchCities();
@@ -120,18 +131,15 @@ function WalkInCustomer({ open, setOpen, defaultCityId, onSubmit }) {
 
           <div className="space-y-1">
             <Label>City</Label>
-            <Select value={form.city} onValueChange={setField("city")}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select city" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(cities).map(([key, city]) => (
-                  <SelectItem value={key} key={key}>
-                    {city.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Combobox
+              options={cityOptions}
+              value={form.city}
+              onChange={setField("city")}
+              loading={citiesLoading}
+              placeholder="Select city"
+              emptyText="No cities yet."
+              notFoundText="No city matches that."
+            />
           </div>
 
           <div className="space-y-1">

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner"
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -25,7 +25,8 @@ import {
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { Combobox } from "@/components/ui/combobox";
 
 const CreatePurchaseQuotation = () => {
   const { pending, run } = usePending();
@@ -36,6 +37,8 @@ const CreatePurchaseQuotation = () => {
     const [selectedRows, setSelectedRows] = useState([])
     const [products, setProducts] = useState([])
     const [suppliers, setSuppliers] = useState([])
+    const [productsLoading, setProductsLoading] = useState(true)
+    const [suppliersLoading, setSuppliersLoading] = useState(true)
     const { token } = useAuth()
     const businessId = localStorage.getItem("mp-business-id")
     const navigate = useNavigate()
@@ -92,6 +95,18 @@ const CreatePurchaseQuotation = () => {
         }
     }
 
+    const productOptions = useMemo(
+        () => Object.entries(products).map(([value, item]) => ({ value, label: item.name })),
+        [products])
+
+    const supplierOptions = useMemo(
+        () => Object.entries(suppliers).map(([value, item]) => ({
+            value,
+            label: formatPartyLabel(item),
+            keywords: [item.name, item.business_name].filter(Boolean),
+        })),
+        [suppliers])
+
     useEffect(() => {
         const fetchProducts = async () => {
             if (!token) return;
@@ -107,6 +122,8 @@ const CreatePurchaseQuotation = () => {
             } catch (error) {
                 console.log("Error fetching products:", error)
                 toast.error("Failed to fetch products")
+            } finally {
+                setProductsLoading(false)
             }
         }
 
@@ -122,6 +139,8 @@ const CreatePurchaseQuotation = () => {
             } catch (error) {
                 console.log("Error fetching suppliers:", error)
                 toast.error("Failed to fetch suppliers")
+            } finally {
+                setSuppliersLoading(false)
             }
         }
 
@@ -192,16 +211,16 @@ const CreatePurchaseQuotation = () => {
                                             name="product"
                                             control={control}
                                             render={({ field }) => (
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {products && Object.keys(products).length > 0 && Object.entries(products).map(([key, item]) => (
-                                                            <SelectItem key={key} value={key}>
-                                                                {item.name}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <Combobox
+                                                    id="product"
+                                                    options={productOptions}
+                                                    value={field.value}
+                                                    onChange={field.onChange}
+                                                    loading={productsLoading}
+                                                    placeholder="Select product"
+                                                    emptyText="No products yet."
+                                                    notFoundText="No product matches that."
+                                                />
                                             )}
                                         />
                                         {itemValidationErrors.product && <span className="text-red-500 text-sm">{itemValidationErrors.product}</span>}
@@ -213,16 +232,16 @@ const CreatePurchaseQuotation = () => {
                                             name="supplier"
                                             control={control}
                                             render={({ field }) => (
-                                                <Select onValueChange={field.onChange} value={field.value}>
-                                                    <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, item]) => (
-                                                            <SelectItem key={key} value={key}>
-                                                                {formatPartyLabel(item)}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <Combobox
+                                                    id="supplier"
+                                                    options={supplierOptions}
+                                                    value={field.value}
+                                                    onChange={field.onChange}
+                                                    loading={suppliersLoading}
+                                                    placeholder="Select supplier"
+                                                    emptyText="No suppliers yet. Add one first."
+                                                    notFoundText="No supplier matches that."
+                                                />
                                             )}
                                         />
                                         {itemValidationErrors.supplier && <span className="text-red-500 text-sm">{itemValidationErrors.supplier}</span>}

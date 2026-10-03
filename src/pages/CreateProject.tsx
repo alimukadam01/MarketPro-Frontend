@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -15,12 +15,16 @@ import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { ArrowLeft, ArrowRight, CheckCircle2Icon, Plus, Trash2, X } from "lucide-react";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { Combobox } from "@/components/ui/combobox";
 
 const CreateProject = () => {
   const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [customers, setCustomers] = useState([]);
+    const [customersLoading, setCustomersLoading] = useState(true);
+    const [productsLoading, setProductsLoading] = useState(true);
+    const [suppliersLoading, setSuppliersLoading] = useState(true);
     const [step, setStep] = useState(1);
     const [success, setSuccess] = useState(false);
     const [products, setProducts] = useState([]);
@@ -147,6 +151,26 @@ const CreateProject = () => {
         }]))
     }
 
+    const customerOptions = useMemo(
+        () => Object.entries(customers).map(([value, customer]) => ({
+            value,
+            label: customer.name,
+            keywords: [customer.phone_number, customer.city?.name].filter(Boolean),
+        })),
+        [customers]);
+
+    const productOptions = useMemo(
+        () => Object.entries(products).map(([value, item]) => ({ value, label: item.name })),
+        [products]);
+
+    const supplierOptions = useMemo(
+        () => Object.entries(suppliers).map(([value, item]) => ({
+            value,
+            label: formatPartyLabel(item),
+            keywords: [item.name, item.business_name].filter(Boolean),
+        })),
+        [suppliers]);
+
     useEffect(() => {
         const fetchCustomers = async () => {
             try {
@@ -160,6 +184,8 @@ const CreateProject = () => {
             } catch (error) {
                 console.log("Error fetching customers:", error)
                 toast.error("Failed to fetch customers")
+            } finally {
+                setCustomersLoading(false)
             }
         }
 
@@ -177,6 +203,8 @@ const CreateProject = () => {
             } catch (error) {
                 console.log("Error fetching products:", error)
                 toast.error("Failed to fetch products")
+            } finally {
+                setProductsLoading(false)
             }
         }
 
@@ -192,6 +220,8 @@ const CreateProject = () => {
             } catch (error) {
                 console.log("Error fetching suppliers:", error)
                 toast.error("Failed to fetch suppliers")
+            } finally {
+                setSuppliersLoading(false)
             }
         }
 
@@ -250,18 +280,16 @@ const CreateProject = () => {
                                                 control={control}
                                                 rules={{ required: "Customer is required" }}
                                                 render={({ field }) => (
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select customer"></SelectValue>
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {customers && Object.keys(customers).length > 0 && Object.entries(customers).map(([key, customer]) => (
-                                                                <SelectItem value={key} key={key}>
-                                                                    {customer.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
+                                                    <Combobox
+                                                        id="customer"
+                                                        options={customerOptions}
+                                                        value={field.value}
+                                                        onChange={field.onChange}
+                                                        loading={customersLoading}
+                                                        placeholder="Select customer"
+                                                        emptyText="No customers yet. Add one first."
+                                                        notFoundText="No customer matches that."
+                                                    />
                                                 )}
                                             />
                                             {errors.customer && <span className="text-red-500 text-sm">{errors.customer.message}</span>}
@@ -469,16 +497,16 @@ const CreateProject = () => {
                                                     name="product"
                                                     control={control}
                                                     render={({ field }) => (
-                                                        <Select onValueChange={field.onChange} value={field.value}>
-                                                            <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                                                            <SelectContent>
-                                                                {products && Object.keys(products).length > 0 && Object.entries(products).map(([key, item]) => (
-                                                                    <SelectItem key={key} value={key}>
-                                                                        {item.name}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
+                                                        <Combobox
+                                                            id="product"
+                                                            options={productOptions}
+                                                            value={field.value}
+                                                            onChange={field.onChange}
+                                                            loading={productsLoading}
+                                                            placeholder="Select product"
+                                                            emptyText="No products yet."
+                                                            notFoundText="No product matches that."
+                                                        />
                                                     )}
                                                 />
                                                 {quotationValidationErrors.product && <span className="text-red-500 text-sm">{quotationValidationErrors.product}</span>}
@@ -490,16 +518,16 @@ const CreateProject = () => {
                                                     name="supplier"
                                                     control={control}
                                                     render={({ field }) => (
-                                                        <Select onValueChange={field.onChange} value={field.value}>
-                                                            <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
-                                                            <SelectContent>
-                                                                {suppliers && Object.keys(suppliers).length > 0 && Object.entries(suppliers).map(([key, item]) => (
-                                                                    <SelectItem key={key} value={key}>
-                                                                        {formatPartyLabel(item)}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
+                                                        <Combobox
+                                                            id="supplier"
+                                                            options={supplierOptions}
+                                                            value={field.value}
+                                                            onChange={field.onChange}
+                                                            loading={suppliersLoading}
+                                                            placeholder="Select supplier"
+                                                            emptyText="No suppliers yet. Add one first."
+                                                            notFoundText="No supplier matches that."
+                                                        />
                                                     )}
                                                 />
                                                 {quotationValidationErrors.supplier && <span className="text-red-500 text-sm">{quotationValidationErrors.supplier}</span>}

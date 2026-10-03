@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -21,12 +21,14 @@ import { useAuth } from "../../services/AuthProvider";
 import { getCitiesList, postCustomer } from "../../services/api";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { Combobox } from "@/components/ui/combobox";
 
 const CreateCustomer = () => {
   const { pending, run } = usePending();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [cities, setCities] = useState([]);
+  const [citiesLoading, setCitiesLoading] = useState(true);
   const { token } = useAuth()
   const navigate = useNavigate();
 
@@ -57,6 +59,10 @@ const CreateCustomer = () => {
     }
   };
 
+  const cityOptions = useMemo(
+    () => Object.entries(cities).map(([value, city]) => ({ value, label: city.name })),
+    [cities]);
+
   useEffect(() => {
     const fetchCities = async () => {
       try {
@@ -70,6 +76,8 @@ const CreateCustomer = () => {
       } catch (error) {
         console.log("Error fetching cities:", error);
         toast.error("Failed to fetch cities");
+      } finally {
+        setCitiesLoading(false);
       }
     };
 
@@ -121,23 +129,15 @@ const CreateCustomer = () => {
                       name="city"
                       control={control}
                       render={({ field }) => (
-                        <Select
-                          onValueChange={field.onChange}
+                        <Combobox
+                          options={cityOptions}
                           value={field.value}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select City"></SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {cities &&
-                              Object.keys(cities).length > 0 &&
-                              Object.entries(cities).map(([key, city]) => (
-                                <SelectItem value={key} key={key}>
-                                  {city.name}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
+                          onChange={field.onChange}
+                          loading={citiesLoading}
+                          placeholder="Select City"
+                          emptyText="No cities yet."
+                          notFoundText="No city matches that."
+                        />
                       )}
                     />
                   </div>
