@@ -31,10 +31,13 @@ export function RecentSales({ recentSales, loading = false }) {
           
           <TableBody>
             {loading || !recentSales ? (
+              // One placeholder per row, spanning the row, rather than a bar
+              // per cell - the row is the unit the reader is waiting on.
               Array.from({ length: 5 }).map((_, index) => (
                 <TableRow key={`skeleton-${index}`}>
-                  <TableCell><Skeleton className="h-4 w-40" /></TableCell>
-                  <TableCell className="flex justify-end"><Skeleton className="h-4 w-20" /></TableCell>
+                  <TableCell colSpan={2} className="py-2">
+                    <Skeleton className="h-6 w-full rounded-md" />
+                  </TableCell>
                 </TableRow>
               ))
             ) : recentSales.length === 0 ? (

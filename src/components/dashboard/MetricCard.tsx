@@ -7,11 +7,11 @@ interface MetricCardProps {
   /** Optional third line, e.g. "as of 1 Aug 2026 · PKR 5,000 left". */
   hint?: string;
   /**
-   * True while the figure is still being fetched. The card shows a placeholder
-   * bar instead of the value.
+   * True while the figure is still being fetched. The WHOLE card is replaced
+   * by a placeholder, not just the number inside it.
    *
    * This matters more than it looks: every counter on these pages was seeded at
-   * 0, so a loading dashboard rendered "PKR 0" across the board - not a missing
+   * 0, so a loading page rendered "PKR 0" across the board - not a missing
    * figure but a confident claim that the business had done nothing. Never pass
    * a zero-initialised value with loading={false}.
    */
@@ -29,24 +29,27 @@ interface MetricCardProps {
  * pages are unchanged by the consolidation.
  */
 export function MetricCard({ title, value, hint, loading = false, className }: MetricCardProps) {
+  if (loading) {
+    // The placeholder wraps the real structure rendered invisible, so it takes
+    // exactly the card's height rather than a hardcoded one. A magic number
+    // would quietly stop matching the first time the type scale or the padding
+    // changed, and the row would jump as the data landed.
+    return (
+      <Skeleton className={cn("rounded-lg", className)}>
+        <div className="invisible p-6" aria-hidden="true">
+          <div className="text-sm mb-2">{title}</div>
+          <div className="text-3xl font-bold">&nbsp;</div>
+          {hint && <p className="mt-1 text-xs">&nbsp;</p>}
+        </div>
+      </Skeleton>
+    );
+  }
+
   return (
     <div className={cn("bg-card rounded-lg p-6 border", className)}>
       <div className="text-sm text-muted-foreground mb-2">{title}</div>
-
-      {loading ? (
-        // Matches the 36px line box of text-3xl so the card does not resize
-        // when the real figure lands.
-        <div className="flex h-9 items-center">
-          <Skeleton className="h-7 w-32" />
-        </div>
-      ) : (
-        <div className="text-3xl font-bold">{value}</div>
-      )}
-
-      {hint && !loading && (
-        <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
-      )}
-      {hint && loading && <Skeleton className="mt-1 h-3 w-40" />}
+      <div className="text-3xl font-bold">{value}</div>
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }

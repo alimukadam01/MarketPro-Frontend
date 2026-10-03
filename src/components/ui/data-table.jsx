@@ -79,19 +79,12 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
       </div>
   );
 
+  // The whole row is the placeholder, not a row of chrome with little bars
+  // inside it. h-[35px] is the real row height, so nothing shifts when the
+  // data lands.
   const skeletonBody = (
     Array.from({ length: skeletonRows }).map((_, idx) => (
-      <div
-        key={`skeleton-${idx}`}
-        className="bg-card rounded-lg h-[35px] flex items-center px-4 border border-border"
-      >
-        <div className={`grid ${gridCols} gap-4 w-full`}>
-          <Skeleton className="h-3 w-6" />
-          {visibleColumns.map((col) => (
-            <Skeleton key={col.key} className="h-3 w-[70%]" />
-          ))}
-        </div>
-      </div>
+      <Skeleton key={`skeleton-${idx}`} className="h-[35px] rounded-lg" />
     ))
   );
 
