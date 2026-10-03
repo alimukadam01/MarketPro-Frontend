@@ -39,8 +39,8 @@ All colors MUST be HSL.
     /* Loading placeholders. Brand hue and saturation held at --primary's
        262.1 83.3%; only the lightness is raised, so they read purple while
        staying quiet against the page. */
-    --skeleton-base: 262.1 83.3% 92%;
-    --skeleton-crest: 262.1 83.3% 97.5%;
+    --skeleton-base: 262.1 83.3% 94.5%;
+    --skeleton-crest: 262.1 83.3% 98%;
 
     --success: 142.1 76.2% 36.3%;
     --success-foreground: 355.7 100% 97.3%;

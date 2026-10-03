@@ -132,10 +132,10 @@ export default {
 				// wrapper and would break every `className` a caller passes.
 				'shimmer': {
 					'0%': {
-						backgroundPosition: '200% 0'
+						backgroundPosition: '140% 0'
 					},
 					'100%': {
-						backgroundPosition: '-200% 0'
+						backgroundPosition: '-40% 0'
 					}
 				}
 			},
@@ -143,7 +143,7 @@ export default {
 				'accordion-down': 'accordion-down 0.2s ease-out',
 				'accordion-up': 'accordion-up 0.2s ease-out',
 				'marquee': 'marquee 6s ease-in-out infinite alternate',
-				'shimmer': 'shimmer 1.6s ease-in-out infinite'
+				'shimmer': 'shimmer 2.2s ease-in-out infinite alternate'
 			}
 		}
 	},

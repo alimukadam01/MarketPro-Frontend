@@ -135,7 +135,7 @@ const PartyLedgerSection = ({
         </div>
 
         {loading ? (
-            <DataTable columns={cols} rowsOnly loading skeletonRows={6} />
+            <DataTable columns={cols} rowsOnly loading />
         ) : rows.length > 0 ? (
             <DataTable
                 columns={cols}
