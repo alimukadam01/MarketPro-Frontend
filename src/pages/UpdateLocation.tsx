@@ -12,11 +12,15 @@ import { locationsAPIPackage } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { FormSkeleton } from "@/components/ui/form-skeleton";
 
 const UpdateLocation = () => {
   const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+    // True until the record arrives. The form is not rendered before
+    // then, because reset() would overwrite anything typed into it.
+    const [detailLoading, setDetailLoading] = useState(true);
     const { token } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -74,7 +78,7 @@ const UpdateLocation = () => {
           }
         };
     
-        fetchLocation();
+        fetchLocation().finally(() => setDetailLoading(false));
       }, [token, location_id]);
 
 
@@ -92,36 +96,40 @@ const UpdateLocation = () => {
                     <DynamicBreadCrumb />
 
                     <div className="flex items-center justify-between">
-                        <form
-                            onSubmit={handleSubmit(run(onLocationUpdate))}
-                            className="flex flex-row w-[48%] gap-12"
-                        >
-                            {/* First Column */}
-                            <div className="flex flex-col flex-wrap flex-1">
-                                <h2 className="text-lg font-semibold mb-6">Add New Location</h2>
-
-                                <div className="flex gap-6 mb-6">
-                                    <div className="flex-1 space-y-1">
-                                        <Label htmlFor="name">Name</Label>
-                                        <Input id="name" type="text" {...register("name")} />
+                        {detailLoading ? (
+                            <FormSkeleton fields={2} className="flex flex-row w-[48%] gap-12" />
+                        ) : (
+                            <form
+                                onSubmit={handleSubmit(run(onLocationUpdate))}
+                                className="flex flex-row w-[48%] gap-12"
+                            >
+                                {/* First Column */}
+                                <div className="flex flex-col flex-wrap flex-1">
+                                    <h2 className="text-lg font-semibold mb-6">Add New Location</h2>
+    
+                                    <div className="flex gap-6 mb-6">
+                                        <div className="flex-1 space-y-1">
+                                            <Label htmlFor="name">Name</Label>
+                                            <Input id="name" type="text" {...register("name")} />
+                                        </div>
+                                    </div>
+    
+                                    <div className="mb-6 space-y-1">
+                                        <Label htmlFor="address">Address</Label>
+                                        <Textarea
+                                            id="address"
+                                            {...register("address")}
+                                            placeholder="Enter address here"
+                                            rows={3}
+                                        />
+                                    </div>
+    
+                                    <div className="flex justify-end gap-3 mt-auto">
+                                        <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Location</SubmitButton>
                                     </div>
                                 </div>
-
-                                <div className="mb-6 space-y-1">
-                                    <Label htmlFor="address">Address</Label>
-                                    <Textarea
-                                        id="address"
-                                        {...register("address")}
-                                        placeholder="Enter address here"
-                                        rows={3}
-                                    />
-                                </div>
-
-                                <div className="flex justify-end gap-3 mt-auto">
-                                    <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Location</SubmitButton>
-                                </div>
-                            </div>
-                        </form>
+                            </form>
+                        )}
                     </div>
                 </main>
             </div>

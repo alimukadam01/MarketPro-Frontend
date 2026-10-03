@@ -20,11 +20,15 @@ import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { formatAccountOption, ExpenseCategoryMap } from "../../services/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { FormSkeleton } from "@/components/ui/form-skeleton";
 
 const UpdateExpense = () => {
   const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+    // True until the record arrives. The form is not rendered before
+    // then, because reset() would overwrite anything typed into it.
+    const [detailLoading, setDetailLoading] = useState(true);
     const [accounts, setAccounts] = useState([]);
     const { token, getPermissions } = useAuth();
     const hasAccounting = !!getPermissions("accounting")?.["view"];
@@ -126,7 +130,7 @@ const UpdateExpense = () => {
             // before the options exist and the Select falls back to its
             // placeholder with a value it cannot match.
             await fetchAccounts();
-            fetchExpense();
+            fetchExpense().finally(() => setDetailLoading(false));
         };
         init();
     }, [token, expense_id]);
@@ -146,95 +150,99 @@ const UpdateExpense = () => {
                     <DynamicBreadCrumb />
 
                     <div className="flex items-center justify-between">
-                        <form
-                            onSubmit={handleSubmit(run(onExpenseUpdate))}
-                            className="flex flex-row w-[48%] gap-12"
-                        >
-                            {/* First Column */}
-                            <div className="flex flex-col flex-wrap flex-1">
-                                <h2 className="text-lg font-semibold mb-6">Update Expense</h2>
-
-                                <div className="flex gap-6 mb-6">
-                                    <div className="flex-1 space-y-1">
-                                        <Label htmlFor="name">Name</Label>
-                                        <Input id="name" type="text" {...register("name")} />
-                                    </div>
-                                </div>
-
-                                <div className="mb-6 space-y-1">
-                                    <Label>Category</Label>
-                                    <Controller
-                                        name="category"
-                                        control={control}
-                                        render={({ field }) => (
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select category" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {Object.entries(ExpenseCategoryMap).map(([key, label]) => (
-                                                        <SelectItem value={key} key={key}>
-                                                            {label}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        )}
-                                    />
-                                </div>
-
-                                <div className="mb-6 space-y-1">
-                                    <Label htmlFor="desc">Description</Label>
-                                    <Textarea
-                                        id="desc"
-                                        {...register("desc")}
-                                        placeholder="Enter expense details here"
-                                        rows={3}
-                                    />
-                                </div>
-
-                                <div className="flex gap-6 mb-6">
-                                    <div className="flex-1 space-y-1">
-                                        <Label htmlFor="amount">Amount</Label>
-                                        <Input id="amount" type="text" {...register("amount")} />
-                                    </div>
-                                </div>
-
-                                {hasAccounting && (
+                        {detailLoading ? (
+                            <FormSkeleton fields={6} className="flex flex-row w-[48%] gap-12" />
+                        ) : (
+                            <form
+                                onSubmit={handleSubmit(run(onExpenseUpdate))}
+                                className="flex flex-row w-[48%] gap-12"
+                            >
+                                {/* First Column */}
+                                <div className="flex flex-col flex-wrap flex-1">
+                                    <h2 className="text-lg font-semibold mb-6">Update Expense</h2>
+    
                                     <div className="flex gap-6 mb-6">
                                         <div className="flex-1 space-y-1">
-                                            <Label>Paid From</Label>
-                                            <Controller
-                                                name="account"
-                                                control={control}
-                                                render={({ field }) => (
-                                                    <Select onValueChange={field.onChange} value={field.value}>
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select account" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {accounts.map((account: any) => (
-                                                                <SelectItem value={String(account.id)} key={account.id}>
-                                                                    {formatAccountOption(account)}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                )}
-                                            />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <Label htmlFor="date">Date</Label>
-                                            <Input id="date" type="date" {...register("date")} />
+                                            <Label htmlFor="name">Name</Label>
+                                            <Input id="name" type="text" {...register("name")} />
                                         </div>
                                     </div>
-                                )}
-
-                                <div className="flex justify-end gap-3 mt-auto">
-                                    <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Expense</SubmitButton>
+    
+                                    <div className="mb-6 space-y-1">
+                                        <Label>Category</Label>
+                                        <Controller
+                                            name="category"
+                                            control={control}
+                                            render={({ field }) => (
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Select category" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {Object.entries(ExpenseCategoryMap).map(([key, label]) => (
+                                                            <SelectItem value={key} key={key}>
+                                                                {label}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        />
+                                    </div>
+    
+                                    <div className="mb-6 space-y-1">
+                                        <Label htmlFor="desc">Description</Label>
+                                        <Textarea
+                                            id="desc"
+                                            {...register("desc")}
+                                            placeholder="Enter expense details here"
+                                            rows={3}
+                                        />
+                                    </div>
+    
+                                    <div className="flex gap-6 mb-6">
+                                        <div className="flex-1 space-y-1">
+                                            <Label htmlFor="amount">Amount</Label>
+                                            <Input id="amount" type="text" {...register("amount")} />
+                                        </div>
+                                    </div>
+    
+                                    {hasAccounting && (
+                                        <div className="flex gap-6 mb-6">
+                                            <div className="flex-1 space-y-1">
+                                                <Label>Paid From</Label>
+                                                <Controller
+                                                    name="account"
+                                                    control={control}
+                                                    render={({ field }) => (
+                                                        <Select onValueChange={field.onChange} value={field.value}>
+                                                            <SelectTrigger>
+                                                                <SelectValue placeholder="Select account" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {accounts.map((account: any) => (
+                                                                    <SelectItem value={String(account.id)} key={account.id}>
+                                                                        {formatAccountOption(account)}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="flex-1 space-y-1">
+                                                <Label htmlFor="date">Date</Label>
+                                                <Input id="date" type="date" {...register("date")} />
+                                            </div>
+                                        </div>
+                                    )}
+    
+                                    <div className="flex justify-end gap-3 mt-auto">
+                                        <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Expense</SubmitButton>
+                                    </div>
                                 </div>
-                            </div>
-                        </form>
+                            </form>
+                        )}
                     </div>
                 </main>
             </div>

@@ -18,11 +18,15 @@ import {
   targetsAPIPackage,
 } from "../../services/api";
 import { todayForInput } from "../../services/utils";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { FormSkeleton } from "@/components/ui/form-skeleton";
 
 const UpdateTarget = () => {
   const { pending, run } = usePending();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  // True until the record arrives. The form is not rendered before
+  // then, because reset() would overwrite anything typed into it.
+  const [detailLoading, setDetailLoading] = useState(true);
   const [step, setStep] = useState(1);
   const [catalogue, setCatalogue] = useState([]);
   const [entities, setEntities] = useState({});
@@ -243,7 +247,7 @@ const UpdateTarget = () => {
       }
     };
 
-    fetchTarget();
+    fetchTarget().finally(() => setDetailLoading(false));
     fetchCatalogue();
     fetchEntities();
   }, [token, targetId]);
@@ -334,28 +338,32 @@ const UpdateTarget = () => {
               </div>
             </>
           ) : (
-            <form
-              className="flex flex-col flex-1"
-              onSubmit={handleSubmit(run(onTargetUpdate))}
-            >
-              <TargetForm
-                                pending={pending}
-                register={register}
-                control={control}
-                watch={watch}
-                setValue={setValue}
-                trigger={trigger}
-                errors={errors}
-                step={step}
-                setStep={setStep}
-                catalogue={catalogue}
-                entities={entities}
-                filters={filters}
-                setFilters={setFilters}
-                submitLabel="Save Target"
-                success={success}
-              />
-            </form>
+            detailLoading ? (
+                <FormSkeleton fields={2} className="flex flex-col flex-1" />
+            ) : (
+                <form
+                  className="flex flex-col flex-1"
+                  onSubmit={handleSubmit(run(onTargetUpdate))}
+                >
+                  <TargetForm
+                                    pending={pending}
+                    register={register}
+                    control={control}
+                    watch={watch}
+                    setValue={setValue}
+                    trigger={trigger}
+                    errors={errors}
+                    step={step}
+                    setStep={setStep}
+                    catalogue={catalogue}
+                    entities={entities}
+                    filters={filters}
+                    setFilters={setFilters}
+                    submitLabel="Save Target"
+                    success={success}
+                  />
+                </form>
+            )
           )}
         </main>
       </div>

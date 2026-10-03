@@ -12,12 +12,16 @@ import { useAuth } from "../../services/AuthProvider";
 import { GetTaskDetail, UpdateTask } from "../../services/api";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { FormSkeleton } from "@/components/ui/form-skeleton";
 
 const UpdateProjectTask = () => {
   const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+    // True until the record arrives. The form is not rendered before
+    // then, because reset() would overwrite anything typed into it.
+    const [detailLoading, setDetailLoading] = useState(true);
     const { token } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -75,7 +79,7 @@ const UpdateProjectTask = () => {
             }
         };
 
-        fetchTask();
+        fetchTask().finally(() => setDetailLoading(false));
     }, [token, project_id, task_id]);
 
     return (
@@ -87,38 +91,42 @@ const UpdateProjectTask = () => {
                 <main className="flex-1 p-6 space-y-6">
                     <DynamicBreadCrumb />
 
-                    <form onSubmit={handleSubmit(run(onTaskUpdate))} className="flex flex-row gap-12">
-                        <div className="flex flex-col flex-wrap flex-1">
-                            <h2 className="text-lg font-semibold mb-6">Update Task</h2>
-
-                            <div className="flex gap-6 mb-6">
-                                <div className="flex-1 space-y-1">
-                                    <Label htmlFor="name">Name</Label>
-                                    <Input id="name" type="text" {...register("name")} />
+                    {detailLoading ? (
+                        <FormSkeleton fields={4} className="flex flex-row gap-12" />
+                    ) : (
+                        <form onSubmit={handleSubmit(run(onTaskUpdate))} className="flex flex-row gap-12">
+                            <div className="flex flex-col flex-wrap flex-1">
+                                <h2 className="text-lg font-semibold mb-6">Update Task</h2>
+    
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="name">Name</Label>
+                                        <Input id="name" type="text" {...register("name")} />
+                                    </div>
+                                </div>
+    
+                                <div className="flex gap-6 mb-6">
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="start">Start Date</Label>
+                                        <Input id="start" type="date" {...register("start")} />
+                                    </div>
+                                    <div className="flex-1 space-y-1">
+                                        <Label htmlFor="end">End Date</Label>
+                                        <Input id="end" type="date" {...register("end")} />
+                                    </div>
+                                </div>
+    
+                                <div className="mb-6 space-y-1">
+                                    <Label htmlFor="description">Description</Label>
+                                    <Textarea id="description" {...register("description")} placeholder="Add task description here..." rows={6} />
+                                </div>
+    
+                                <div className="flex justify-end gap-3 mt-auto">
+                                    <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Task</SubmitButton>
                                 </div>
                             </div>
-
-                            <div className="flex gap-6 mb-6">
-                                <div className="flex-1 space-y-1">
-                                    <Label htmlFor="start">Start Date</Label>
-                                    <Input id="start" type="date" {...register("start")} />
-                                </div>
-                                <div className="flex-1 space-y-1">
-                                    <Label htmlFor="end">End Date</Label>
-                                    <Input id="end" type="date" {...register("end")} />
-                                </div>
-                            </div>
-
-                            <div className="mb-6 space-y-1">
-                                <Label htmlFor="description">Description</Label>
-                                <Textarea id="description" {...register("description")} placeholder="Add task description here..." rows={6} />
-                            </div>
-
-                            <div className="flex justify-end gap-3 mt-auto">
-                                <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Task</SubmitButton>
-                            </div>
-                        </div>
-                    </form>
+                        </form>
+                    )}
                 </main>
             </div>
         </div>
