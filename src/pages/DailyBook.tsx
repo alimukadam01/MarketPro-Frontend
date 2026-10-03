@@ -62,10 +62,12 @@ const DailyBook = () => {
         todayForInput()
     );
     const [dayBook, setDayBook] = useState(null);
+    const [dayBookLoading, setDayBookLoading] = useState(true);
     // The tables are nested one per account inside dayBook, so they all
     // share the parent fetch's flag.
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
+    const [summaryLoading, setSummaryLoading] = useState(true);
     const [accountIndex, setAccountIndex] = useState(0);
     const { token, getPermissions } = useAuth();
     const permissions = getPermissions("accounting");
@@ -109,6 +111,8 @@ const DailyBook = () => {
         } catch (error) {
             console.log("Error fetching daily summary:", error);
             toast.error("Failed to fetch the daily summary.");
+        } finally {
+          setSummaryLoading(false);
         }
     };
 
@@ -172,35 +176,43 @@ const DailyBook = () => {
                                 <MetricCard
                                     title="Money In"
                                     value={formatCurrency(dayBook?.total_money_in)}
-                                />
+                                    loading={dayBookLoading}
+                                  />
                                 <MetricCard
                                     title="Money Out"
                                     value={formatCurrency(dayBook?.total_money_out)}
-                                />
+                                    loading={dayBookLoading}
+                                  />
                                 <MetricCard
                                     title="Credit Extended"
                                     value={formatCurrency(summary?.credit_extended)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                                 <MetricCard
                                     title="Credit Recovered"
                                     value={formatCurrency(summary?.money_in?.udhaar_recovered)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                                 <MetricCard
                                     title="Total Receivable"
                                     value={formatCurrency(summary?.total_receivable)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                                 <MetricCard
                                     title="Total Payable"
                                     value={formatCurrency(summary?.total_payable)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                                 <MetricCard
                                     title="Cheques Due"
                                     value={String(summary?.pending_cheques?.length || 0)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                                 <MetricCard
                                     title="Profit (estimated)"
                                     value={formatCurrency(summary?.profit?.profit)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                             </div>
 
                             <p className="text-xs text-muted-foreground">

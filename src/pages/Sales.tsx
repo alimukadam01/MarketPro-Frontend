@@ -4,6 +4,7 @@ import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   getStatusColor,
@@ -143,9 +144,12 @@ const Sales = () => {
   // "no records" before it has asked. Cleared in a finally, never on
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
-  const [totalSalesDaily, setTotalSalesDaily] = useState(0);
-  const [totalItemsSoldDaily, setTotalItemsSoldDaily] = useState(0);
-  const [totalInvoicesDaily, setTotalInvoicesDaily] = useState(0);
+  const [totalSalesDaily, setTotalSalesDaily] = useState(null);
+  const [totalSalesDailyLoading, setTotalSalesDailyLoading] = useState(true);
+  const [totalItemsSoldDaily, setTotalItemsSoldDaily] = useState(null);
+  const [totalItemsSoldDailyLoading, setTotalItemsSoldDailyLoading] = useState(true);
+  const [totalInvoicesDaily, setTotalInvoicesDaily] = useState(null);
+  const [totalInvoicesDailyLoading, setTotalInvoicesDailyLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const { getPermissions } = useAuth()
@@ -236,6 +240,8 @@ const Sales = () => {
       } catch (error) {
         toast.error("Failed to fetch total sales data.");
         console.error("Error fetching total sales data:", error);
+      } finally {
+        setTotalSalesDailyLoading(false);
       }
     }
 
@@ -252,6 +258,8 @@ const Sales = () => {
       } catch (error) {
         toast.error("Failed to fetch total items sold data.");
         console.error("Error fetching total items sold data:", error);
+      } finally {
+        setTotalItemsSoldDailyLoading(false);
       }
     }
 
@@ -268,6 +276,8 @@ const Sales = () => {
       } catch (error) {
         toast.error("Failed to fetch total invoices data.");
         console.error("Error fetching total invoices data:", error);
+      } finally {
+        setTotalInvoicesDailyLoading(false);
       }
     }
 
@@ -324,35 +334,23 @@ const Sales = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Sales Today
-              </div>
-              <div className="text-3xl font-bold">PKR {totalSalesDaily}</div>
-              {/* <div className="text-sm text-green-600 mt-1">
-                +12% from last yesterday
-              </div> */}
-            </div>
+            <MetricCard
+              title="Total Sales Today"
+              value={`PKR ${totalSalesDaily}`}
+              loading={totalSalesDailyLoading}
+            />
             
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Invoices Today
-              </div>
-              <div className="text-3xl font-bold">{totalInvoicesDaily}</div>
-              {/* <div className="text-sm text-green-600 mt-1">
-                +12% from last month
-              </div> */}
-            </div>
+            <MetricCard
+              title="Total Invoices Today"
+              value={totalInvoicesDaily}
+              loading={totalInvoicesDailyLoading}
+            />
             
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Items Sold Today
-              </div>
-              <div className="text-3xl font-bold">{totalItemsSoldDaily}</div>
-              {/* <div className="text-sm text-green-600 mt-1">
-                +12% from last year
-              </div> */}
-            </div>
+            <MetricCard
+              title="Total Items Sold Today"
+              value={totalItemsSoldDaily}
+              loading={totalItemsSoldDailyLoading}
+            />
             
           </div>
 

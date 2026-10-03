@@ -3,6 +3,7 @@ import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner"
 import DataTable from "@/components/ui/data-table";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import CustomFilter from "@/components/layout/CustomFilter";
 import {
@@ -122,10 +123,14 @@ const Purchases = () => {
   // "no records" before it has asked. Cleared in a finally, never on
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
-  const [totalPurchasesMonthly, setTotalPurchasesMonthly] = useState(0)
-  const [totalPurchaseInvoicesMonthly, setTotalPurchaseInvoicesMonthly] = useState(0)
-  const [totalPendingPurchaseInvoices, setTotalPendingPurchaseInvoices] = useState(0)
-  const [totalPendingPayment, setTotalPendingPayment] = useState(0)
+  const [totalPurchasesMonthly, setTotalPurchasesMonthly] = useState(null);
+  const [totalPurchasesMonthlyLoading, setTotalPurchasesMonthlyLoading] = useState(true);
+  const [totalPurchaseInvoicesMonthly, setTotalPurchaseInvoicesMonthly] = useState(null);
+  const [totalPurchaseInvoicesMonthlyLoading, setTotalPurchaseInvoicesMonthlyLoading] = useState(true);
+  const [totalPendingPurchaseInvoices, setTotalPendingPurchaseInvoices] = useState(null);
+  const [totalPendingPurchaseInvoicesLoading, setTotalPendingPurchaseInvoicesLoading] = useState(true);
+  const [totalPendingPayment, setTotalPendingPayment] = useState(null);
+  const [totalPendingPaymentLoading, setTotalPendingPaymentLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState(null)
   const { token } = useAuth() || null
   const { getPermissions } = useAuth()
@@ -210,6 +215,8 @@ const Purchases = () => {
       } catch (error) {
         toast.error("Failed to fetch purchase data.")
         console.error("Error fetching purchase data:", error)
+      } finally {
+        setTotalPurchasesMonthlyLoading(false);
       }
     }
 
@@ -226,6 +233,8 @@ const Purchases = () => {
       } catch (error) {
         toast.error("Failed to fetch monthly purchase invoices.")
         console.error("Error fetching monthly purchase invoices:", error)
+      } finally {
+        setTotalPurchaseInvoicesMonthlyLoading(false);
       }
     }
 
@@ -242,6 +251,8 @@ const Purchases = () => {
       } catch (error) {
         toast.error("Failed to fetch pending purchase invoices.")
         console.error("Error fetching pending purchase invoices:", error)
+      } finally {
+        setTotalPendingPurchaseInvoicesLoading(false);
       }
     }
 
@@ -258,6 +269,8 @@ const Purchases = () => {
       } catch (error) {
         toast.error("Failed to fetch pending payment.")
         console.error("Error fetching pending payment:", error)
+      } finally {
+        setTotalPendingPaymentLoading(false);
       }
     }
 
@@ -310,24 +323,30 @@ const Purchases = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Purchase Expense this month</div>
-              <div className="text-3xl font-bold">PKR {totalPurchasesMonthly}</div>
-              {/* <div className="text-sm text-green-600 mt-1">+12% from last month</div> */}
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Purchase Invoices this month</div>
-              <div className="text-3xl font-bold text-black-600">{totalPurchaseInvoicesMonthly}</div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Pending Invoices</div>
-              <div className="text-3xl font-bold text-black-600">{totalPendingPurchaseInvoices}</div>
-              <div className="text-sm text-muted-foreground mt-1">Awaiting payment</div>
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Pending Payment</div>
-              <div className="text-3xl font-bold text-red-600">PKR {totalPendingPayment}</div>
-            </div>
+            <MetricCard
+              title="Total Purchase Expense this month"
+              value={`PKR ${totalPurchasesMonthly}`}
+              loading={totalPurchasesMonthlyLoading}
+            />
+            <MetricCard
+              title="Total Purchase Invoices this month"
+              value={totalPurchaseInvoicesMonthly}
+              valueClassName="text-black-600"
+              loading={totalPurchaseInvoicesMonthlyLoading}
+            />
+            <MetricCard
+              title="Total Pending Invoices"
+              value={totalPendingPurchaseInvoices}
+              hint="Awaiting payment"
+              valueClassName="text-black-600"
+              loading={totalPendingPurchaseInvoicesLoading}
+            />
+            <MetricCard
+              title="Total Pending Payment"
+              value={`PKR ${totalPendingPayment}`}
+              valueClassName="text-red-600"
+              loading={totalPendingPaymentLoading}
+            />
           </div>
 
           {/* Purchases Records Section */}

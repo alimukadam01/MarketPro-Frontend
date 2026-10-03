@@ -132,7 +132,9 @@ const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`
 const Accounting = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [cashInHand, setCashInHand] = useState(null);
+    const [cashLoading, setCashLoading] = useState(true);
     const [summary, setSummary] = useState(null);
+    const [summaryLoading, setSummaryLoading] = useState(true);
     const [cashTrend, setCashTrend] = useState(Array(30).fill(0));
     const [transactionsData, setTransactionsData] = useState(null);
     // true until the first response lands, so the table never flashes
@@ -215,6 +217,8 @@ const Accounting = () => {
             } catch (error) {
                 console.log(error);
                 toast.error("Failed to fetch cash in hand.");
+            } finally {
+              setCashLoading(false);
             }
         };
 
@@ -225,6 +229,8 @@ const Accounting = () => {
             } catch (error) {
                 console.log(error);
                 toast.error("Failed to fetch today's summary.");
+            } finally {
+              setSummaryLoading(false);
             }
         };
 
@@ -295,15 +301,18 @@ const Accounting = () => {
                                 <MetricCard
                                     title="Cash in Hand"
                                     value={formatCurrency(cashInHand?.total)}
-                                />
+                                    loading={cashLoading}
+                                  />
                                 <MetricCard
                                     title="Money In Today"
                                     value={formatCurrency(summary?.money_in?.total)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                                 <MetricCard
                                     title="Money Out Today"
                                     value={formatCurrency(summary?.money_out?.total)}
-                                />
+                                    loading={summaryLoading}
+                                  />
                             </div>
 
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

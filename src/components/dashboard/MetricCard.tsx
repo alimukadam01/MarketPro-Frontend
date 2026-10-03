@@ -1,4 +1,5 @@
 import { StatCard } from "@/components/dashboard/StatCard";
+import { cn } from "@/lib/utils";
 
 interface MetricCardProps {
   title: string;
@@ -16,6 +17,12 @@ interface MetricCardProps {
    */
   loading?: boolean;
   className?: string;
+  /**
+   * Extra classes for the figure itself. Some counters colour the number to
+   * carry meaning - "Total Restocks Required" is red - and that is part of
+   * what the card says, not decoration.
+   */
+  valueClassName?: string;
 }
 
 /**
@@ -26,10 +33,10 @@ interface MetricCardProps {
  * figure looked different depending on the screen. This keeps the hand-rolled
  * styling, which was the more common of the two.
  */
-export function MetricCard({ title, value, hint, loading = false, className }: MetricCardProps) {
+export function MetricCard({ title, value, hint, loading = false, className, valueClassName }: MetricCardProps) {
   return (
     <StatCard title={title} loading={loading} className={className}>
-      <div className="text-3xl font-bold">{value}</div>
+      <div className={cn("text-3xl font-bold", valueClassName)}>{value}</div>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </StatCard>
   );

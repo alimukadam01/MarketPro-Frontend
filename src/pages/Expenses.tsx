@@ -4,6 +4,7 @@ import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   formatSearchQuery,
@@ -78,8 +79,14 @@ const Expenses = () => {
   // "no records" before it has asked. Cleared in a finally, never on
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
-  const [totalExpenses, setTotalExpenses] = useState(0);
-  const [totalExpenseAmount, setTotalExpenseAmount] = useState(0);
+  const [totalExpenses, setTotalExpenses] = useState(null);
+  // Its own flag: this counter and the table are separate
+  // requests, and one must not speak for the other.
+  const [totalExpensesLoading, setTotalExpensesLoading] = useState(true);
+  const [totalExpenseAmount, setTotalExpenseAmount] = useState(null);
+  // Its own flag: this counter and the table are separate
+  // requests, and one must not speak for the other.
+  const [totalExpenseAmountLoading, setTotalExpenseAmountLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const { getPermissions } = useAuth()
@@ -165,6 +172,8 @@ const Expenses = () => {
       } catch (error) {
         toast.error("Failed to fetch total expenses.");
         console.error("Error fetching total expenses:", error);
+      } finally {
+        setTotalExpensesLoading(false);
       }
     }
 
@@ -181,6 +190,8 @@ const Expenses = () => {
       } catch (error) {
         toast.error("Failed to fetch total expenses.");
         console.error("Error fetching total expenses:", error);
+      } finally {
+        setTotalExpenseAmountLoading(false);
       }
     }
     
@@ -236,19 +247,17 @@ const Expenses = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Expenses this month
-              </div>
-              <div className="text-3xl font-bold">{totalExpenses}</div>
-            </div>
+            <MetricCard
+              title="Total Expenses this month"
+              value={totalExpenses}
+              loading={totalExpensesLoading}
+            />
             
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Expense Amount this month
-              </div>
-              <div className="text-3xl font-bold">{totalExpenseAmount}</div>
-            </div>
+            <MetricCard
+              title="Total Expense Amount this month"
+              value={totalExpenseAmount}
+              loading={totalExpenseAmountLoading}
+            />
           </div>
 
 

@@ -4,6 +4,7 @@ import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   formatSearchQuery,
@@ -76,7 +77,10 @@ const ReturnedItems = () => {
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
   const [returnedItemsIdMap, setReturnedItemsIdMap] = useState([])
-  const [totalReturnedItems, setTotalReturnedItems] = useState(0)
+  const [totalReturnedItems, setTotalReturnedItems] = useState(null);
+  // Its own flag: this counter and the table are separate
+  // requests, and one must not speak for the other.
+  const [totalReturnedItemsLoading, setTotalReturnedItemsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("")
   const { token } = useAuth() || null
   const { getPermissions } = useAuth()
@@ -194,6 +198,8 @@ const ReturnedItems = () => {
       } catch (error) {
         toast.error("Failed to fetch total returned items.");
         console.error("Error fetching total returned items:", error);
+      } finally {
+        setTotalReturnedItemsLoading(false);
       }
     }
 
@@ -248,12 +254,11 @@ const ReturnedItems = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Returned Items
-              </div>
-              <div className="text-3xl font-bold">{totalReturnedItems}</div>
-            </div>
+            <MetricCard
+              title="Total Returned Items"
+              value={totalReturnedItems}
+              loading={totalReturnedItemsLoading}
+            />
           </div>
 
           {/* Sales Records Section */}

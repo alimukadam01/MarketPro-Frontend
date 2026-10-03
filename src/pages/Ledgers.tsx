@@ -67,6 +67,7 @@ const Ledgers = () => {
     const [loading, setLoading] = useState(true);
     const [payables, setPayables] = useState(null);
     const [profit, setProfit] = useState(null);
+    const [profitLoading, setProfitLoading] = useState(true);
     const { token, getPermissions } = useAuth();
     const permissions = getPermissions("accounting");
     const navigate = useNavigate();
@@ -155,6 +156,8 @@ const Ledgers = () => {
             } catch (error) {
                 console.log("Error fetching profit estimate:", error);
                 toast.error("Failed to fetch profit estimate.");
+            } finally {
+              setProfitLoading(false);
             }
         };
 
@@ -203,14 +206,17 @@ const Ledgers = () => {
                                 <MetricCard
                                     title="Receivable"
                                     value={formatCurrency(receivables?.total)}
+                                    loading={loading}
                                 />
                                 <MetricCard
                                     title="Payable"
                                     value={formatCurrency(payables?.total)}
+                                    loading={loading}
                                 />
                                 <MetricCard
                                     title="Profit this month (estimated)"
                                     value={formatCurrency(profit?.this_month?.profit)}
+                                    loading={profitLoading}
                                 />
                             </div>
 
@@ -221,30 +227,21 @@ const Ledgers = () => {
                             </p>
 
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div className="bg-card rounded-lg p-6 border">
-                                    <div className="text-sm text-muted-foreground mb-2">
-                                        Receivable 0&ndash;30 days
-                                    </div>
-                                    <div className="text-3xl font-bold">
-                                        {formatCurrency(receivables?.aging?.current)}
-                                    </div>
-                                </div>
-                                <div className="bg-card rounded-lg p-6 border">
-                                    <div className="text-sm text-muted-foreground mb-2">
-                                        Receivable 31&ndash;60 days
-                                    </div>
-                                    <div className="text-3xl font-bold">
-                                        {formatCurrency(receivables?.aging?.days_31_60)}
-                                    </div>
-                                </div>
-                                <div className="bg-card rounded-lg p-6 border">
-                                    <div className="text-sm text-muted-foreground mb-2">
-                                        Receivable over 60 days
-                                    </div>
-                                    <div className="text-3xl font-bold">
-                                        {formatCurrency(receivables?.aging?.days_over_60)}
-                                    </div>
-                                </div>
+                                <MetricCard
+                                  title="Receivable 0&ndash;30 days"
+                                  value={formatCurrency(receivables?.aging?.current)}
+                                  loading={loading}
+                                />
+                                <MetricCard
+                                  title="Receivable 31&ndash;60 days"
+                                  value={formatCurrency(receivables?.aging?.days_31_60)}
+                                  loading={loading}
+                                />
+                                <MetricCard
+                                  title="Receivable over 60 days"
+                                  value={formatCurrency(receivables?.aging?.days_over_60)}
+                                  loading={loading}
+                                />
                             </div>
 
                             {/* Customers who owe money */}

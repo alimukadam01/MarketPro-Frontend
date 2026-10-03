@@ -13,8 +13,7 @@ import {
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
-  projectsAPIPackage,
-  getTotalProjects
+  projectsAPIPackage
 } from "../../services/api";
 import {
   ArrowLeft,
@@ -63,7 +62,6 @@ const Projects = () => {
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
   const [projectsIdMap, setProjectsIdMap] = useState([])
-  const [totalProjects, setTotalProjects] = useState(0)
   const [searchTerm, setSearchTerm] = useState("")
   const { token } = useAuth() || null
   const { getPermissions } = useAuth()
@@ -139,24 +137,6 @@ const Projects = () => {
 
   useEffect(() => {
 
-    const fetchTotalProjects = async () => {
-      if (!token) return;
-        
-      return 0
-    //   try {
-    //     const res = await getTotalProjects(token);
-    //     if (res!==null) {
-    //       setTotalProjects(res);
-    //     } else {
-    //       toast.error("Failed to fetch total projects.");
-    //     }
-    //   } catch (error) {
-    //     toast.error("Failed to fetch total projects.");
-    //     console.error("Error fetching total projects:", error);
-    //   }
-    }
-
-    fetchTotalProjects()
     fetchProjects();
   }, [token, isDeleted])
 
@@ -202,16 +182,6 @@ const Projects = () => {
                   </p>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Key Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Projects
-              </div>
-              <div className="text-3xl font-bold">{totalProjects}</div>
             </div>
           </div>
 

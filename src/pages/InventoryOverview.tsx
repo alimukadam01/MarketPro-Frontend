@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner"
 import CustomFilter from "@/components/layout/CustomFilter";
 import DataTable from "@/components/ui/data-table";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { formatSearchQuery, listCountLabel } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
@@ -69,8 +70,10 @@ const InventoryOverview = () => {
   // "no records" before it has asked. Cleared in a finally, never on
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
-  const [totalInventoryValue, setTotalInventoryValue] = useState(0)
-  const [totalRestocksReq, setTotalRestocksReq] = useState(0)
+  const [totalInventoryValue, setTotalInventoryValue] = useState(null);
+  const [totalInventoryValueLoading, setTotalInventoryValueLoading] = useState(true);
+  const [totalRestocksReq, setTotalRestocksReq] = useState(null);
+  const [totalRestocksReqLoading, setTotalRestocksReqLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState(null);
   const { token } = useAuth() || null
   const { getPermissions } = useAuth()
@@ -156,6 +159,8 @@ const InventoryOverview = () => {
       } catch (error) {
         toast.error("Failed to fetch Total Inventory Value.")
         console.error("Error fetching Total Inventory Value:", error)
+      } finally {
+        setTotalInventoryValueLoading(false);
       }
     }
 
@@ -172,6 +177,8 @@ const InventoryOverview = () => {
       } catch (error) {
         toast.error("Failed to fetch Total Inventory Value.")
         console.error("Error fetching Total Inventory Value:", error)
+      } finally {
+        setTotalRestocksReqLoading(false);
       }
     }
 
@@ -226,16 +233,18 @@ const InventoryOverview = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Inventory Value</div>
-              <div className="text-3xl font-bold">PKR {totalInventoryValue}</div>
-              {/* <div className="text-sm text-green-600 mt-1">+12% from last month</div> */}
-            </div>
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">Total Restocks Required</div>
-              <div className="text-3xl font-bold text-red-600">{totalRestocksReq} Item{totalRestocksReq > 1 ? 's' : ''}</div>
-              <div className="text-sm text-muted-foreground mt-1">Running out of stock</div>
-            </div>
+            <MetricCard
+              title="Total Inventory Value"
+              value={`PKR ${totalInventoryValue}`}
+              loading={totalInventoryValueLoading}
+            />
+            <MetricCard
+              title="Total Restocks Required"
+              value={`${totalRestocksReq} Item${totalRestocksReq > 1 ? "s" : ""}`}
+              valueClassName="text-red-600"
+              hint="Running out of stock"
+              loading={totalRestocksReqLoading}
+            />
           </div>
 
           {/* Inventory Items Section */}

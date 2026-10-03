@@ -7,6 +7,7 @@ import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
+import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   formatSearchQuery,
@@ -63,7 +64,10 @@ const Customers = () => {
   // "no records" before it has asked. Cleared in a finally, never on
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
-  const [totalCustomers, setTotalCustomers] = useState(0);
+  const [totalCustomers, setTotalCustomers] = useState(null);
+  // Its own flag: this counter and the table are separate
+  // requests, and one must not speak for the other.
+  const [totalCustomersLoading, setTotalCustomersLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const { token } = useAuth() || null;
   const { getPermissions } = useAuth()
@@ -148,6 +152,8 @@ const Customers = () => {
       } catch (error) {
         toast.error("Failed to fetch total customers.");
         console.error("Error fetching total customers:", error);
+      } finally {
+        setTotalCustomersLoading(false);
       }
     }
 
@@ -201,12 +207,11 @@ const Customers = () => {
 
           {/* Key Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-card rounded-lg p-6 border">
-              <div className="text-sm text-muted-foreground mb-2">
-                Total Customers
-              </div>
-              <div className="text-3xl font-bold">{ totalCustomers }</div>
-            </div>
+            <MetricCard
+              title="Total Customers"
+              value={totalCustomers}
+              loading={totalCustomersLoading}
+            />
           </div>
 
           {/* Sales Records Section */}
