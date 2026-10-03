@@ -62,9 +62,9 @@ const DailyBook = () => {
         todayForInput()
     );
     const [dayBook, setDayBook] = useState(null);
-    const [dayBookLoading, setDayBookLoading] = useState(true);
-    // The tables are nested one per account inside dayBook, so they all
-    // share the parent fetch's flag.
+    // Every surface fed by fetchDayBook shares this: the two figures above the
+    // fold and the per-account tables, which are nested inside dayBook rather
+    // than fetched separately.
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
     const [summaryLoading, setSummaryLoading] = useState(true);
@@ -84,6 +84,7 @@ const DailyBook = () => {
 
     const fetchDayBook = async () => {
         if (!token) return;
+        setLoading(true);
         try {
             const res = await getDayBook(token, selectedDate);
             if (res) {
@@ -101,6 +102,7 @@ const DailyBook = () => {
 
     const fetchSummary = async () => {
         if (!token) return;
+        setSummaryLoading(true);
         try {
             const res = await getDailySummary(token, selectedDate);
             if (res) {
@@ -176,12 +178,12 @@ const DailyBook = () => {
                                 <MetricCard
                                     title="Money In"
                                     value={formatCurrency(dayBook?.total_money_in)}
-                                    loading={dayBookLoading}
+                                    loading={loading}
                                   />
                                 <MetricCard
                                     title="Money Out"
                                     value={formatCurrency(dayBook?.total_money_out)}
-                                    loading={dayBookLoading}
+                                    loading={loading}
                                   />
                                 <MetricCard
                                     title="Credit Extended"

@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner"
 import * as z from "zod";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { ArrowLeft, Eye, EyeOff, Lock } from "lucide-react";
@@ -184,9 +185,9 @@ const ResetPassword = () => {
               )}
             />
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? "Saving..." : "Reset Password"}
-            </Button>
+            <SubmitButton type="submit" className="w-full" pending={isLoading} pendingLabel="Saving…">
+              Reset Password
+            </SubmitButton>
           </form>
         </Form>
 
