@@ -306,7 +306,7 @@ const InventoryOverview = () => {
             <MetricCard
               title="Total Inventory Value (With Profit)"
               value={formatPKR(valueWithProfit)}
-              hint="Sum of unit prices"
+              hint="At what the stock sells for"
               loading={valueWithProfitLoading}
             />
             <MetricCard
