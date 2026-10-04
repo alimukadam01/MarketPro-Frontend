@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import * as DialogUI from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -160,9 +161,9 @@ function WalkInCustomer({ open, setOpen, defaultCityId, onSubmit }) {
           >
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isSaving}>
-            {isSaving ? "Saving…" : "Save & Send"}
-          </Button>
+          <SubmitButton onClick={handleSubmit} pending={isSaving} pendingLabel="Saving…">
+            Save &amp; Send
+          </SubmitButton>
         </DialogUI.DialogFooter>
       </DialogUI.DialogContent>
     </DialogUI.Dialog>

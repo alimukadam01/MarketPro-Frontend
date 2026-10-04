@@ -286,7 +286,7 @@ export function Combobox({
               // while loading would read as "no match" before the first option has
               // had a chance to arrive.
               <div className="flex items-center gap-2 px-3 py-4 text-sm text-muted-foreground">
-                <Spinner size={14} />
+                <Spinner size={16} />
                 <span>Loading…</span>
               </div>
             ) : options.length === 0 ? (

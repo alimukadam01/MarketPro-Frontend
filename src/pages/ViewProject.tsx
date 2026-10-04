@@ -34,11 +34,16 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { ArrowLeft, ArrowRight, CheckCircle2Icon, Edit, Edit2, Plus, Trash, Trash2, X } from "lucide-react";
 import { Checkbox } from "@radix-ui/react-checkbox";
 import { Combobox } from "@/components/ui/combobox";
+import { Spinner } from "@/components/ui/spinner"
+import { useBusyAction } from "@/hooks/use-busy-action";
 
 const ViewProject = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [customers, setCustomers] = useState([]);
     const [customersLoading, setCustomersLoading] = useState(true);
+    // The project itself, which feeds the whole page. Reported beside the title,
+    // the same way the Update pages do it.
+    const [detailLoading, setDetailLoading] = useState(true);
     const [step, setStep] = useState(1);
     const [success, setSuccess] = useState(false);
     const [products, setProducts] = useState([]);
@@ -101,6 +106,12 @@ const ViewProject = () => {
         setSalesInvoices(data.sales_invoices)
         setPurchaseInvoices(data.purchase_invoices)
     }
+
+    // Keyed per control, and the key is namespaced: a task, a quotation item
+    // and an invoice row can all be on screen at once and their ids overlap.
+    // Only the control that was clicked locks, as in payments.jsx - deleting
+    // one row must not freeze the rest of the page.
+    const { busy, run } = useBusyAction();
 
     const handleDeleteProjectInvoice = async (entryId, is_sales_invoice) => {
         try {
@@ -246,7 +257,7 @@ const ViewProject = () => {
             }
         }
 
-        fetchProject()
+        fetchProject().finally(() => setDetailLoading(false))
     }, [products, project_id])
 
     {
@@ -269,7 +280,10 @@ const ViewProject = () => {
                     <div className="grid grid-cols-2 gap-4">
                         {/* Col 1 Row 1: Project Details */}
                         <div className="flex flex-col border border-light rounded-lg bg-card px-2 py-2">
-                            <h2 className="text-xl font-semibold mb-2">Project Details</h2>
+                            <h2 className="flex items-center gap-3 text-xl font-semibold mb-2">
+                                Project Details
+                                {detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}
+                            </h2>
                             <Input id="name" className="text-xl font-semibold mb-2 w-fit" type="text" {...register("name", { required: "Name is required", onChange: (e) => handleFieldPatch(`/projects/${project_id}/`, "name", e.target.value) })} />
                             <Textarea
                                 id="desc"
@@ -343,9 +357,10 @@ const ViewProject = () => {
                                             <input
                                                 type="checkbox"
                                                 checked={task.is_complete}
-                                                onChange={(e) => {
+                                                disabled={busy === `task-check-${task.id}`}
+                                                onChange={run(`task-check-${task.id}`, () =>
                                                     handleTask(index, task.id, "check")
-                                                }}
+                                                )}
                                                 className="w-4 h-4 border border-light rounded-xs bg-neutral-secondary-medium"
                                             />
                                         </div>
@@ -380,9 +395,12 @@ const ViewProject = () => {
                                                 type="button"
                                                 variant="unstyled"
                                                 className="p-0 hover:text-red-500"
-                                                onClick={() => handleTask(index, task.id, "delete")}
+                                                disabled={busy === `task-delete-${task.id}`}
+                                                onClick={run(`task-delete-${task.id}`, () => handleTask(index, task.id, "delete"))}
                                             >
-                                                <Trash cursor={'pointer'} />
+                                                {busy === `task-delete-${task.id}`
+                                                    ? <Spinner size={16} />
+                                                    : <Trash cursor={'pointer'} />}
                                             </Button>
                                         </div>
                                     </div>
@@ -450,9 +468,10 @@ const ViewProject = () => {
                                                         <input
                                                             type="checkbox"
                                                             checked={item.is_fulfilled}
-                                                            onChange={(e) => {
+                                                            disabled={busy === `quote-check-${item.id}`}
+                                                            onChange={run(`quote-check-${item.id}`, () =>
                                                                 handleQuotationItem(index, item.id, "check")
-                                                            }}
+                                                            )}
                                                             className="w-4 h-4 border border-light rounded-xs bg-neutral-secondary-medium"
                                                         />
                                                     </div>
@@ -471,8 +490,11 @@ const ViewProject = () => {
                                                         type="button"
                                                         variant="unstyled"
                                                         className="p-0 hover:text-red-500 h-[10px]"
-                                                        onClick={() => handleQuotationItem(index, item.id, "delete")}>
-                                                        <Trash cursor={'pointer'} />
+                                                        disabled={busy === `quote-delete-${item.id}`}
+                                                        onClick={run(`quote-delete-${item.id}`, () => handleQuotationItem(index, item.id, "delete"))}>
+                                                        {busy === `quote-delete-${item.id}`
+                                                            ? <Spinner size={16} />
+                                                            : <Trash cursor={'pointer'} />}
                                                     </Button>
                                                 </div>
                                             ))}
@@ -505,8 +527,11 @@ const ViewProject = () => {
                                                 </Button>
                                             </div>
                                             <div className="flex items-center h-7">
-                                                <Button type="button" variant="unstyled" className="p-0 hover:text-red-500" onClick={() => handleDeleteProjectInvoice(entry.id, true)}>
-                                                    <Trash cursor={'pointer'} />
+                                                <Button type="button" variant="unstyled" className="p-0 hover:text-red-500" disabled={busy === `inv-sales-${entry.id}`}
+                                                    onClick={run(`inv-sales-${entry.id}`, () => handleDeleteProjectInvoice(entry.id, true))}>
+                                                    {busy === `inv-sales-${entry.id}`
+                                                        ? <Spinner size={16} />
+                                                        : <Trash cursor={'pointer'} />}
                                                 </Button>
                                             </div>
                                         </div>
@@ -535,8 +560,11 @@ const ViewProject = () => {
                                                 </Button>
                                             </div>
                                             <div className="flex items-center h-7">
-                                                <Button type="button" variant="unstyled" className="p-0 hover:text-red-500" onClick={() => handleDeleteProjectInvoice(entry.id, false)}>
-                                                    <Trash cursor={'pointer'} />
+                                                <Button type="button" variant="unstyled" className="p-0 hover:text-red-500" disabled={busy === `inv-purchase-${entry.id}`}
+                                                    onClick={run(`inv-purchase-${entry.id}`, () => handleDeleteProjectInvoice(entry.id, false))}>
+                                                    {busy === `inv-purchase-${entry.id}`
+                                                        ? <Spinner size={16} />
+                                                        : <Trash cursor={'pointer'} />}
                                                 </Button>
                                             </div>
                                         </div>

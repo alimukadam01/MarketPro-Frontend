@@ -29,6 +29,7 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
+import { useBusyAction } from "@/hooks/use-busy-action";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 
@@ -101,6 +102,8 @@ const ReturnedItems = () => {
   // could be fired twice.
 
   const [deleting, setDeleting] = useState(false);
+
+  const { busy, run } = useBusyAction();
 
   const handleDeletion = async () => {
     setDeleting(true);
@@ -303,10 +306,10 @@ const ReturnedItems = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1 || (selectedRows.length > 0 && returnedItemsIdMap[selectedRows[0]]?.is_returned) || !permissions["edit"]}
-                  onClick={handleReturnToInventory}
+                  disabled={!!busy || selectedRows.length !== 1 || (selectedRows.length > 0 && returnedItemsIdMap[selectedRows[0]]?.is_returned) || !permissions["edit"]}
+                  onClick={run("restock", handleReturnToInventory)}
                 >
-                  <Undo2 className="w-4 h-4" />
+                  {busy === "restock" ? <Spinner size={16} /> : <Undo2 className="w-4 h-4" />}
                   <span>Restock</span>
                 </Button>
 
@@ -314,10 +317,10 @@ const ReturnedItems = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1 || (selectedRows.length > 0 && returnedItemsIdMap[selectedRows[0]]?.is_returned) || !permissions["edit"]}
-                  onClick={handleReturnToSalesInvoice}
+                  disabled={!!busy || selectedRows.length !== 1 || (selectedRows.length > 0 && returnedItemsIdMap[selectedRows[0]]?.is_returned) || !permissions["edit"]}
+                  onClick={run("reinvoice", handleReturnToSalesInvoice)}
                 >
-                  <Undo2 className="w-4 h-4" />
+                  {busy === "reinvoice" ? <Spinner size={16} /> : <Undo2 className="w-4 h-4" />}
                   <span>Add Back to Sales Invoice</span>
                 </Button>
                 

@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { Progress } from "@/components/ui/progress";
 import { ChevronDown, Edit, Lock, Trash2 } from "lucide-react";
 import {
@@ -27,6 +29,10 @@ const TargetProgressCard = ({
   canEdit = true,
   canDelete = true,
 }) => {
+  // Local to the card: one delete button each, so a flag in Targets would
+  // spin every card at once.
+  const [deleting, setDeleting] = useState(false);
+
   if (!item) return null;
 
   const isTarget = item.kind !== "point";
@@ -89,11 +95,24 @@ const TargetProgressCard = ({
         <Button
           variant="unstyled"
           aria-label={isTarget ? "Delete target" : "Delete data point"}
-          disabled={!canDelete}
-          onClick={() => onDelete && onDelete(item)}
+          disabled={deleting || !canDelete}
+          onClick={async () => {
+            if (!onDelete) return;
+            setDeleting(true);
+            try {
+              await onDelete(item);
+            } finally {
+              // The card usually unmounts on success, so this often lands on a
+              // gone component. Harmless, and it is what releases the button
+              // when the delete fails instead.
+              setDeleting(false);
+            }
+          }}
           className="shrink-0 w-7 h-7 p-0 flex items-center justify-center rounded-md"
         >
-          {canDelete ? (
+          {deleting ? (
+            <Spinner size={16} />
+          ) : canDelete ? (
             <Trash2 className="w-4 h-4 text-red-700" />
           ) : (
             <Lock className="w-4 h-4 text-muted-foreground" />

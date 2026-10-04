@@ -20,12 +20,16 @@ import {
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdateInventoryItem = () => {
   const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
+    // True until the record arrives, which the spinner beside the title
+    // reports. A failure is the only thing that toasts.
+    const [detailLoading, setDetailLoading] = useState(true);
     const [productName, setProductName] = useState("")
     const [locations, setLocations] = useState([])
     const { token } = useAuth()
@@ -131,7 +135,7 @@ const UpdateInventoryItem = () => {
 
         const init = async () => {
             await fetchLocations()
-            fetchInventoryItem()
+            fetchInventoryItem().finally(() => setDetailLoading(false));
         }
         init()
     }, [token, item_id])
@@ -152,7 +156,7 @@ const UpdateInventoryItem = () => {
 
                             {/* Second Column */}
                             <div className="flex flex-col flex-wrap flex-1">
-                                <h2 className="text-lg font-semibold mb-6">Update Inventory Item</h2>
+                                <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Update Inventory Item{detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
 
                                 <div className="flex gap-6 mb-6">
                                     <div className="w-[50%] space-y-1">

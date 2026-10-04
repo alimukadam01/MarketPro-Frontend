@@ -19,10 +19,18 @@ import {
 } from "../../services/api";
 import { todayForInput } from "../../services/utils";
 import { usePending } from "@/hooks/use-pending";
+import { useBusyAction } from "@/hooks/use-busy-action";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdateTarget = () => {
   const { pending, run } = usePending();
+  // Separate from `pending`, which belongs to the form submit: these two sit
+  // outside it and must not disable it, or each other wrongly.
+  const { busy, run: runAction } = useBusyAction();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  // True until the record arrives, which the spinner beside the title
+  // reports. A failure is the only thing that toasts.
+  const [detailLoading, setDetailLoading] = useState(true);
   const [step, setStep] = useState(1);
   const [catalogue, setCatalogue] = useState([]);
   const [entities, setEntities] = useState({});
@@ -243,7 +251,7 @@ const UpdateTarget = () => {
       }
     };
 
-    fetchTarget();
+    fetchTarget().finally(() => setDetailLoading(false));
     fetchCatalogue();
     fetchEntities();
   }, [token, targetId]);
@@ -267,8 +275,9 @@ const UpdateTarget = () => {
               onClick={() => navigate("/targets")}
             />
             <div>
-              <h1 className="text-2xl font-semibold">
+              <h1 className="flex items-center gap-3 text-2xl font-semibold">
                 {target ? target.name : "Target"}
+                {detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}
               </h1>
               {target && (
                 <p className="text-sm text-muted-foreground">
@@ -308,10 +317,12 @@ const UpdateTarget = () => {
                 <Button
                   variant="outline"
                   className="flex items-center space-x-2"
-                  disabled={!permissions?.["create"]}
-                  onClick={handleDuplicate}
+                  disabled={!!busy || !permissions?.["create"]}
+                  onClick={runAction("duplicate", handleDuplicate)}
                 >
-                  {permissions?.["create"] ? (
+                  {busy === "duplicate" ? (
+                    <Spinner size={16} />
+                  ) : permissions?.["create"] ? (
                     <Copy className="w-4 h-4" />
                   ) : (
                     <Lock className="w-4 h-4" />
@@ -321,10 +332,12 @@ const UpdateTarget = () => {
                 <Button
                   variant="outline"
                   className="flex items-center space-x-2"
-                  disabled={!permissions?.["delete"]}
-                  onClick={handleDelete}
+                  disabled={!!busy || !permissions?.["delete"]}
+                  onClick={runAction("delete", handleDelete)}
                 >
-                  {permissions?.["delete"] ? (
+                  {busy === "delete" ? (
+                    <Spinner size={16} />
+                  ) : permissions?.["delete"] ? (
                     <Trash2 className="w-4 h-4" />
                   ) : (
                     <Lock className="w-4 h-4" />

@@ -23,6 +23,7 @@ import {
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
+import { useBusyAction } from "@/hooks/use-busy-action";
 
 const cols = [
   { key: "id", label: "ID" },
@@ -136,6 +137,7 @@ const Backlog = () => {
   // could be fired twice.
 
   const [deleting, setDeleting] = useState(false);
+  const { busy, run } = useBusyAction();
 
   const handleDeletion = async () => {
     setDeleting(true);
@@ -288,10 +290,10 @@ const Backlog = () => {
                   variant="outline"
                   size="sm"
                   className="flex items-center space-x-2"
-                  disabled={selectedRows.length !== 1}
-                  onClick={handleToggleStatus}
+                  disabled={!!busy || selectedRows.length !== 1}
+                  onClick={run("toggle", handleToggleStatus)}
                 >
-                  <CheckCircle2 className="w-4 h-4" />
+                  {busy === "toggle" ? <Spinner size={16} /> : <CheckCircle2 className="w-4 h-4" />}
                   <span>Toggle Status</span>
                 </Button>
                 <Button

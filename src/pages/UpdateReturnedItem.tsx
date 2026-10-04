@@ -13,11 +13,15 @@ import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdateReturnedItem = () => {
   const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+    // True until the record arrives, which the spinner beside the title
+    // reports. A failure is the only thing that toasts.
+    const [detailLoading, setDetailLoading] = useState(true);
     const { token } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -90,7 +94,7 @@ const UpdateReturnedItem = () => {
             }
         };
 
-        fetchReturnedItem();
+        fetchReturnedItem().finally(() => setDetailLoading(false));
     }, [token, returned_item_id]);
 
     return (
@@ -113,7 +117,7 @@ const UpdateReturnedItem = () => {
                         >
                             {/* First Column */}
                             <div className="flex flex-col flex-wrap flex-1">
-                                <h2 className="text-lg font-semibold mb-6">Update Returned Item</h2>
+                                <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Update Returned Item{detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
 
                                 <div className="flex gap-6 mb-6">
                                     <div className="flex-1 space-y-1">

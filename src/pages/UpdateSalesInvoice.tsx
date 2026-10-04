@@ -35,11 +35,15 @@ import { useInvoiceActions } from "@/hooks/use-invoice-actions";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
 import { Combobox } from "@/components/ui/combobox";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdateSalesInvoice = () => {
   const { pending, run } = usePending();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
+  // True until the record arrives, which the spinner beside the title
+  // reports. A failure is the only thing that toasts.
+  const [detailLoading, setDetailLoading] = useState(true);
   const [returnItemWindowOpen, setReturnItemWindowOpen] = useState(false)
   const [paymentsOpen, setPaymentsOpen] = useState(false)
   const [itemReturned, setItemReturned] = useState(false)
@@ -245,6 +249,8 @@ const UpdateSalesInvoice = () => {
     } catch (error) {
       console.log(error)
       toast.error("Failed to fetch sales invoice")
+    } finally {
+      setDetailLoading(false)
     }
   }
 
@@ -355,7 +361,7 @@ const UpdateSalesInvoice = () => {
           <form onSubmit={handleSubmit(run(onSubmit))} className="flex flex-row gap-12">
             {/* First Column */}
             <div className="flex flex-col flex-wrap flex-1">
-              <h2 className="text-lg font-semibold mb-6">Invoice Details</h2>
+              <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Invoice Details{detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
 
               <div className="flex gap-6 mb-6">
                 <div className="flex-1 space-y-1">
