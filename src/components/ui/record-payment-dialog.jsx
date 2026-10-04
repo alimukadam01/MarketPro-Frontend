@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import * as DialogUI from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -569,9 +570,14 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button disabled={cannotRecord} onClick={onSubmit}>
-              {saving ? "Recording…" : "Record payment"}
-            </Button>
+            <SubmitButton
+              disabled={cannotRecord}
+              pending={saving}
+              pendingLabel="Recording…"
+              onClick={onSubmit}
+            >
+              Record payment
+            </SubmitButton>
           </div>
         </div>
       </DialogUI.DialogContent>

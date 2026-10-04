@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import * as DialogUI from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { useBusyAction } from "@/hooks/use-busy-action";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
@@ -49,6 +51,11 @@ export default function CustomFilter({
   const handleChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
   }
+
+  // Both await the refetch before closing the dialog, so without this the
+  // dialog just sits there after the click. One edit here covers the filter
+  // button on every list page.
+  const { busy, run } = useBusyAction();
 
   const applyFilters = async () => {
     const query = formatFilterQuery(filters);
@@ -115,10 +122,17 @@ export default function CustomFilter({
         </div>
 
         <DialogUI.DialogFooter className="flex gap-2">
-          <Button variant="outline" onClick={resetFilters} type="button">
+          <Button
+            variant="outline"
+            onClick={run("reset", resetFilters)}
+            disabled={!!busy}
+            type="button"
+          >
+            {busy === "reset" && <Spinner size={16} />}
             Reset
           </Button>
-          <Button onClick={applyFilters} type="button">
+          <Button onClick={run("apply", applyFilters)} disabled={!!busy} type="button">
+            {busy === "apply" && <Spinner size={16} />}
             Apply Filters
           </Button>
         </DialogUI.DialogFooter>

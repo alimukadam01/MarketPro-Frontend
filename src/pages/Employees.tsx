@@ -8,6 +8,8 @@ import { Header } from "@/components/layout/Header"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb"
 import DataTable from "@/components/ui/data-table"
 import { Button } from "@/components/ui/button"
+import { SubmitButton } from "@/components/ui/submit-button"
+import { Spinner } from "@/components/ui/spinner"
 import { Input } from "@/components/ui/input"
 import { SearchField } from "@/components/ui/search-field"
 import { Label } from "@/components/ui/label"
@@ -108,6 +110,8 @@ const Employees = () => {
   const [selectedRows, setSelectedRows] = useState([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  // The toolbar delete, separate again from the dialog submit above.
+  const [deleting, setDeleting] = useState(false)
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -262,6 +266,7 @@ const Employees = () => {
   const handleDeletion = async () => {
     if (selectedRows.length <= 0) return
 
+    setDeleting(true)
     try {
       const results = await Promise.all(
         selectedRows.map((id) => deleteEmployee(token, businessId, id))
@@ -278,6 +283,8 @@ const Employees = () => {
     } catch (error) {
       console.log("Error deleting employees:", error)
       toast.error("Failed to remove employees.")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -341,10 +348,10 @@ const Employees = () => {
                 variant="outline"
                 size="sm"
                 className="flex items-center space-x-2"
-                disabled={selectedRows.length === 0}
+                disabled={deleting || selectedRows.length === 0}
                 onClick={handleDeletion}
               >
-                <Trash2 className="w-4 h-4" />
+                {deleting ? <Spinner size={16} /> : <Trash2 className="w-4 h-4" />}
                 <span>Delete</span>
               </Button>
             </div>
@@ -464,9 +471,9 @@ const Employees = () => {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSubmit} disabled={isLoading}>
-              {isLoading ? "Saving…" : editingId ? "Save Changes" : "Create Employee"}
-            </Button>
+            <SubmitButton onClick={handleSubmit} pending={isLoading} pendingLabel="Saving…">
+              {editingId ? "Save Changes" : "Create Employee"}
+            </SubmitButton>
           </DialogFooter>
         </DialogContent>
       </Dialog>

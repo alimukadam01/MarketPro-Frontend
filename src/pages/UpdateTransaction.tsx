@@ -39,8 +39,11 @@ import {
 } from "../../services/utils";
 import { Combobox } from "@/components/ui/combobox";
 import { Spinner } from "@/components/ui/spinner";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const UpdateTransaction = () => {
+    const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     // True until the record arrives, which the spinner beside the title
     // reports. A failure is the only thing that toasts.
@@ -354,7 +357,7 @@ const UpdateTransaction = () => {
                     )}
 
                     <form
-                        onSubmit={handleSubmit(onTransactionUpdate)}
+                        onSubmit={handleSubmit(run(onTransactionUpdate))}
                         className="flex flex-col flex-1 gap-4"
                     >
                         {/* Row One — both columns start together, so Reference lines up
@@ -601,9 +604,14 @@ const UpdateTransaction = () => {
                                 </div>
 
                                 <div className="flex justify-end mt-auto">
-                                    <Button type="submit" disabled={isSourceLinked}>
+                                    <SubmitButton
+                                        type="submit"
+                                        pending={pending}
+                                        pendingLabel="Updating…"
+                                        disabled={isSourceLinked}
+                                    >
                                         Update Transaction
-                                    </Button>
+                                    </SubmitButton>
                                 </div>
                             </div>
                         </div>
