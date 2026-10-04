@@ -4,6 +4,8 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { useBusyAction } from "@/hooks/use-busy-action";
 import { toast } from "sonner";
 import { ArrowLeft, CheckCircle2, XCircle, Lock } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -105,6 +107,8 @@ const Cheques = () => {
         }
     };
 
+    const { busy, run } = useBusyAction();
+
     const handleMarkCleared = async () => {
         if (selectedRows.length !== 1) return;
         try {
@@ -188,10 +192,12 @@ const Cheques = () => {
                             variant="outline"
                             size="sm"
                             className="flex items-center space-x-2"
-                            disabled={selectedRows.length !== 1 || !permissions?.["edit"]}
-                            onClick={handleMarkCleared}
+                            disabled={!!busy || selectedRows.length !== 1 || !permissions?.["edit"]}
+                            onClick={run("cleared", handleMarkCleared)}
                         >
-                            {permissions?.["edit"] ? (
+                            {busy === "cleared" ? (
+                                <Spinner size={16} />
+                            ) : permissions?.["edit"] ? (
                                 <CheckCircle2 className="w-4 h-4" />
                             ) : (
                                 <Lock className="w-4 h-4" />
@@ -202,10 +208,12 @@ const Cheques = () => {
                             variant="outline"
                             size="sm"
                             className="flex items-center space-x-2"
-                            disabled={selectedRows.length !== 1 || !permissions?.["edit"]}
-                            onClick={handleMarkBounced}
+                            disabled={!!busy || selectedRows.length !== 1 || !permissions?.["edit"]}
+                            onClick={run("bounced", handleMarkBounced)}
                         >
-                            {permissions?.["edit"] ? (
+                            {busy === "bounced" ? (
+                                <Spinner size={16} />
+                            ) : permissions?.["edit"] ? (
                                 <XCircle className="w-4 h-4" />
                             ) : (
                                 <Lock className="w-4 h-4" />

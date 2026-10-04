@@ -38,9 +38,16 @@ import {
     formatAccountOption,
 } from "../../services/utils";
 import { Combobox } from "@/components/ui/combobox";
+import { Spinner } from "@/components/ui/spinner";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { usePending } from "@/hooks/use-pending";
 
 const UpdateTransaction = () => {
+    const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+    // True until the record arrives, which the spinner beside the title
+    // reports. A failure is the only thing that toasts.
+    const [detailLoading, setDetailLoading] = useState(true);
     const [accounts, setAccounts] = useState({});
     const [customers, setCustomers] = useState({});
     const [suppliers, setSuppliers] = useState({});
@@ -230,7 +237,7 @@ const UpdateTransaction = () => {
             // placeholder and the account looked empty. Same pattern
             // UpdateProduct.tsx already uses.
             await Promise.all([fetchAccounts(), fetchCustomers(), fetchSuppliers()]);
-            fetchTransaction();
+            fetchTransaction().finally(() => setDetailLoading(false));
         };
         init();
     }, [token, transaction_id]);
@@ -350,7 +357,7 @@ const UpdateTransaction = () => {
                     )}
 
                     <form
-                        onSubmit={handleSubmit(onTransactionUpdate)}
+                        onSubmit={handleSubmit(run(onTransactionUpdate))}
                         className="flex flex-col flex-1 gap-4"
                     >
                         {/* Row One — both columns start together, so Reference lines up
@@ -358,7 +365,7 @@ const UpdateTransaction = () => {
                         <div className="flex gap-12">
                             {/* First Column */}
                             <div className="flex flex-col flex-1">
-                                <h2 className="text-lg font-semibold mb-6">Transaction Details</h2>
+                                <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Transaction Details{detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
 
                                 <div className="flex gap-6 mb-6">
                                     <div className="flex-1 space-y-1">
@@ -597,9 +604,14 @@ const UpdateTransaction = () => {
                                 </div>
 
                                 <div className="flex justify-end mt-auto">
-                                    <Button type="submit" disabled={isSourceLinked}>
+                                    <SubmitButton
+                                        type="submit"
+                                        pending={pending}
+                                        pendingLabel="Updating…"
+                                        disabled={isSourceLinked}
+                                    >
                                         Update Transaction
-                                    </Button>
+                                    </SubmitButton>
                                 </div>
                             </div>
                         </div>

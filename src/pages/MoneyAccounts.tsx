@@ -3,6 +3,9 @@ import { Header } from "@/components/layout/Header";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import DataTable from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
+import { SubmitButton } from "@/components/ui/submit-button";
+import { Spinner } from "@/components/ui/spinner";
+import { useBusyAction } from "@/hooks/use-busy-action";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -153,6 +156,8 @@ const MoneyAccounts = () => {
         setDialogOpen(true);
     };
 
+    const { busy, run } = useBusyAction();
+
     const handleSubmit = async () => {
         if (!form.name) {
             toast.error("Please enter an account name.");
@@ -293,11 +298,14 @@ const MoneyAccounts = () => {
                                 !selectedAccount ||
                                 !permissions?.["edit"] ||
                                 !selectedAccount.is_active ||
-                                selectedAccount.is_default
+                                selectedAccount.is_default ||
+                                !!busy
                             }
-                            onClick={handleSetDefault}
+                            onClick={run("default", handleSetDefault)}
                         >
-                            {permissions?.["edit"] ? (
+                            {busy === "default" ? (
+                                <Spinner size={16} />
+                            ) : permissions?.["edit"] ? (
                                 <Star className="w-4 h-4" />
                             ) : (
                                 <Lock className="w-4 h-4" />
@@ -311,11 +319,14 @@ const MoneyAccounts = () => {
                             disabled={
                                 !selectedAccount ||
                                 !permissions?.["edit"] ||
-                                (selectedAccount.is_active && selectedAccount.is_system)
+                                (selectedAccount.is_active && selectedAccount.is_system) ||
+                                !!busy
                             }
-                            onClick={handleToggleActive}
+                            onClick={run("active", handleToggleActive)}
                         >
-                            {permissions?.["edit"] ? (
+                            {busy === "active" ? (
+                                <Spinner size={16} />
+                            ) : permissions?.["edit"] ? (
                                 <Power className="w-4 h-4" />
                             ) : (
                                 <Lock className="w-4 h-4" />
@@ -413,9 +424,9 @@ const MoneyAccounts = () => {
                         <Button variant="outline" onClick={() => setDialogOpen(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleSubmit} disabled={isLoading}>
-                            {isLoading ? "Saving…" : editingId ? "Save Changes" : "Create Account"}
-                        </Button>
+                        <SubmitButton onClick={handleSubmit} pending={isLoading} pendingLabel="Saving…">
+                            {editingId ? "Save Changes" : "Create Account"}
+                        </SubmitButton>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -42,6 +42,11 @@ All colors MUST be HSL.
     --skeleton-base: 262.1 83.3% 94.5%;
     --skeleton-crest: 262.1 83.3% 98%;
 
+    /* The page-title spinners. Full brand purple - unlike the skeleton tints
+       these are thin rings that have to read against the page, not recede
+       into it. Every other spinner inherits its colour instead. */
+    --spinner: 262.1 83.3% 57.8%;
+
     --success: 142.1 76.2% 36.3%;
     --success-foreground: 355.7 100% 97.3%;
 
@@ -110,6 +115,11 @@ All colors MUST be HSL.
        which the dark theme overrides to a near-white 210 40% 98%. */
     --skeleton-base: 262.1 83.3% 18%;
     --skeleton-crest: 262.1 83.3% 11%;
+
+    /* Lightened, not the light theme's 57.8%, which muddies against the 4.9%
+       page. Same reason --skeleton-* is not derived from --primary: the dark
+       theme overrides --primary to a near-white 210 40% 98%. */
+    --spinner: 262.1 83.3% 72%;
 
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;

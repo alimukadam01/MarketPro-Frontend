@@ -23,11 +23,15 @@ import { useAuth } from "../../services/AuthProvider";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { createIdMap, getImageUrl } from "../../services/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdateBacklogEntry = () => {
   const { pending, run } = usePending();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  // True until the record arrives, which the spinner beside the title
+  // reports. A failure is the only thing that toasts.
+  const [detailLoading, setDetailLoading] = useState(true);
   const [employees, setEmployees] = useState({});
   const [imageFile, setImageFile] = useState(null);
   const [existingImageUrl, setExistingImageUrl] = useState(null);
@@ -109,7 +113,7 @@ const UpdateBacklogEntry = () => {
       }
     };
 
-    fetchEntry();
+    fetchEntry().finally(() => setDetailLoading(false));
     fetchEmployees();
   }, [token, entry_id]);
 
@@ -131,9 +135,9 @@ const UpdateBacklogEntry = () => {
             className="flex flex-row w-[48%] gap-12"
           >
             <div className="flex flex-col flex-1">
-              <h2 className="text-lg font-semibold mb-6">
+              <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">
                 Update Backlog Entry
-              </h2>
+              {detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
 
               {/* Type */}
               <div className="flex-1 space-y-1 mb-6">

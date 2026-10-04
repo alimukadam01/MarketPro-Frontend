@@ -28,11 +28,15 @@ import { ReadStream } from "fs";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
 import { Combobox } from "@/components/ui/combobox";
+import { Spinner } from "@/components/ui/spinner";
 
 const UpdatePurchaseQuotation = () => {
   const { pending, run } = usePending();
 
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
+    // True until the record arrives, which the spinner beside the title
+    // reports. A failure is the only thing that toasts.
+    const [detailLoading, setDetailLoading] = useState(true);
     const [quotationItems, setQuotationItems] = useState([])
     const [itemValidationErrors, setItemValidationErrors] = useState([])
     const [products, setProducts] = useState(null)
@@ -193,7 +197,7 @@ const UpdatePurchaseQuotation = () => {
                 fetchSuppliers(),
                 fetchProducts(),
             ])
-            fetchPurchaseQuotation()
+            fetchPurchaseQuotation().finally(() => setDetailLoading(false));
         }
         init()
     }, [token, purchase_quotation_id])
@@ -209,7 +213,7 @@ const UpdatePurchaseQuotation = () => {
                     <DynamicBreadCrumb />
 
                     <form onSubmit={handleSubmit(run(onPurchaseQuotationUpdate))} className="flex flex-col flex-1">
-                        <h2 className="text-lg font-semibold mb-6">Update Project Quotation</h2>
+                        <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Update Project Quotation{detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
                         <div
                             className="flex flex-row gap-12 h-auto"
                         >
