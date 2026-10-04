@@ -13,6 +13,8 @@ import {
   bulkDeleteInventoryItems,
   deleteInventoryItem,
   getTotalInventoryValue,
+  getTotalInventoryValueWithProfit,
+  getTotalItemsNotInInventory,
   getTotalRestocksReq
 } from "../../services/api";
 import { Eye, ArrowLeft, Plus, Filter, Edit, Trash2, Lock } from "lucide-react";
@@ -21,6 +23,10 @@ import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+
+// Separators, because these run to eight digits - "PKR 46405500" is not a
+// number anyone reads at a glance. Same shape as Accounting.tsx's helper.
+const formatPKR = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
 
 const cols = [
   { key: "id", label: "ID" },
@@ -74,6 +80,12 @@ const InventoryOverview = () => {
   const [loading, setLoading] = useState(true);
   const [totalInventoryValue, setTotalInventoryValue] = useState(null);
   const [totalInventoryValueLoading, setTotalInventoryValueLoading] = useState(true);
+  // Seeded null, not 0, so the card shows a skeleton rather than claiming the
+  // stock is worth nothing while the figure is still in flight.
+  const [valueWithProfit, setValueWithProfit] = useState(null);
+  const [valueWithProfitLoading, setValueWithProfitLoading] = useState(true);
+  const [itemsNotInInventory, setItemsNotInInventory] = useState(null);
+  const [itemsNotInInventoryLoading, setItemsNotInInventoryLoading] = useState(true);
   const [totalRestocksReq, setTotalRestocksReq] = useState(null);
   const [totalRestocksReqLoading, setTotalRestocksReqLoading] = useState(true);
   const { token } = useAuth() || null
@@ -199,8 +211,46 @@ const InventoryOverview = () => {
       }
     }
 
+    const fetchValueWithProfit = async () => {
+      if (!token) return
+
+      try {
+        const res = await getTotalInventoryValueWithProfit(token)
+        if (res !== null) {
+          setValueWithProfit(res)
+        } else {
+          toast.error("Failed to fetch Inventory Value With Profit.")
+        }
+      } catch (error) {
+        toast.error("Failed to fetch Inventory Value With Profit.")
+        console.error("Error fetching Inventory Value With Profit:", error)
+      } finally {
+        setValueWithProfitLoading(false);
+      }
+    }
+
+    const fetchItemsNotInInventory = async () => {
+      if (!token) return
+
+      try {
+        const res = await getTotalItemsNotInInventory(token)
+        if (res !== null) {
+          setItemsNotInInventory(res)
+        } else {
+          toast.error("Failed to fetch Items Not In Inventory.")
+        }
+      } catch (error) {
+        toast.error("Failed to fetch Items Not In Inventory.")
+        console.error("Error fetching Items Not In Inventory:", error)
+      } finally {
+        setItemsNotInInventoryLoading(false);
+      }
+    }
+
     fetchTotalRestocksReq()
     fetchTotalInventoryValue()
+    fetchValueWithProfit()
+    fetchItemsNotInInventory()
     fetchInventoryItems()
   }, [token, isDeleted])
 
@@ -240,8 +290,21 @@ const InventoryOverview = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <MetricCard
               title="Total Inventory Value"
-              value={`PKR ${totalInventoryValue}`}
+              value={formatPKR(totalInventoryValue)}
+              hint="At what the stock cost"
               loading={totalInventoryValueLoading}
+            />
+            <MetricCard
+              title="Total Inventory Value (With Profit)"
+              value={formatPKR(valueWithProfit)}
+              hint="At what the stock sells for"
+              loading={valueWithProfitLoading}
+            />
+            <MetricCard
+              title="Items Not In Inventory"
+              value={`${itemsNotInInventory} Item${itemsNotInInventory === 1 ? "" : "s"}`}
+              hint="No stock record yet"
+              loading={itemsNotInInventoryLoading}
             />
             <MetricCard
               title="Total Restocks Required"

@@ -1561,6 +1561,50 @@ export const getTotalInventoryValue = async (token) => {
   }
 };
 
+export const getTotalInventoryValueWithProfit = async (token) => {
+  try {
+    const res = await apiClient.get(
+      "inventory-kpis/total-inventory-value-with-profit/",
+      {
+        headers: {
+          Authorization: token,
+        },
+      }
+    );
+
+    if (res.status == 200) {
+      return res.data.total_inventory_value_with_profit;
+    }
+
+    return null;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getTotalItemsNotInInventory = async (token) => {
+  try {
+    const res = await apiClient.get(
+      "inventory-kpis/total-items-not-in-inventory/",
+      {
+        headers: {
+          Authorization: token,
+        },
+      }
+    );
+
+    if (res.status == 200) {
+      return res.data.items_not_in_inventory;
+    }
+
+    return null;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
 export const getTotalRestocksReq = async (token) => {
   try {
     const res = await apiClient.get("inventory-kpis/total-restocks-required/", {
