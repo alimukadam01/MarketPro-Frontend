@@ -24,9 +24,18 @@ import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 
+// A failed fetch leaves these null, and the card still renders because its
+// loading flag has cleared. "PKR 0" and "null Items" both state a figure the
+// server never sent; an em dash says it is missing, which is the truth.
+const missing = (v) => v === null || v === undefined;
+
 // Separators, because these run to eight digits - "PKR 46405500" is not a
 // number anyone reads at a glance. Same shape as Accounting.tsx's helper.
-const formatPKR = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
+const formatPKR = (amount) =>
+  missing(amount) ? "—" : `PKR ${Number(amount).toLocaleString()}`;
+
+const formatItems = (count) =>
+  missing(count) ? "—" : `${count} Item${count === 1 ? "" : "s"}`;
 
 const cols = [
   { key: "id", label: "ID" },
@@ -297,18 +306,18 @@ const InventoryOverview = () => {
             <MetricCard
               title="Total Inventory Value (With Profit)"
               value={formatPKR(valueWithProfit)}
-              hint="At what the stock sells for"
+              hint="Sum of unit prices"
               loading={valueWithProfitLoading}
             />
             <MetricCard
               title="Items Not In Inventory"
-              value={`${itemsNotInInventory} Item${itemsNotInInventory === 1 ? "" : "s"}`}
+              value={formatItems(itemsNotInInventory)}
               hint="No stock record yet"
               loading={itemsNotInInventoryLoading}
             />
             <MetricCard
               title="Total Restocks Required"
-              value={`${totalRestocksReq} Item${totalRestocksReq > 1 ? "s" : ""}`}
+              value={formatItems(totalRestocksReq)}
               valueClassName="text-red-600"
               hint="Running out of stock"
               loading={totalRestocksReqLoading}
