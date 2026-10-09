@@ -265,7 +265,21 @@ export function Combobox({
       </div>
 
       <ComboboxPrimitive.Portal>
-        <ComboboxPrimitive.Positioner sideOffset={4} align="start" className="z-50">
+        {/* pointer-events-auto is not decoration. This popup is portalled to
+            the body, and a Radix dialog - which is what CustomFilter, the
+            walk-in capture and the payment dialog all are - disables pointer
+            events on the body for as long as it is open
+            (react-dismissable-layer sets `pointerEvents = "none"` there) and
+            hands them back only to its own layers, inline, in JS. This popup
+            is a sibling of that content rather than a descendant, so it
+            inherits `none`: the list renders in the right place, highlights
+            on hover, and ignores every click. Base UI has no idea a Radix
+            dialog is above it, so the grant has to be made here. */}
+        <ComboboxPrimitive.Positioner
+          sideOffset={4}
+          align="start"
+          className="z-50 pointer-events-auto"
+        >
           <ComboboxPrimitive.Popup
             className={cn(
               // select.tsx's SelectContent, so the panel is the one already in the

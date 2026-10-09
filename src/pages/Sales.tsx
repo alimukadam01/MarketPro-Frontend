@@ -12,6 +12,7 @@ import {
   SalesInvoiceStatusMap,
   PaymentStatusMap,
   listCountLabel,
+  createIdMap,
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -21,6 +22,7 @@ import {
   getTotalSalesInvoicesDaily,
   bulkDeleteSalesInvoice,
   deleteSalesInvoice,
+  getCustomersList,
 } from "../../services/api";
 import {
   Download,
@@ -32,7 +34,7 @@ import {
   Lock,
   Send,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import WalkInCustomer from "@/components/ui/walk-in-customer";
 import { useInvoiceActions } from "@/hooks/use-invoice-actions";
@@ -42,9 +44,41 @@ import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each customer.
 
+/**
+ * The grid the table is laid out on.
+ *
+ * Interpolated into `grid-cols-${colsConfig}` by DataTable, so Tailwind cannot
+ * see it in the source and it has to be safelisted in tailwind.config.ts.
+ * Without that entry the class is purged silently - no build error, the table
+ * just loses its grid.
+ *
+ * 13 tracks: S.no, which DataTable renders itself, then the 12 columns below.
+ * Fixed widths wherever the content has a known size, so the five money
+ * columns get what is left and "PKR 1,234,567" does not start scrolling
+ * inside its cell:
+ *
+ *   48px   S.no            - as specified
+ *   120px  Invoice No.     - as specified
+ *   240px  Customer        - as specified; names here run long, e.g.
+ *                            "Mr Mohd C/O Hasnain Kanpur"
+ *   1fr    Status          - a pill, and "Partially Completed" is long
+ *   1fr    Payment Status  - a pill, "Partially Paid"
+ *   88px   Date Issued     - DD/MM/YYYY never varies
+ *   88px   Date Due        - same
+ *   72px   Tax             - "0%" or "none"
+ *   88px   Discount        - "PKR 6,000" or "none"
+ *   72px   Total Items     - a small integer
+ *   1fr    Total           - money
+ *   1fr    Amount Paid     - money
+ *   1fr    Pending Balance - money
+ */
+const COLS_CONFIG =
+  "[48px_120px_240px_1fr_1fr_88px_88px_72px_88px_84px_1fr_1fr_1fr]";
+
 const cols = [
   { key: "id", label: "ID" },
   { key: "invoice_no", label: "Invoice No." },
+  { key: "customer", label: "Customer" },
   {
     key: "status",
     label: "Status",
@@ -76,65 +110,49 @@ const cols = [
   { key: "tax", label: "Tax" },
   { key: "discount", label: "Discount" },
   { key: "total_items", label: "Total Items" },
-  { key: "sub_total", label: "Subtotal" },
   { key: "total", label: "Total" },
+  { key: "amount_paid", label: "Amount Paid" },
+  { key: "pending_balance", label: "Pending Balance" },
 ];
+
+/** Only what the filter's customer picker reads off a customer. */
+type FilterCustomer = {
+  name?: string
+  phone_number?: string
+  city?: { name?: string }
+}
 
 const filter_fields_template = {
   customer__name: "",
   status: "",
   payment_status: "",
+  // Ranges, not single dates. date_issued is a DateTimeField, so an exact
+  // match would have to be the precise instant rather than the day.
+  date_issued_from: "",
+  date_issued_to: "",
+  date_due_from: "",
+  date_due_to: "",
   sub_total: "",
   total: "",
-  is_deducted: false,
-  is_partially_deducted: false,
 };
 
-const filter_fields_mapper = {
-  customer__name: {
-    label: "Customer Name",
-    type: "text",
-    placeholder: "Enter customer name",
-  },
-  status: {
-    label: "Order Status",
-    type: "text",
-    placeholder: "e.g. pending, completed, cancelled",
-  },
-  payment_status: {
-    label: "Payment Status",
-    type: "text",
-    placeholder: "e.g. paid, unpaid, partial",
-  },
-  sub_total: {
-    label: "Subtotal",
-    type: "number",
-    placeholder: "Enter subtotal",
-  },
-  total: {
-    label: "Total",
-    type: "number",
-    placeholder: "Enter total",
-  },
-  discount: {
-    label: "Discount",
-    type: "number",
-    placeholder: "Enter Discount (PKR)",
-  },
-  tax: {
-    label: "Tax",
-    type: "number",
-    placeholder: "Enter Tax (%)",
-  },
-  is_deducted: {
-    label: "Is Deducted",
-    type: "checkbox",
-  },
-  is_partially_deducted: {
-    label: "Is Partially Deducted",
-    type: "checkbox",
-  },
-};
+// Order status, as stored. The free-text box this replaces suggested
+// "pending, completed, cancelled", none of which are values the column holds -
+// it keeps single-letter codes, and DjangoFilterBackend matches them exactly,
+// so the field could not match anything a user typed.
+const status_options = Object.entries(SalesInvoiceStatusMap).map(
+  ([value, label]) => ({ value, label })
+);
+
+// Only the three a sales invoice can actually report. payment_status is
+// derived from its receipts, and SalesInvoice.payment_status returns P, PP or
+// PEN and nothing else - PaymentStatusMap also carries Cancelled and
+// Refunded, which no invoice can ever be, so offering them would be a choice
+// that always comes back empty.
+const payment_status_options = ["P", "PP", "PEN"].map((value) => ({
+  value,
+  label: PaymentStatusMap[value],
+}));
 
 const Sales = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -155,6 +173,11 @@ const Sales = () => {
   const permissions = getPermissions("sales")
   const [isDeleted, setIsDeleted] = useState(false);
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
+  // Only the filter's customer picker needs these. Loaded alongside the page
+  // rather than when the dialog opens, so the picker is never empty on the
+  // first open.
+  const [customers, setCustomers] = useState<Record<string, FilterCustomer>>({});
+  const [customersLoading, setCustomersLoading] = useState(true);
   const navigate = useNavigate();
   // Download never prompts. Sending prompts only for a counter sale, which has
   // no number to send to until the buyer is named.
@@ -296,11 +319,94 @@ const Sales = () => {
       }
     }
 
+    const fetchCustomers = async () => {
+      if (!token) return;
+
+      try {
+        const res = await getCustomersList(token);
+        if (res) {
+          setCustomers(createIdMap(res));
+        } else {
+          toast.error("Failed to fetch customers.");
+        }
+      } catch (error) {
+        toast.error("Failed to fetch customers.");
+        console.error("Error fetching customers:", error);
+      } finally {
+        setCustomersLoading(false);
+      }
+    }
+
     fetchTotalInvoicesDaily()
     fetchTotalItemsSoldDaily()
     fetchTotalSalesDaily()
+    fetchCustomers()
     fetchSalesInvoices();
   }, [token, isDeleted])
+
+  // The filter sends customer__name, so the option value is the name rather
+  // than the id - that is the field the API exposes, and picking from a list
+  // means it always matches exactly, which the free-text box it replaces
+  // could not guarantee.
+  //
+  // Keyed by name so two customers sharing one cannot produce duplicate
+  // options; they would be indistinguishable in the list anyway, and the
+  // filter would return both either way.
+  const customerOptions = useMemo(() => {
+    const byName = new Map();
+    Object.values(customers).forEach((customer) => {
+      if (!customer?.name || byName.has(customer.name)) return;
+      byName.set(customer.name, {
+        value: customer.name,
+        label: customer.name,
+        keywords: [customer.phone_number, customer.city?.name].filter(Boolean),
+      });
+    });
+    return [...byName.values()];
+  }, [customers]);
+
+  // Built here, not at module scope, because the customer options arrive from
+  // a fetch.
+  const filter_fields_mapper = useMemo(() => ({
+    customer__name: {
+      label: "Customer",
+      type: "combobox",
+      // Spans the row: it is the field most often used, and a customer name
+      // is far longer than a status or a date.
+      fullWidth: true,
+      options: customerOptions,
+      loading: customersLoading,
+      placeholder: "Any customer",
+      emptyText: "No customers yet.",
+      notFoundText: "No customer matches that.",
+    },
+    status: {
+      label: "Order Status",
+      type: "select",
+      options: status_options,
+      anyLabel: "Any status",
+    },
+    payment_status: {
+      label: "Payment Status",
+      type: "select",
+      options: payment_status_options,
+      anyLabel: "Any payment status",
+    },
+    date_issued_from: { label: "Issued From", type: "date" },
+    date_issued_to: { label: "Issued To", type: "date" },
+    date_due_from: { label: "Due From", type: "date" },
+    date_due_to: { label: "Due To", type: "date" },
+    sub_total: {
+      label: "Subtotal",
+      type: "number",
+      placeholder: "Enter subtotal",
+    },
+    total: {
+      label: "Total",
+      type: "number",
+      placeholder: "Enter total",
+    },
+  }), [customerOptions, customersLoading]);
 
 
   return (
@@ -448,13 +554,16 @@ const Sales = () => {
             </div>
 
             {loading || (salesData && salesData.length > 0) ? (
-              <DataTable columns={cols} headerOnly />
+              <DataTable columns={cols} colsConfig={COLS_CONFIG} headerOnly />
             ) : null}
           </div>
 
           {loading || (salesData && salesData.length > 0) ? (
             <DataTable
               columns={cols}
+              // Must match the header's, or the two grids drift apart and
+              // every cell sits under the wrong label.
+              colsConfig={COLS_CONFIG}
               data={permissions["view"] ? salesData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}

@@ -461,7 +461,7 @@ const UpdateProduct = () => {
                                                 >
                                                     <div
                                                         className={
-                                                            `flex-1 bg-card rounded-lg h-[35px] flex cursor-pointer items-center px-4 gap-4
+                                                            `flex-1 bg-card rounded-lg min-h-[35px] py-0.5 flex cursor-pointer items-center px-4 gap-4
                                                             ${selectedVariant === item ? "border-2 border-[#4285F4]" : "border border-border"}`
                                                         }
                                                         onClick={() => handleVariantSelection(item)}

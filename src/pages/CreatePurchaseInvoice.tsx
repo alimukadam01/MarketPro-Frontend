@@ -357,8 +357,8 @@ const CreatePurchaseInvoice = () => {
                       header can never drift out of step with the rows when a
                       scrollbar appears. */}
                   <div className="sticky top-0 z-10 bg-background flex items-center gap-2">
-                    <div className="bg-card rounded-lg border h-[35px] flex flex-1 items-center px-4">
-                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
+                    <div className="bg-card rounded-lg border min-h-[35px] py-0.5 flex flex-1 items-center px-4">
+                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] items-center gap-4 w-full text-sm font-medium text-muted-foreground">
                         <div>id</div>
                         <div>product</div>
                         <div>quantity</div>
@@ -372,8 +372,8 @@ const CreatePurchaseInvoice = () => {
 
                   {invoiceItems.map((item) => (
                     <div key={item.id} className="flex items-center gap-2">
-                      <div className="bg-card rounded-lg h-[35px] flex flex-1 items-center px-4 border border-border">
-                        <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
+                      <div className="bg-card rounded-lg min-h-[35px] py-0.5 flex flex-1 items-center px-4 border border-border">
+                        <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] items-center gap-4 w-full text-sm">
                           <div>{item.id}</div>
                           <div className="font-medium">{item.product.name}</div>
                           <div>{item.quantity}</div>

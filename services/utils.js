@@ -132,6 +132,34 @@ export const todayForInput = () => {
   return parts; // en-CA already yields YYYY-MM-DD
 };
 
+/**
+ * A cleared date input for a field the API allows to be null.
+ *
+ * An empty `<input type="date">` reads back as "", and DRF accepts null on a
+ * nullable date but rejects "" with "Date has wrong format. Use one of these
+ * formats instead: YYYY-MM-DD." Reading a record that has no due date and
+ * saving it unchanged is enough to trigger that, so every nullable date has
+ * to go through here on the way out.
+ */
+export const nullIfBlank = (value) =>
+  value === "" || value === undefined || value === null ? null : value;
+
+/**
+ * A date input's value as a datetime, for the fields the backend stores as
+ * DateTimeField (date_issued on both invoice types).
+ *
+ * Posting the bare YYYY-MM-DD parses as midnight, and midnight in
+ * Asia/Karachi is 19:00 UTC the day before — so anything reading the raw UTC
+ * date lands a day early, which is the trap local_date() exists to work
+ * around. Midday is clear of both ends of the day.
+ *
+ * Deliberately sent without an offset: the backend applies its own TIME_ZONE,
+ * so this keeps working if that ever changes, and there is no +05:00 hardcoded
+ * in the client.
+ */
+export const dateInputToDateTime = (value) =>
+  value ? `${value}T12:00:00` : null;
+
 export function transformExpense(data) {
   return {
     id: data.id,
@@ -453,55 +481,92 @@ export function transformMoneyAccount(data) {
 export function transformSalesInvoice(data) {
   // Helper to format currency as "PKR X,XXX"
   const formatCurrency = (amount) => {
-    return `PKR ${Number(amount).toLocaleString()}`;
+    return `PKR ${Number(amount || 0).toLocaleString()}`;
   };
+
+  // formatDate(null) is "01/01/1970" - new Date(null) is the epoch, not an
+  // invalid date - and date_due is null on any invoice with no terms, which is
+  // most of them. Every row read 01/01/1970 until this guard.
+  const formatDateOrDash = (value) => (value ? formatDate(value) : "—");
+
+  // A money JSON is {value, type}: a percentage prints as one, a flat amount
+  // as currency. Guarded because tax can be absent on an older invoice, and
+  // `formatCurrency(data.tax.value)` threw on it rather than printing a dash.
+  const formatMoneyJson = (payload, whenMissing) => {
+    if (!payload || Object.keys(payload).length === 0) return whenMissing;
+    return payload.type === "percentage"
+      ? `${payload.value}%`
+      : formatCurrency(payload.value);
+  };
+
+  // What is left to collect. Negative when more has been taken than the
+  // invoice came to, which is a credit rather than an error, so it is shown
+  // as it stands rather than floored at zero.
+  const pending = Number(data.total || 0) - Number(data.amount_paid || 0);
 
   return {
     id: data.id,
     invoice_no: data.invoice_number ? data.invoice_number : "N/A",
+    customer: data.customer?.name || "—",
     status: data.status,
-    date_issued: formatDate(data.date_issued),
-    date_due: formatDate(data.date_due),
     payment_status: data.payment_status,
-    tax:
-      data.tax?.type === "percentage"
-        ? `${data.tax.value}%`
-        : formatCurrency(data.tax.value),
-    discount:
-      data.discount && Object.keys(data.discount).length > 0
-        ? data.discount?.type === "percentage"
-          ? `${data.discount.value}%`
-          : formatCurrency(data.discount.value)
-        : "none",
-    total_items: String(data.total_items),
-    sub_total: formatCurrency(data.sub_total),
+    date_issued: formatDateOrDash(data.date_issued),
+    date_due: formatDateOrDash(data.date_due),
+    tax: formatMoneyJson(data.tax, "none"),
+    discount: formatMoneyJson(data.discount, "none"),
+    // The quantities on the invoice, not the number of product lines - the
+    // serializer sums them now.
+    total_items: String(data.total_items ?? 0),
     total: formatCurrency(data.total),
+    amount_paid: formatCurrency(data.amount_paid),
+    pending_balance: formatCurrency(pending),
   };
 }
 
 export function transformPurchaseInvoice(data) {
   // Helper to format currency as "PKR X,XXX"
   const formatCurrency = (amount) => {
-    return `PKR ${Number(amount).toLocaleString()}`;
+    return `PKR ${Number(amount || 0).toLocaleString()}`;
   };
+
+  // formatDate(null) is "01/01/1970" - new Date(null) is the epoch, not an
+  // invalid date - and delivery and date_due are both null on a purchase with
+  // no terms recorded, which is most of them. Both columns read 01/01/1970 on
+  // every row until this guard.
+  const formatDateOrDash = (value) => (value ? formatDate(value) : "—");
+
+  const formatMoneyJson = (payload, whenMissing) => {
+    if (!payload || Object.keys(payload).length === 0) return whenMissing;
+    return payload.type === "percentage"
+      ? `${payload.value}%`
+      : formatCurrency(payload.value);
+  };
+
+  // What is still owed to the supplier. Negative when more has been paid than
+  // the invoice came to, which is a credit rather than an error, so it is
+  // shown as it stands rather than floored at zero.
+  const pending = Number(data.total || 0) - Number(data.amount_paid || 0);
 
   return {
     id: data.id,
     invoice_no: data.invoice_number ? data.invoice_number : "N/A",
+    supplier: data.supplier?.name || "—",
+    // The date on the invoice, not created_at - which the serializer also
+    // sends, and which is when the row was typed in rather than when the
+    // purchase happened. For the migrated invoices the two are five months
+    // apart.
+    date_issued: formatDateOrDash(data.date_issued),
     status: data.status,
-    supplier: data.supplier.name,
-    date_issued: formatDate(data.date_issued),
-    delivery: formatDate(data.delivery),
-    date_due: formatDate(data.date_due),
     payment_status: data.payment_status,
-    tax:
-      data.tax?.type === "percentage"
-        ? `${data.tax.value}%`
-        : formatCurrency(data.tax.value),
-    total_items: String(data.total_items),
-    sub_total: formatCurrency(data.sub_total),
+    delivery: formatDateOrDash(data.delivery),
+    date_due: formatDateOrDash(data.date_due),
+    tax: formatMoneyJson(data.tax, "none"),
+    // The quantities on the invoice, not the number of product lines - the
+    // serializer sums them now.
+    total_items: String(data.total_items ?? 0),
     total: formatCurrency(data.total),
-    amount_paid: data.amount_paid,
+    amount_paid: formatCurrency(data.amount_paid),
+    pending_balance: formatCurrency(pending),
   };
 }
 

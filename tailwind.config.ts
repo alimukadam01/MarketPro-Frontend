@@ -14,6 +14,14 @@ export default {
     // build error - the table just loses its grid. Purchases is at 12.
     ...Array.from({ length: 16 }, (_, i) => `grid-cols-${i + 1}`),
     // any other dynamic classes you rely on, e.g. custom borders
+	// Sales invoice listing: 13 tracks. Fixed widths for S.no, the invoice
+	// number, the customer, both dates and the three small numeric columns, so
+	// the five money columns divide what is left. Kept in step with
+	// COLS_CONFIG in src/pages/Sales.tsx.
+	"grid-cols-[48px_120px_240px_1fr_1fr_88px_88px_72px_88px_84px_1fr_1fr_1fr]",
+	// Purchase invoice listing: 13 tracks. Kept in step
+	// with COLS_CONFIG in src/pages/Purchases.tsx.
+	"grid-cols-[48px_120px_240px_96px_1fr_1fr_96px_96px_56px_80px_1fr_1fr_1fr]",
 	"grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr]",
 	"grid-cols-[48px_240px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]",
 	"grid-cols-[48px_120px_512px_1fr_1fr_1fr_1fr]",

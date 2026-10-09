@@ -428,7 +428,7 @@ const CreateInventoryItem = () => {
                                                 {productVariants.map((item, idx) => (
                                                     <div
                                                         key={`${item.id}-${idx}`}
-                                                        className="bg-card rounded-lg h-[35px] flex items-center px-4 gap-4 border border-border scrollbar-none"
+                                                        className="bg-card rounded-lg min-h-[35px] py-0.5 flex items-center px-4 gap-4 border border-border scrollbar-none"
                                                     >
                                                         <div>{idx + 1}.</div>
                                                         {<div className="font-sm flex flex-1">
