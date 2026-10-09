@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { useBusyAction } from "@/hooks/use-busy-action";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Combobox } from "@/components/ui/combobox";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -36,6 +37,12 @@ const ANY = "__any__";
  *  { label, type, placeholder }                        text / date / number
  *  { label, type: "checkbox" }                         checkbox
  *  { label, type: "select", options: [{value,label}] } dropdown
+ *  { label, type: "combobox", options, loading? }      searchable dropdown
+ *
+ * Use "combobox" over "select" once the list is long enough to need typing -
+ * a business with 75 customers is past that - and because it is the same
+ * picker the create and update forms use, so a filter looks like the field it
+ * filters on. It takes the same emptyText / notFoundText as those forms.
  */
 export default function CustomFilter({
   title = "Filter Records",
@@ -76,15 +83,39 @@ export default function CustomFilter({
           <DialogUI.DialogTitle>{title}</DialogUI.DialogTitle>
         </DialogUI.DialogHeader>
 
-        <div className="flex flex-wrap gap-4 my-4">
+        {/* A two-column grid rather than flex-wrap. Every field used to carry
+            a fixed w-56, so a row's fields never filled it and the right-hand
+            edge was ragged. Equal columns make the box even, let a field span
+            the full width with `fullWidth`, and - because placement follows
+            the order of templateMapper - put each consecutive from/to pair of
+            dates side by side without anything having to say so. */}
+        <div className="grid grid-cols-2 gap-4 my-4">
           {Object.entries(templateMapper || {}).map(([key, config]) => (
-            <div key={key} className="flex flex-col gap-1">
+            <div
+              key={key}
+              className={`flex flex-col gap-1 ${config.fullWidth ? "col-span-2" : ""}`}
+            >
               <label className="text-sm text-gray-700">{config.label}</label>
 
               {config.type === "checkbox" ? (
                 <Checkbox
                   checked={!!filters[key]}
                   onCheckedChange={(checked) => handleChange(key, checked)}
+                />
+              ) : config.type === "combobox" ? (
+                <Combobox
+                  id={key}
+                  className="w-full"
+                  options={config.options || []}
+                  value={filters[key] ?? ""}
+                  onChange={(value) => handleChange(key, value || "")}
+                  loading={config.loading}
+                  placeholder={config.placeholder || "Any"}
+                  emptyText={config.emptyText}
+                  notFoundText={config.notFoundText}
+                  // So a chosen value can be dropped again without reopening
+                  // the dialog, which is what the select's "Any" row does.
+                  clearable
                 />
               ) : config.type === "select" ? (
                 <Select
@@ -93,7 +124,7 @@ export default function CustomFilter({
                     handleChange(key, value === ANY ? "" : value)
                   }
                 >
-                  <SelectTrigger className="w-56">
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder={config.placeholder || "Any"} />
                   </SelectTrigger>
                   <SelectContent>
@@ -114,7 +145,7 @@ export default function CustomFilter({
                   placeholder={config.placeholder}
                   value={filters[key] ?? ""}
                   onChange={(e) => handleChange(key, e.target.value)}
-                  className="w-56"
+                  className="w-full"
                 />
               )}
             </div>

@@ -15,8 +15,11 @@ import {
   SalesInvoiceStatusMap,
   createIdMap,
   createNestedIdMap,
+  dateInputToDateTime,
   derivePaymentStatus,
-  getPaymentStatusColor
+  getPaymentStatusColor,
+  nullIfBlank,
+  todayForInput
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -33,9 +36,48 @@ import Payments from "@/components/ui/payments";
 import WalkInCustomer from "@/components/ui/walk-in-customer";
 import { useInvoiceActions } from "@/hooks/use-invoice-actions";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
 import { Combobox } from "@/components/ui/combobox";
 import { Spinner } from "@/components/ui/spinner";
+
+type SalesInvoiceFormItem = {
+  id: number
+  product: { id: number, name: string, base: { name: string } }
+  quantity: number
+  unit_price: number
+  total: number
+  is_returned?: boolean
+}
+
+/**
+ * Everything the form holds, which is the whole invoice.
+ *
+ * Stated explicitly because react-hook-form otherwise infers the shape from
+ * defaultValues, and that inference collapses once items is in there - paths
+ * resolve to `never` and setValue stops typechecking on valid fields.
+ *
+ * The `string | number` members are not laziness: an <Input> reads back as a
+ * string while the API sends a number, and these fields genuinely hold either
+ * depending on whether the user has touched them since the record loaded.
+ */
+type SalesInvoiceFormValues = {
+  invoice_number: string
+  customer: string | number
+  notes: string
+  date_issued: string
+  date_due: string
+  discount: string | number
+  discount_type: string
+  tax: string | number
+  tax_type: string
+  status: string
+  project: string | null
+  items: SalesInvoiceFormItem[]
+  amount_paid: number
+  newItemProduct: string
+  newItemQuantity: string | number
+  newItemPrice: string | number
+}
 
 const UpdateSalesInvoice = () => {
   const { pending, run } = usePending();
@@ -47,7 +89,6 @@ const UpdateSalesInvoice = () => {
   const [returnItemWindowOpen, setReturnItemWindowOpen] = useState(false)
   const [paymentsOpen, setPaymentsOpen] = useState(false)
   const [itemReturned, setItemReturned] = useState(false)
-  const [invoiceItems, setInvoiceItems] = useState([])
   const [returningItem, setReturningItem] = useState(null)
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
@@ -59,7 +100,6 @@ const UpdateSalesInvoice = () => {
   const [customersLoading, setCustomersLoading] = useState(true)
   const [projectsLoading, setProjectsLoading] = useState(true)
   const [pdfData, setPdfData] = useState(null)
-  const [amountPaid, setAmountPaid] = useState(0)
   const { token } = useAuth()
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
@@ -81,32 +121,51 @@ const UpdateSalesInvoice = () => {
     },
   })
 
-  // react-hook-form setup
-  const { register, handleSubmit, control, watch, reset, setValue } = useForm({
+  // react-hook-form setup.
+  //
+  // The whole invoice lives here, including the line items, the two
+  // percentage/amount toggles and the paid figure. Nothing about the record is
+  // kept in a useState beside it: a second home for form data is what let
+  // discount_type be written twice and end up undefined, which the API then
+  // rejected. One store means populateInvoiceFields is a single reset() and a
+  // field it forgets is impossible rather than merely unlikely.
+  const { register, handleSubmit, control, watch, reset, setValue } = useForm<SalesInvoiceFormValues>({
     defaultValues: {
       invoice_number: "",
       customer: "",
       notes: "",
-      date_issued: "2025-08-09",
-      date_due: "2025-08-09",
+      // Only ever seen if the detail fetch fails. These used to be a
+      // hardcoded 2025 date, which a submit would then have saved.
+      date_issued: todayForInput(),
+      date_due: "",
       discount: "0.0",
+      // Whether discount/tax are a percentage or a flat amount. Part of the
+      // record, so it belongs in the form rather than in useState.
+      discount_type: "percentage",
       tax: "0.0",
+      tax_type: "percentage",
       status: "",
       project: null,
+      items: [],
+      // Derived server-side from the payments recorded against the invoice.
+      // Shown, never typed into, and never submitted.
+      amount_paid: 0,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemPrice: 0
     },
   })
 
-  const discount = parseFloat(watch("discount") || 0)
-  const tax = parseFloat(watch("tax") || 0)
+  const discount = parseFloat(String(watch("discount") || 0))
+  const tax = parseFloat(String(watch("tax") || 0))
+  const discountType = watch("discount_type")
+  const taxType = watch("tax_type")
+  const invoiceItems = watch("items") || []
+  const amountPaid = watch("amount_paid") || 0
 
   const subtotal = invoiceItems
     .filter(item => !item.is_returned)
     .reduce((sum, item) => sum + item.total, 0)
-  const [discountType, setDiscountType] = useState("percentage")
-  const [taxType, setTaxType] = useState("percentage")
   const discountAmount = discountType === "percentage" ? (subtotal * discount) / 100 : discount
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
   const totalAmount = subtotal - discountAmount + taxAmount
@@ -115,32 +174,42 @@ const UpdateSalesInvoice = () => {
 
   const onSubmit = async (data) => {
 
-    const { newItemPrice, newItemProduct, newItemQuantity, ...rest } = data
-
-    const tax = {
-      "value": parseFloat(data.tax),
-      "type": taxType
+    // Named field by field rather than spread from the form. The form now
+    // holds everything about the invoice, including the toggles and the paid
+    // figure, and a spread would post all of it - so listing the payload is
+    // what keeps a new form field from silently becoming a new API field.
+    const payload = {
+      invoice_number: data.invoice_number,
+      customer: data.customer,
+      notes: data.notes,
+      // date_issued is a DateTimeField, so a bare date would be stored as
+      // midnight and read back a day early; date_due is nullable, and an
+      // empty input posts "" which the API rejects outright.
+      date_issued: dateInputToDateTime(data.date_issued),
+      date_due: nullIfBlank(data.date_due),
+      status: data.status,
+      project: data.project,
+      // The type is never defaulted here. It comes from the record through
+      // the form, and an absent one would be dropped by JSON.stringify and
+      // then raise KeyError('type') in adjust_totals on the server.
+      discount: {
+        "value": parseFloat(String(data.discount)) || 0,
+        "type": data.discount_type
+      },
+      tax: {
+        "value": parseFloat(String(data.tax)) || 0,
+        "type": data.tax_type
+      },
+      items: (data.items || []).map(item => ({
+        id: item.id,
+        product_id: item.product.id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+      })),
     }
-
-    const discount = {
-      "value": parseFloat(data.discount),
-      "type": discountType
-    }
-
-    const items = invoiceItems.map(item => ({
-      id: item.id,
-      product_id: item.product.id,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-    }))
 
     try {
-      const success = await updateSalesInvoiceAndItems(token, invoice_id, {
-        ...rest,
-        tax: tax,
-        discount: discount,
-        items: items
-      })
+      const success = await updateSalesInvoiceAndItems(token, invoice_id, payload)
 
       if (success) {
         toast.success("Sales invoice updated successfully!")
@@ -163,42 +232,64 @@ const UpdateSalesInvoice = () => {
         unit_price,
         total: quantity * unit_price,
       };
-      setInvoiceItems([...invoiceItems, newInvoiceItem]);
-      reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true });
+      setValue("items", [...invoiceItems, newInvoiceItem]);
+      setValue("newItemProduct", "");
+      setValue("newItemQuantity", 0);
     }
   }
 
+  // The whole record in, the whole form out, in one write.
+  //
+  // Every key of defaultValues appears below. That is the point: the form is
+  // the only store, so anything missing here would be left over from the
+  // previous invoice rather than quietly defaulted, and reset() replaces the
+  // lot atomically. There is deliberately no setX() beside it - a second
+  // write to the same value is what caused discount_type to arrive undefined.
   const populateInvoiceFields = (data) => {
+    const {
+      invoice_number,
+      customer,
+      notes,
+      date_issued,
+      date_due,
+      discount,
+      tax,
+      status,
+      projects,
+      amount_paid,
+      invoice_items,
+    } = data
+
     reset({
-      invoice_number: data.invoice_number || "",
-      customer: data.customer?.id || "",
-      notes: data.notes || "",
-      date_issued: data.date_issued?.split("T")[0] || "",
-      date_due: data.date_due || "",
-      discount: data.discount?.value ?? "0.0",
-      tax: data.tax?.value ?? "0.0",
-      status: data.status || "",
-      project: data.projects?.length > 0 ? String(data.projects[0].project) : null,
+      invoice_number: invoice_number || "",
+      customer: customer?.id || "",
+      notes: notes || "",
+      // A DateTimeField, and an <Input type="date"> rejects a full ISO datetime.
+      date_issued: date_issued?.split("T")[0] || "",
+      date_due: date_due || "",
+      discount: discount?.value ?? "0.0",
+      // Falling back rather than taking the stored value as-is: an undefined
+      // type is dropped by JSON.stringify, and the API rejects a
+      // tax/discount with no type at all. Taking "percentage" for an amount
+      // would also reinterpret it - a 6000 discount as 6000% of the subtotal.
+      discount_type: discount?.type || "percentage",
+      tax: tax?.value ?? "0.0",
+      tax_type: tax?.type || "percentage",
+      status: status || "",
+      project: projects?.length > 0 ? String(projects[0].project) : null,
+      items: (invoice_items || []).map((item) => ({
+        id: item.id,
+        product: item.product,
+        quantity: item.net_quantity,
+        unit_price: item.unit_price,
+        total: (item.net_quantity * item.unit_price) || 0,
+        is_returned: item.is_returned
+      })),
+      amount_paid: amount_paid || 0,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemPrice: 0,
     })
-
-    setAmountPaid(data.amount_paid || 0)
-
-    // build your items array for state
-    const items = (data.invoice_items || []).map((item) => ({
-      id: item.id,
-      product: item.product,
-      quantity: item.net_quantity,
-      unit_price: item.unit_price,
-      total: (item.net_quantity * item.unit_price) || 0,
-      is_returned: item.is_returned
-    }))
-    setInvoiceItems(items)
-
-    setDiscountType(data.discount?.type)
-    setTaxType(data.tax?.type)
   }
 
   // Returns are one item at a time, so the row being returned is held here
@@ -211,7 +302,7 @@ const UpdateSalesInvoice = () => {
 
   const handleDeleteItem = (e, id) => {
     e.preventDefault();
-    setInvoiceItems(invoiceItems.filter(item => item.id !== id));
+    setValue("items", invoiceItems.filter(item => item.id !== id));
   }
 
   const customerOptions = useMemo(
@@ -411,7 +502,7 @@ const UpdateSalesInvoice = () => {
                   <div className="relative">
                     <Input id="discount" {...register("discount")} placeholder="0.0" />
                     <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {discountType === "percentage" ? <Button type="button" variant="outline" onClick={() => setDiscountType("amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setDiscountType("percentage")}>PKR</Button>}
+                      {discountType === "percentage" ? <Button type="button" variant="outline" onClick={() => setValue("discount_type", "amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setValue("discount_type", "percentage")}>PKR</Button>}
                     </span>
                   </div>
                 </div>
@@ -420,7 +511,7 @@ const UpdateSalesInvoice = () => {
                   <div className="relative">
                     <Input id="tax" {...register("tax")} placeholder="0.0" />
                     <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {taxType === "percentage" ? <Button type="button" variant="outline" onClick={() => setTaxType("amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setTaxType("percentage")}>PKR</Button>}
+                      {taxType === "percentage" ? <Button type="button" variant="outline" onClick={() => setValue("tax_type", "amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setValue("tax_type", "percentage")}>PKR</Button>}
                     </span>
                   </div>
                 </div>
@@ -485,7 +576,7 @@ const UpdateSalesInvoice = () => {
                   <Button
                     type="button"
                     onClick={() =>
-                      addItem(watch("newItemProduct"), parseInt(watch("newItemQuantity") || 0), parseFloat(watch("newItemPrice") || 0.0))
+                      addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemPrice") || 0.0)))
                     }
                     className="w-full"
                   >
@@ -509,8 +600,8 @@ const UpdateSalesInvoice = () => {
                       header can never drift out of step with the rows when a
                       scrollbar appears. */}
                   <div className="sticky top-0 z-10 bg-background flex items-center gap-2">
-                    <div className="bg-card rounded-lg border h-[35px] flex flex-1 items-center px-4">
-                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
+                    <div className="bg-card rounded-lg border min-h-[35px] py-0.5 flex flex-1 items-center px-4">
+                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] items-center gap-4 w-full text-sm font-medium text-muted-foreground">
                         <div>id</div>
                         <div>product</div>
                         <div>quantity</div>
@@ -529,9 +620,9 @@ const UpdateSalesInvoice = () => {
                     return (
                       <div key={item.id} className="flex items-center gap-2">
                         <div
-                          className={`bg-card rounded-lg h-[35px] flex flex-1 items-center px-4 border border-border ${isReturned ? "opacity-50" : ""}`}
+                          className={`bg-card rounded-lg min-h-[35px] py-0.5 flex flex-1 items-center px-4 border border-border ${isReturned ? "opacity-50" : ""}`}
                         >
-                          <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
+                          <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] items-center gap-4 w-full text-sm">
                             <div>{idx + 1}</div>
                             <div className="font-medium">
                               {item.product.base.name} ({item.product.name})

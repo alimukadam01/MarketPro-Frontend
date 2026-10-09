@@ -12,6 +12,8 @@ import {
   PurchaseInvoiceStatusMap,
   PaymentStatusMap,
   listCountLabel,
+  createIdMap,
+  formatPartyLabel,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -21,15 +23,50 @@ import {
   getTotalPurchasesMonthly,
   getTotalPurchaseInvoicesMonthly,
   getTotalPendingPurchaseInvoices,
-  getTotalPendingPayment
+  getTotalPendingPayment,
+  suppliersAPIPackage
 
 } from "../../services/api"
 import { Eye, ArrowLeft, Plus, Filter, Edit, Trash2, Lock } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+
+/**
+ * The grid the table is laid out on.
+ *
+ * Interpolated into `grid-cols-${colsConfig}` by DataTable, so Tailwind cannot
+ * see it in the source and it has to be safelisted in tailwind.config.ts.
+ * Without that entry the class is purged silently - no build error, the table
+ * just loses its grid.
+ *
+ * 14 tracks: S.no, which DataTable renders itself, then the 13 columns below.
+ * Fixed widths wherever the content has a known size, so the four money
+ * columns and the two status pills divide what is left:
+ *
+ *   48px   S.no            - as specified
+ *   120px  Invoice No.     - as specified
+ *   240px  Supplier        - as specified; every name here carries the
+ *                            "(contact TBC)" placeholder, so they run long
+ *   80px   Invoice Date    - DD/MM/YYYY never varies
+ *   1fr    Status          - a pill, and "Partially Received" is long
+ *   1fr    Payment Status  - a pill, "Partially Paid"
+ *   80px   Delivery Date   - DD/MM/YYYY
+ *   80px   Date Due        - DD/MM/YYYY
+ *   56px   Tax             - "0%" or "none"
+ *   56px   Total Items     - a small integer
+ *   1fr    Subtotal        - money
+ *   1fr    Total           - money
+ *   1fr    Amount Paid     - money
+ *   1fr    Pending Balance - money
+ *
+ * One column more than the sales table, so it is tighter: the largest figures
+ * can still outgrow their cell, which is what MarqueeCell is there for.
+ */
+const COLS_CONFIG =
+  "[48px_120px_240px_96px_1fr_1fr_96px_96px_56px_80px_1fr_1fr_1fr]";
 
 const cols = [
   { key: "id", label: "ID" },
@@ -66,55 +103,51 @@ const cols = [
   { key: "date_due", label: "Date Due" },
   { key: "tax", label: "Tax" },
   { key: "total_items", label: "Total Items" },
-  { key: "sub_total", label: "Subtotal" },
   { key: "total", label: "Total" },
+  { key: "amount_paid", label: "Amount Paid" },
+  { key: "pending_balance", label: "Pending Balance" },
 ]
+
+/** Only what the filter's supplier picker reads off a supplier. */
+type FilterSupplier = {
+  name?: string
+  business_name?: string
+  phone?: string
+}
 
 const filter_fields_template = {
   supplier__name: "",
   status: "",
   payment_status: "",
+  // Ranges, not single dates. date_issued is a DateTimeField, so an exact
+  // match would have to be the precise instant rather than the day.
+  date_issued_from: "",
+  date_issued_to: "",
+  delivery_from: "",
+  delivery_to: "",
+  date_due_from: "",
+  date_due_to: "",
   sub_total: "",
   total: "",
-  is_restocked: false,
-  is_partially_restocked: false
 };
 
-const filter_fields_mapper = {
-  supplier__name: {
-    label: "Supplier Name",
-    type: "text",
-    placeholder: "Enter Supplier name",
-  },
-  status: {
-    label: "Order Status",
-    type: "text",
-    placeholder: "e.g. pending, completed, cancelled",
-  },
-  payment_status: {
-    label: "Payment Status",
-    type: "text",
-    placeholder: "e.g. paid, unpaid, partial",
-  },
-  sub_total: {
-    label: "Subtotal",
-    type: "number",
-    placeholder: "Enter subtotal",
-  },
-  total: {
-    label: "Total",
-    type: "number",
-    placeholder: "Enter total",
-  },
-  is_restocked: {
-    label: "Is Restocked",
-    type: "checkbox",
-  },
-  is_partially_restocked: {
-    label: "Is Partially Restocked",
-    type: "checkbox",
-  },
-};
+// Order status, as stored. The free-text box this replaces suggested
+// "pending, completed, cancelled", none of which are values the column holds -
+// it keeps single-letter codes, and DjangoFilterBackend matches them exactly,
+// so the field could not match anything a user typed.
+const status_options = Object.entries(PurchaseInvoiceStatusMap).map(
+  ([value, label]) => ({ value, label })
+);
+
+// Only the three a purchase invoice can actually report. payment_status is
+// derived from its receipts, and PurchaseInvoice.payment_status returns P, PP
+// or PEN and nothing else - PaymentStatusMap also carries Cancelled and
+// Refunded, which no invoice can ever be, so offering them would be a choice
+// that always comes back empty.
+const payment_status_options = ["P", "PP", "PEN"].map((value) => ({
+  value,
+  label: PaymentStatusMap[value],
+}));
 
 const Purchases = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
@@ -137,6 +170,11 @@ const Purchases = () => {
   const permissions = getPermissions("purchases")
   const [isDeleted, setIsDeleted] = useState(false)
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
+  // Only the filter's supplier picker needs these. Loaded alongside the page
+  // rather than when the dialog opens, so the picker is never empty on the
+  // first open.
+  const [suppliers, setSuppliers] = useState<Record<string, FilterSupplier>>({});
+  const [suppliersLoading, setSuppliersLoading] = useState(true);
   const navigate = useNavigate()
 
   const toggleRowSelection = (id: string) => {
@@ -290,12 +328,99 @@ const Purchases = () => {
       }
     }
 
+    const fetchSuppliers = async () => {
+      if (!token) return;
+
+      try {
+        const res = await suppliersAPIPackage.list(token)
+        if (res) {
+          setSuppliers(createIdMap(res))
+        } else {
+          toast.error("Failed to fetch suppliers.")
+        }
+      } catch (error) {
+        toast.error("Failed to fetch suppliers.")
+        console.error("Error fetching suppliers:", error)
+      } finally {
+        setSuppliersLoading(false);
+      }
+    }
+
     fetchTotalPendingPayment()
     fetchTotalPendingPurchaseInvoices()
     fetchTotalPurchaseInvoicesMonthly()
     fetchTotalPurchases()
+    fetchSuppliers()
     fetchPurchaseInvoices()
   }, [token, isDeleted])
+
+  // The filter sends supplier__name, so the option value is the name rather
+  // than the id - that is the field the API exposes, and picking from a list
+  // means it always matches exactly, which the free-text box it replaces
+  // could not guarantee. The label is the fuller "name (business_name)",
+  // because every name here ends in the "(contact TBC)" placeholder and the
+  // firm is what a user actually recognises.
+  //
+  // Keyed by name so two suppliers sharing one cannot produce duplicate
+  // options; the filter would return both either way.
+  const supplierOptions = useMemo(() => {
+    const byName = new Map();
+    Object.values(suppliers).forEach((supplier: FilterSupplier) => {
+      if (!supplier?.name || byName.has(supplier.name)) return;
+      byName.set(supplier.name, {
+        value: supplier.name,
+        label: formatPartyLabel(supplier),
+        keywords: [supplier.business_name, supplier.phone].filter(Boolean),
+      });
+    });
+    return [...byName.values()];
+  }, [suppliers]);
+
+  // Built here, not at module scope, because the supplier options arrive from
+  // a fetch.
+  const filter_fields_mapper = useMemo(() => ({
+    supplier__name: {
+      label: "Supplier",
+      type: "combobox",
+      // Spans the row: it is the field most often used, and these names are
+      // the longest text in the box - "name (business_name)", both of which
+      // carry the "(contact TBC)" placeholder.
+      fullWidth: true,
+      options: supplierOptions,
+      loading: suppliersLoading,
+      placeholder: "Any supplier",
+      emptyText: "No suppliers yet.",
+      notFoundText: "No supplier matches that.",
+    },
+    status: {
+      label: "Order Status",
+      type: "select",
+      options: status_options,
+      anyLabel: "Any status",
+    },
+    payment_status: {
+      label: "Payment Status",
+      type: "select",
+      options: payment_status_options,
+      anyLabel: "Any payment status",
+    },
+    date_issued_from: { label: "Invoice Date From", type: "date" },
+    date_issued_to: { label: "Invoice Date To", type: "date" },
+    delivery_from: { label: "Delivery From", type: "date" },
+    delivery_to: { label: "Delivery To", type: "date" },
+    date_due_from: { label: "Due From", type: "date" },
+    date_due_to: { label: "Due To", type: "date" },
+    sub_total: {
+      label: "Subtotal",
+      type: "number",
+      placeholder: "Enter subtotal",
+    },
+    total: {
+      label: "Total",
+      type: "number",
+      placeholder: "Enter total",
+    },
+  }), [supplierOptions, suppliersLoading]);
 
 
   return (
@@ -404,13 +529,16 @@ const Purchases = () => {
             </div>
 
             {loading || (purchasesData && purchasesData.length > 0) ? (
-              <DataTable columns={cols} headerOnly />
+              <DataTable columns={cols} colsConfig={COLS_CONFIG} headerOnly />
             ) : null}
           </div>
 
           {loading || (purchasesData && purchasesData.length > 0) ? (
             <DataTable
               columns={cols}
+              // Must match the header's, or the two grids drift apart and
+              // every cell sits under the wrong label.
+              colsConfig={COLS_CONFIG}
               data={permissions["view"] ? purchasesData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}

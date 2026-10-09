@@ -16,8 +16,10 @@ import {
   PurchaseInvoiceStatusMap,
   createIdMap,
   transformProductVariant,
+  dateInputToDateTime,
   derivePaymentStatus,
-  getPaymentStatusColor
+  getPaymentStatusColor,
+  nullIfBlank
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -30,9 +32,51 @@ import {
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import Payments from "@/components/ui/payments";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
 import { Combobox } from "@/components/ui/combobox";
 import { Spinner } from "@/components/ui/spinner";
+
+type PurchaseInvoiceFormItem = {
+  // Absent on a row added in this session; the API assigns it on save.
+  id?: number
+  // Either shape, which is why the row renders it defensively. A row loaded
+  // from the record goes through transformProductVariant and is flat, with
+  // name already "Base (Variant)"; a row added here keeps the raw variant
+  // off the products list, which still has its nested base.
+  product: { id: number, name: string, base?: { name: string } }
+  quantity: number
+  unit_cost: number
+  total: number
+}
+
+/**
+ * Everything the form holds, which is the whole invoice.
+ *
+ * Stated explicitly because react-hook-form otherwise infers the shape from
+ * defaultValues, and that inference collapses once items is in there - paths
+ * resolve to `never` and setValue stops typechecking on valid fields.
+ *
+ * The `string | number` members are not laziness: an <Input> reads back as a
+ * string while the API sends a number, and these fields genuinely hold either
+ * depending on whether the user has touched them since the record loaded.
+ */
+type PurchaseInvoiceFormValues = {
+  invoice_number: string
+  supplier: string | number
+  notes: string
+  date_issued: string
+  delivery: string
+  date_due: string
+  tax: string | number
+  tax_type: string
+  status: string
+  project: string | null
+  items: PurchaseInvoiceFormItem[]
+  amount_paid: number
+  newItemProduct: string
+  newItemQuantity: string | number
+  newItemCost: string | number
+}
 
 const UpdatePurchaseInvoice = () => {
   const { pending, run } = usePending();
@@ -42,7 +86,6 @@ const UpdatePurchaseInvoice = () => {
   // reports. A failure is the only thing that toasts.
   const [detailLoading, setDetailLoading] = useState(true);
   const [paymentsOpen, setPaymentsOpen] = useState(false)
-  const [invoiceItems, setInvoiceItems] = useState([])
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [projects, setProjects] = useState([])
@@ -51,14 +94,19 @@ const UpdatePurchaseInvoice = () => {
   const [productsLoading, setProductsLoading] = useState(true)
   const [suppliersLoading, setSuppliersLoading] = useState(true)
   const [projectsLoading, setProjectsLoading] = useState(true)
-  const [amountPaid, setAmountPaid] = useState(0)
   const { token } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const invoice_id = location.state?.invoice_id || null
 
-  // react-hook-form setup
-  const { register, handleSubmit, control, watch, reset, setValue } = useForm({
+  // react-hook-form setup.
+  //
+  // The whole invoice lives here, including the line items, the
+  // percentage/amount toggle and the paid figure. Nothing about the record is
+  // kept in a useState beside it, so populateInvoiceFields is a single reset()
+  // and there is only one place a field can come from. See UpdateSalesInvoice,
+  // where a second home for the same value is what made it arrive undefined.
+  const { register, handleSubmit, control, watch, reset, setValue } = useForm<PurchaseInvoiceFormValues>({
     defaultValues: {
       invoice_number: "",
       supplier: "",
@@ -67,18 +115,27 @@ const UpdatePurchaseInvoice = () => {
       delivery: "",
       date_due: "",
       tax: "0.0",
+      // Whether tax is a percentage or a flat amount. Part of the record, so
+      // it belongs in the form rather than in useState.
+      tax_type: "percentage",
       status: "",
       project: null,
+      items: [],
+      // Derived server-side from the payments recorded against the invoice.
+      // Shown, never typed into, and never submitted.
+      amount_paid: 0,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemCost: 0
     },
   })
 
-  const tax = parseFloat(watch("tax") || 0)
+  const tax = parseFloat(String(watch("tax") || 0))
+  const taxType = watch("tax_type")
+  const invoiceItems = watch("items") || []
+  const amountPaid = watch("amount_paid") || 0
 
   const subtotal = invoiceItems.reduce((sum, item) => sum + item.total, 0)
-  const [taxType, setTaxType] = useState("percentage")
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
   const totalAmount = subtotal + taxAmount
   const selectedProduct = products[watch("newItemProduct")]
@@ -86,32 +143,38 @@ const UpdatePurchaseInvoice = () => {
 
   const onSubmit = async (data) => {
 
-    const { newItemCost, newItemProduct, newItemQuantity, ...rest } = data
-
-    const tax = {
-      "value": parseFloat(data.tax),
-      "type": taxType
+    // Named field by field rather than spread from the form. The form now
+    // holds everything about the invoice, including the toggle and the paid
+    // figure, and a spread would post all of it - so listing the payload is
+    // what keeps a new form field from silently becoming a new API field.
+    const payload = {
+      invoice_number: data.invoice_number,
+      supplier: data.supplier,
+      notes: data.notes,
+      // date_issued is a DateTimeField; date_due and delivery are both
+      // nullable, and an empty date input posts "" which the API rejects.
+      date_issued: dateInputToDateTime(data.date_issued),
+      delivery: nullIfBlank(data.delivery),
+      date_due: nullIfBlank(data.date_due),
+      status: data.status,
+      project: data.project,
+      // The type comes from the record through the form and is never
+      // defaulted here: an absent one is dropped by JSON.stringify and then
+      // raises KeyError('type') in adjust_totals on the server.
+      tax: {
+        "value": parseFloat(String(data.tax)) || 0,
+        "type": data.tax_type
+      },
+      items: (data.items || []).map(item => ({
+        id: item.id ? item.id : null,
+        product_id: item.product.id,
+        quantity: item.quantity,
+        unit_cost: item.unit_cost,
+      })),
     }
 
-    const items = invoiceItems.map(item => ({
-      id: item.id ? item.id : null,
-      product_id: item.product.id,
-      quantity: item.quantity,
-      unit_cost: item.unit_cost,
-    }))
-
-    console.log({
-      ...rest,
-      tax: tax,
-      items: items
-    })
-
     try {
-      const success = await updatePurchaseInvoiceAndItems(token, invoice_id, {
-        ...rest,
-        tax: tax,
-        items: items
-      })
+      const success = await updatePurchaseInvoiceAndItems(token, invoice_id, payload)
 
       if (success) {
         toast.success("Purchase invoice updated successfully!")
@@ -133,8 +196,9 @@ const UpdatePurchaseInvoice = () => {
         unit_cost,
         total: quantity * unit_cost,
       }
-      setInvoiceItems([...invoiceItems, newInvoiceItem])
-      reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true })
+      setValue("items", [...invoiceItems, newInvoiceItem])
+      setValue("newItemProduct", "")
+      setValue("newItemQuantity", 0)
     }
   }
 
@@ -144,39 +208,59 @@ const UpdatePurchaseInvoice = () => {
 
   const handleDeleteItem = (e, target) => {
     e.preventDefault();
-    setInvoiceItems(invoiceItems.filter(item => item !== target));
+    // Matched by identity rather than id, because a row added in this session
+    // has no id yet.
+    setValue("items", invoiceItems.filter(item => item !== target));
   }
 
+  // The whole record in, the whole form out, in one write.
+  //
+  // Every key of defaultValues appears below. That is the point: the form is
+  // the only store, so anything missing here would be left over from the
+  // previous invoice rather than quietly defaulted, and reset() replaces the
+  // lot atomically. There is deliberately no setX() beside it.
   const populateInvoiceFields = (data) => {
-    // fill the main form fields
+    const {
+      invoice_number,
+      supplier,
+      notes,
+      date_issued,
+      delivery,
+      date_due,
+      tax,
+      status,
+      projects,
+      amount_paid,
+      invoice_items,
+    } = data
+
     reset({
-      invoice_number: data.invoice_number || "",
-      supplier: data.supplier,
-      notes: data.notes || "",
+      invoice_number: invoice_number || "",
+      supplier: supplier,
+      notes: notes || "",
       // A DateTimeField, and an <Input type="date"> rejects a full ISO datetime.
-      date_issued: data.date_issued?.split("T")[0] || "",
-      delivery: data.delivery?.split("T")[0] || "",
-      date_due: data.date_due || "",
-      tax: data.tax?.value ?? "0.0",
-      status: data.status,
-      project: data.projects?.length > 0 ? String(data.projects[0].project) : null,
+      date_issued: date_issued?.split("T")[0] || "",
+      delivery: delivery?.split("T")[0] || "",
+      date_due: date_due || "",
+      tax: tax?.value ?? "0.0",
+      // Falling back rather than taking the stored value as-is: an undefined
+      // type is dropped by JSON.stringify, and the API rejects a tax with no
+      // type at all.
+      tax_type: tax?.type || "percentage",
+      status: status,
+      project: projects?.length > 0 ? String(projects[0].project) : null,
+      items: (invoice_items || []).map((item) => ({
+        id: item.id,
+        product: transformProductVariant(item.product),
+        quantity: item.quantity,
+        unit_cost: item.unit_cost,
+        total: (item.quantity * item.unit_cost),
+      })),
+      amount_paid: amount_paid || 0,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemCost: 0,
     })
-
-    setAmountPaid(data.amount_paid || 0)
-
-    // build your items array for state
-    const items = (data.invoice_items || []).map((item) => ({
-      id: item.id,
-      product: transformProductVariant(item.product),
-      quantity: item.quantity,
-      unit_cost: item.unit_cost,
-      total: (item.quantity * item.unit_cost),
-    }))
-    setInvoiceItems(items)
-    setTaxType(data.tax?.type)
   }
 
   const supplierOptions = useMemo(
@@ -356,7 +440,7 @@ const UpdatePurchaseInvoice = () => {
                   <div className="relative">
                     <Input id="tax" {...register("tax")} placeholder="0.0" />
                     <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {taxType === "percentage" ? <Button type="button" variant="outline" onClick={() => setTaxType("amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setTaxType("percentage")}>PKR</Button>}
+                      {taxType === "percentage" ? <Button type="button" variant="outline" onClick={() => setValue("tax_type", "amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setValue("tax_type", "percentage")}>PKR</Button>}
                     </span>
                   </div>
                 </div>
@@ -418,7 +502,7 @@ const UpdatePurchaseInvoice = () => {
                   <Button
                     type="button"
                     onClick={() =>
-                      addItem(watch("newItemProduct"), parseInt(watch("newItemQuantity") || 0), parseFloat(watch("newItemCost") || 0.0))
+                      addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemCost") || 0.0)))
                     }
                     className="w-full"
                   >
@@ -442,8 +526,8 @@ const UpdatePurchaseInvoice = () => {
                       header can never drift out of step with the rows when a
                       scrollbar appears. */}
                   <div className="sticky top-0 z-10 bg-background flex items-center gap-2">
-                    <div className="bg-card rounded-lg border h-[35px] flex flex-1 items-center px-4">
-                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
+                    <div className="bg-card rounded-lg border min-h-[35px] py-0.5 flex flex-1 items-center px-4">
+                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] items-center gap-4 w-full text-sm font-medium text-muted-foreground">
                         <div>#</div>
                         <div>product</div>
                         <div>quantity</div>
@@ -457,8 +541,8 @@ const UpdatePurchaseInvoice = () => {
 
                   {invoiceItems.map((item, idx) => (
                     <div key={`${item.id}-${idx}`} className="flex items-center gap-2">
-                      <div className="bg-card rounded-lg h-[35px] flex flex-1 items-center px-4 border border-border">
-                        <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
+                      <div className="bg-card rounded-lg min-h-[35px] py-0.5 flex flex-1 items-center px-4 border border-border">
+                        <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] items-center gap-4 w-full text-sm">
                           <div>{idx + 1}</div>
                           <div className="font-medium">{
                             item.product.base ?
