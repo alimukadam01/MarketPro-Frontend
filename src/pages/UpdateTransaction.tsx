@@ -20,6 +20,8 @@ import {
     updateTransaction,
     moneyAccountsAPIPackage,
     suppliersAPIPackage,
+    salesInvoicesAPIPackage,
+    purchaseInvoicesAPIPackage,
     getCustomersList,
 } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider";
@@ -36,7 +38,8 @@ import {
     SourceKindMap,
     methodsForAccount,
     formatAccountOption,
-} from "../../services/utils";
+    formatInvoiceOption,
+} from "../../services/utils";
 import { Combobox } from "@/components/ui/combobox";
 import { Spinner } from "@/components/ui/spinner";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -59,6 +62,11 @@ const UpdateTransaction = () => {
     const [existingImageUrl, setExistingImageUrl] = useState(null);
     const [isSourceLinked, setIsSourceLinked] = useState(false);
     const [source, setSource] = useState(null);
+    // The invoice a sale or purchase payment was recorded against. `source`
+    // only carries its number; the field beside Type reads the same as on the
+    // create screen, which also needs the party, total and amount paid.
+    const [sourceInvoice, setSourceInvoice] = useState(null);
+    const [sourceInvoiceLoading, setSourceInvoiceLoading] = useState(false);
     const { token } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -88,8 +96,8 @@ const UpdateTransaction = () => {
     const isCheque = selectedMethod === "cheque";
 
     // Same single rule as the create screen: the cell beside Type is whatever
-    // this type refers to. Only the three party/transfer kinds are editable
-    // here - an invoice-backed or expense-backed row is locked anyway.
+    // this type refers to. Only the party and transfer kinds are editable here;
+    // an invoice-backed row is locked, so its invoice is shown but not chosen.
     const referenceKind = ReferenceForType[selectedType] || null;
     const isTransfer = referenceKind === "transfer_account";
 
@@ -242,6 +250,32 @@ const UpdateTransaction = () => {
         init();
     }, [token, transaction_id]);
 
+    useEffect(() => {
+        const invoicesAPI = {
+            sales_invoice: salesInvoicesAPIPackage,
+            purchase_invoice: purchaseInvoicesAPIPackage,
+        }[source?.kind];
+        if (!token || !invoicesAPI) return;
+
+        const fetchSourceInvoice = async () => {
+            setSourceInvoiceLoading(true);
+            try {
+                const res = await invoicesAPI.detail(token, source.id);
+                if (res) {
+                    setSourceInvoice(res);
+                } else {
+                    toast.error("Failed to fetch the linked invoice.");
+                }
+            } catch (error) {
+                console.log("Error fetching linked invoice:", error);
+                toast.error("Failed to fetch the linked invoice.");
+            } finally {
+                setSourceInvoiceLoading(false);
+            }
+        };
+        fetchSourceInvoice();
+    }, [token, source?.kind, source?.id]);
+
     /**
      * The cell beside Type, mirroring the create screen.
      */
@@ -273,6 +307,42 @@ const UpdateTransaction = () => {
                                 </SelectContent>
                             </Select>
                         )}
+                    />
+                </div>
+            );
+        }
+
+        // A sale or purchase payment always came from an invoice, so the field
+        // is locked and offers the one invoice it belongs to. Labelled exactly
+        // as on the create screen.
+        if (referenceKind === "sales_invoice" || referenceKind === "purchase_invoice") {
+            const isSale = referenceKind === "sales_invoice";
+            // Purchase detail sends the supplier as a bare id, so the name
+            // comes from the supplier list this page already loads.
+            const invoice = sourceInvoice && !isSale && typeof sourceInvoice.supplier !== "object"
+                ? { ...sourceInvoice, supplier: suppliers[sourceInvoice.supplier] }
+                : sourceInvoice;
+            const invoiceOptions = source?.id
+                ? [{
+                    value: String(source.id),
+                    // The number alone until the invoice arrives, or if it
+                    // fails to - never a blank field.
+                    label: invoice ? formatInvoiceOption(invoice) : source.label,
+                }]
+                : [];
+
+            return (
+                <div className="flex-1 space-y-1">
+                    <Label htmlFor={referenceKind}>{isSale ? "Sales Invoice" : "Purchase Invoice"}</Label>
+                    <Combobox
+                        options={invoiceOptions}
+                        value={source?.id ? String(source.id) : ""}
+                        onChange={() => {}}
+                        disabled
+                        loading={sourceInvoiceLoading}
+                        placeholder={detailLoading ? "Select invoice" : "No invoice linked"}
+                        emptyText="No invoice linked"
+                        notFoundText="No match."
                     />
                 </div>
             );
