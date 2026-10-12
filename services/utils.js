@@ -188,7 +188,24 @@ export const TransactionTypeMap = {
   other_payment: "Other Payment",
   transfer: "Account Transfer",
   cash_adjustment: "Cash Adjustment",
+  customer_credit_note: "Customer Credit Note",
+  customer_debit_note: "Customer Debit Note",
+  supplier_credit_note: "Supplier Credit Note",
+  supplier_debit_note: "Supplier Debit Note",
 };
+
+/**
+ * Notes move no money: no account, no payment method, no cheque, always
+ * cleared. A credit note lowers the party's khaata, a debit note raises it,
+ * and the khaata settles either against the opening balance first and then
+ * the oldest pending debts. They never name an invoice.
+ */
+export const NoteTransactionTypes = [
+  "customer_credit_note", "customer_debit_note",
+  "supplier_credit_note", "supplier_debit_note",
+];
+
+export const isNoteType = (type) => NoteTransactionTypes.includes(type);
 
 /**
  * Grouped for the type picker, mirroring the BRD's catalogue.
@@ -210,12 +227,15 @@ export const TransactionTypeGroups = {
     "loan_repayment", "other_payment",
   ],
   "Neither": ["transfer", "cash_adjustment"],
+  "Notes": NoteTransactionTypes,
 };
 
-// Types that name a customer or supplier when paid on account.
+// Types that name a customer or supplier when recorded on account. Notes
+// always name one: it is the only thing they settle against.
 export const PartyTransactionTypes = [
   "customer_receipt", "supplier_payment",
   "sales_return_refund", "purchase_return_refund",
+  ...NoteTransactionTypes,
 ];
 
 export const TransactionStatusMap = {
@@ -409,6 +429,40 @@ export const ReferenceForType = {
   purchase_payment: "purchase_invoice",
   expense: "expense",
   transfer: "transfer_account",
+  customer_credit_note: "customer",
+  customer_debit_note: "customer",
+  supplier_credit_note: "supplier",
+  supplier_debit_note: "supplier",
+};
+
+/**
+ * Who owes whom, keyed "customer:12" / "supplier:7", built from the
+ * receivables and payables lists. Those lists hold every party with a
+ * non-zero khaata - a supplier holding the business's money is under
+ * receivables - so together they cover everyone a note could be for.
+ */
+export const buildKhaataPositions = (receivables, payables) => {
+  const positions = {};
+  for (const row of receivables?.parties || []) {
+    positions[`${row.party_kind}:${row.id}`] = { side: "receivable", amount: row.balance };
+  }
+  for (const row of payables?.parties || []) {
+    positions[`${row.party_kind}:${row.id}`] = { side: "payable", amount: row.balance };
+  }
+  return positions;
+};
+
+/**
+ * How a party reads in the note picker, e.g. "Jotun · you owe PKR 9,172,894".
+ * Says which way the khaata stands, because a note can push it either way.
+ */
+export const formatPartyKhaataOption = (party, position) => {
+  const label = formatPartyLabel(party);
+  if (!position || !position.amount) return `${label} · settled`;
+  const amount = `PKR ${Number(position.amount).toLocaleString()}`;
+  return position.side === "receivable"
+    ? `${label} · owes you ${amount}`
+    : `${label} · you owe ${amount}`;
 };
 
 // How a locked transaction names where it came from. The detail payload sends
@@ -460,9 +514,10 @@ export function transformTransaction(data) {
     id: data.id,
     date: formatDate(data.date),
     type: data.type,
-    account: data.account_name,
+    // A note has neither: no money moved.
+    account: data.account_name || "—",
     amount: data.amount,
-    payment_method: PaymentMethodMap[data.payment_method] || data.payment_method,
+    payment_method: PaymentMethodMap[data.payment_method] || data.payment_method || "—",
     status: data.status,
   }
 }
