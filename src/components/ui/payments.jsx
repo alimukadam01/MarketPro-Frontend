@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { useAuth } from "../../../services/AuthProvider";
 import {
   getPaymentsList,
+  getInvoiceSettlement,
   createPayment,
   deletePayment,
   moneyAccountsAPIPackage,
@@ -29,11 +30,16 @@ import {
   TransactionStatusMap,
   getTransactionStatusColor,
   todayForInput,
+  formatDate,
 } from "../../../services/utils";
 
 function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPaymentsChanged }) {
   const { token, getPermissions } = useAuth();
   const [payments, setPayments] = useState([]);
+  // What the party's khaata settles onto this invoice (credit notes,
+  // on-account money), plus the server's own paid / still-owed / room figures.
+  // null until it arrives, or if the request fails.
+  const [settlement, setSettlement] = useState(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [accounts, setAccounts] = useState([]);
@@ -76,12 +82,16 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
 
   const fetchPayments = async () => {
     try {
-      const data = await getPaymentsList(token, invoiceId, isSalesPayment)
+      const [data, settled] = await Promise.all([
+        getPaymentsList(token, invoiceId, isSalesPayment),
+        getInvoiceSettlement(token, invoiceId, isSalesPayment),
+      ]);
       if (data) {
         setPayments(data)
       } else {
         toast.error("Failed to fetch payments.")
       }
+      setSettlement(settled);
     } catch (error) {
       console.log("Error fetching payments:", error)
       toast.error("Failed to fetch payments.")
@@ -179,8 +189,21 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
   const totalCleared = payments
     .filter((p) => !p.status || p.status === "C")
     .reduce((sum, p) => sum + Number(p.amount), 0);
-  const isPaidInFull = invoiceTotal > 0 && totalCleared >= invoiceTotal;
-  const isFullyRecorded = invoiceTotal > 0 && totalRecorded >= invoiceTotal;
+  // The khaata can settle part or all of the invoice too (credit notes,
+  // money on account), and only the server knows how much. When its figures
+  // are in, they decide; the local sums are the fallback if that request
+  // failed. Otherwise an invoice the khaata already covers would still offer
+  // "Create Payment" and the server would refuse the amount.
+  const isPaidInFull = settlement
+    ? settlement.total > 0 && settlement.paid >= settlement.total
+    : invoiceTotal > 0 && totalCleared >= invoiceTotal;
+  const isFullyRecorded = settlement
+    ? settlement.room <= 0
+    : invoiceTotal > 0 && totalRecorded >= invoiceTotal;
+  const exceedsRoom = settlement
+    ? (parseFloat(amount) || 0) > settlement.room
+    : totalRecorded + (parseFloat(amount) || 0) > invoiceTotal;
+  const settledBy = settlement?.settled_by || [];
 
   const handleDelete = async (paymentId) => {
     setRemovingId(paymentId);
@@ -316,7 +339,7 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
             disabled={
               isFullyRecorded ||
               chequeIncomplete ||
-              totalRecorded + (parseFloat(amount) || 0) > invoiceTotal
+              exceedsRoom
             }
           >
             {isPaidInFull
@@ -367,6 +390,41 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
             </div>
           ))}
         </div>
+
+        {/* Settled from the party's khaata, oldest debt first. Read-only:
+            these are worked out, not stored, so they change by editing or
+            deleting the note or payment in Transactions. */}
+        {settledBy.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <div className="text-sm font-medium">Settled from khaata</div>
+            {settledBy.map((row, index) => (
+              <div
+                key={`${row.kind}-${row.id}-${index}`}
+                className="rounded-lg flex justify-between px-2 py-1 border border-dashed border-border"
+              >
+                <div className="font-medium">
+                  PKR {Number(row.applied).toLocaleString()}
+                  <span className="text-muted-foreground font-normal">
+                    {" "}· {row.label}{row.reference ? ` · ${row.reference}` : ""}
+                  </span>
+                </div>
+                {row.date && (
+                  <span className="text-muted-foreground text-sm">{formatDate(row.date)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {settlement && (
+          <p className="text-sm text-muted-foreground">
+            Total PKR {Number(settlement.total).toLocaleString()} · Paid PKR{" "}
+            {Number(settlement.paid).toLocaleString()} ·{" "}
+            <span className="font-medium text-foreground">
+              Still owed PKR {Number(settlement.still_owed).toLocaleString()}
+            </span>
+          </p>
+        )}
       </DialogUI.DialogContent>
     </DialogUI.Dialog>
   );

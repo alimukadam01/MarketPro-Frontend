@@ -105,6 +105,10 @@ const transaction_type_options = [
     { value: "other_payment", label: "Other Payment" },
     { value: "transfer", label: "Account Transfer" },
     { value: "cash_adjustment", label: "Cash Adjustment" },
+    { value: "customer_credit_note", label: "Customer Credit Note" },
+    { value: "customer_debit_note", label: "Customer Debit Note" },
+    { value: "supplier_credit_note", label: "Supplier Credit Note" },
+    { value: "supplier_debit_note", label: "Supplier Debit Note" },
 ];
 
 const transaction_status_options = [
