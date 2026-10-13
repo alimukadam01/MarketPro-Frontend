@@ -17,9 +17,23 @@ import {
 
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
 
+// Both tables mix customers and suppliers: a supplier holding the business's
+// money is under Receivables, a customer it owes under Payables. The tag says
+// which, because the same name can be on both sides of a shop's books.
+const renderPartyName = (value, row) => (
+    <span className="flex items-center gap-2">
+        {value}
+        {row.tag && (
+            <span className="px-2 py-0.25 rounded-full text-xs font-medium whitespace-nowrap bg-muted text-muted-foreground">
+                {row.tag}
+            </span>
+        )}
+    </span>
+);
+
 const customerCols = [
     { key: "id", label: "ID" },
-    { key: "name", label: "Customer" },
+    { key: "name", label: "Name", render: renderPartyName },
     { key: "phone", label: "Phone" },
     {
         key: "balance",
@@ -47,7 +61,7 @@ const customerCols = [
 
 const supplierCols = [
     { key: "id", label: "ID" },
-    { key: "name", label: "Supplier" },
+    { key: "name", label: "Name", render: renderPartyName },
     { key: "business_name", label: "Business" },
     { key: "phone", label: "Phone" },
     {
@@ -72,8 +86,11 @@ const Ledgers = () => {
     const permissions = getPermissions("accounting");
     const navigate = useNavigate();
 
+    // A customer and a supplier can share an id, so a row's id carries its
+    // kind too; openLedger splits it back apart.
     const customerRows = (receivables?.parties || []).map((party) => ({
-        id: party.id,
+        id: `${party.party_kind}-${party.id}`,
+        tag: party.party_kind === "supplier" ? "Supplier" : null,
         name: party.name,
         phone: party.phone || "-",
         balance: party.balance,
@@ -83,7 +100,8 @@ const Ledgers = () => {
     }));
 
     const supplierRows = (payables?.parties || []).map((party) => ({
-        id: party.id,
+        id: `${party.party_kind}-${party.id}`,
+        tag: party.party_kind === "customer" ? "Customer" : null,
         name: party.name,
         business_name: party.business_name || "-",
         phone: party.phone || "-",
@@ -94,16 +112,18 @@ const Ledgers = () => {
     // khaata plus the balance, the opening balance and the payment dialog. Under
     // this path rather than /customers, so the URL and the breadcrumb both say
     // the user came through accounting.
-    const openCustomerLedger = (id) => {
-        navigate("/accounting/ledgers/view-customer", {
-            state: { customer_id: id },
-        });
-    };
-
-    const openSupplierLedger = (id) => {
-        navigate("/accounting/ledgers/view-supplier", {
-            state: { supplier_id: id },
-        });
+    const openLedger = (rowId) => {
+        const [kind, id] = String(rowId).split("-");
+        const partyId = Number(id);
+        if (kind === "supplier") {
+            navigate("/accounting/ledgers/view-supplier", {
+                state: { supplier_id: partyId },
+            });
+        } else {
+            navigate("/accounting/ledgers/view-customer", {
+                state: { customer_id: partyId },
+            });
+        }
     };
 
     useEffect(() => {
@@ -248,43 +268,45 @@ const Ledgers = () => {
                                 />
                             </div>
 
-                            {/* Customers who owe money */}
+                            {/* Everyone who owes the business: customers, and any
+                                supplier holding its money (a rebate, an advance). */}
                             <div className="space-y-4">
                                 <h2 className="text-xl font-semibold">
-                                    Customers with Outstanding Balance
+                                    Receivables · who owes you
                                 </h2>
                                 {loading || customerRows.length > 0 ? (
                                     <DataTable
                                         columns={customerCols}
                                         data={customerRows}
                                         selectedRows={[]}
-                                        onRowClick={openCustomerLedger}
+                                        onRowClick={openLedger}
                                         loading={loading}
                                     />
                                 ) : (
                                     <div className="bg-card rounded-lg p-6 border">
                                         <p className="text-sm text-muted-foreground">
-                                            No customer owes you anything right now.
+                                            Nobody owes you anything right now.
                                         </p>
                                     </div>
                                 )}
                             </div>
 
-                            {/* Suppliers we owe */}
+                            {/* Everyone the business owes: suppliers, and any
+                                customer it holds money for. */}
                             <div className="space-y-4">
-                                <h2 className="text-xl font-semibold">Suppliers Owed</h2>
+                                <h2 className="text-xl font-semibold">Payables · whom you owe</h2>
                                 {loading || supplierRows.length > 0 ? (
                                     <DataTable
                                         columns={supplierCols}
                                         data={supplierRows}
                                         selectedRows={[]}
-                                        onRowClick={openSupplierLedger}
+                                        onRowClick={openLedger}
                                         loading={loading}
                                     />
                                 ) : (
                                     <div className="bg-card rounded-lg p-6 border">
                                         <p className="text-sm text-muted-foreground">
-                                            You do not owe any supplier right now.
+                                            You do not owe anyone right now.
                                         </p>
                                     </div>
                                 )}

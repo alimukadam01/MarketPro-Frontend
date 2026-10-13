@@ -11,7 +11,7 @@ import {
   formatConfig,
 } from "./utils";
 
-const DEBUG = false;
+const DEBUG = true;
 
 export const BASE_URL = DEBUG
   ? "http://localhost:8000/"
@@ -2105,6 +2105,25 @@ export const deleteEmployee = async (token, businessId, employeeId) => {
   }
 };
 
+/**
+ * What the khaata settles onto one invoice, and the totals the payments dialog
+ * works from: paid (own payments + khaata), still owed, the room one more
+ * payment may take, and the khaata lines (credit notes, on-account money).
+ * Returns null on failure.
+ */
+export const getInvoiceSettlement = async (token, invoiceId, is_sales_payment) => {
+  try {
+    const res = await apiClient.get(
+      `${is_sales_payment ? 'sales' : 'purchase'}-invoices/${invoiceId}/settlement/`,
+      { headers: { Authorization: token } },
+    );
+    return res.status === 200 ? res.data : null;
+  } catch (error) {
+    console.log("Error fetching invoice settlement:", error);
+    return null;
+  }
+};
+
 export const getPaymentsList = async (token, invoiceId, is_sales_payment) => {
   try {
     const res = await apiClient.get(`${is_sales_payment? 'sales': 'purchase'}-invoices/${invoiceId}/payments/`, {
@@ -2367,9 +2386,10 @@ export const getReceivables = async (token) => {
 
 /**
  * Parties still carrying an unsettled opening balance, with what is left on
- * it. Not the same as getPayables/getReceivables, which include invoice debt —
- * an on-account payment settles only the khaata balance brought across at
- * onboarding.
+ * it. Not the same as getPayables/getReceivables, which include invoice debt.
+ * The khaata's pool (on-account payments, credit notes) settles the opening
+ * balance first and then pending invoices, so "left on it" is what the pool
+ * has not reached yet.
  */
 export const getOpeningBalances = async (token, party = "supplier") => {
   try {
