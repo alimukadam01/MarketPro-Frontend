@@ -141,6 +141,37 @@ export const todayForInput = () => {
  * saving it unchanged is enough to trigger that, so every nullable date has
  * to go through here on the way out.
  */
+/**
+ * Adds a line to an invoice's items, merging it when it is the same line twice.
+ *
+ * The same product may legitimately appear more than once at DIFFERENT prices
+ * - four paint colours billed off one base product, an old price beside a new
+ * one - so those stay separate lines. At the SAME price it is one line entered
+ * twice, so the quantity joins the row already there instead of making a
+ * duplicate the server refuses.
+ *
+ * `priceKey` is "unit_price" on sales and "unit_cost" on purchases.
+ * Returns a new array and never mutates the one passed in; the caller can
+ * compare lengths to see whether a merge happened.
+ */
+export const addOrMergeInvoiceItem = (items, newItem, priceKey = "unit_price") => {
+  const list = items || [];
+  const samePrice = (a, b) => Number(a[priceKey]) === Number(b[priceKey]);
+  const index = list.findIndex(
+    (item) =>
+      String(item.product?.id) === String(newItem.product?.id) &&
+      samePrice(item, newItem)
+  );
+
+  if (index === -1) return [...list, newItem];
+
+  return list.map((item, position) => {
+    if (position !== index) return item;
+    const quantity = Number(item.quantity) + Number(newItem.quantity);
+    return { ...item, quantity, total: quantity * Number(item[priceKey]) };
+  });
+};
+
 export const nullIfBlank = (value) =>
   value === "" || value === undefined || value === null ? null : value;
 
