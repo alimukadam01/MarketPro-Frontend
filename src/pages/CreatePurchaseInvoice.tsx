@@ -11,6 +11,7 @@ import { ChartNoAxesColumnDecreasing, Plus, Trash2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
+  addOrMergeInvoiceItem,
   formatPartyLabel,
   PaymentStatusMap,
   PurchaseInvoiceStatusMap,
@@ -117,7 +118,13 @@ const CreatePurchaseInvoice = () => {
         unit_cost,
         total: quantity * unit_cost,
       }
-      setInvoiceItems([...invoiceItems, newInvoiceItem])
+      // Same product at a different price is its own line; at the same
+      // price it joins the line already there (addOrMergeInvoiceItem).
+      const merged = addOrMergeInvoiceItem(invoiceItems, newInvoiceItem, "unit_cost")
+      if (merged.length === invoiceItems.length) {
+        toast.success(`Added ${quantity} to the existing line for this product at this cost.`)
+      }
+      setInvoiceItems(merged)
       reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true })
     }
   }

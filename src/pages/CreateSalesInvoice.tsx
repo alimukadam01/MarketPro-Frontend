@@ -12,6 +12,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import CustomFilter from "../components/layout/CustomFilter"
 import {
+  addOrMergeInvoiceItem,
   PaymentStatusMap,
   SalesInvoiceStatusMap,
   createIdMap,
@@ -170,7 +171,13 @@ const CreateSalesInvoice = () => {
         unit_price,
         total: quantity * unit_price,
       };
-      setInvoiceItems([...invoiceItems, newInvoiceItem]);
+      // Same product at a different price is its own line; at the same
+      // price it joins the line already there (addOrMergeInvoiceItem).
+      const merged = addOrMergeInvoiceItem(invoiceItems, newInvoiceItem);
+      if (merged.length === invoiceItems.length) {
+        toast.success(`Added ${quantity} to the existing line for this product at this price.`);
+      }
+      setInvoiceItems(merged);
       reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true });
     }
   }
