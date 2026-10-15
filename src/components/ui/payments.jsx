@@ -371,7 +371,10 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
                       {payment.account.name} ({AccountTypeMap[payment.account.type] || payment.account.type})
                     </span>
                   )}
-                  <span>{new Date(payment.created_at).toLocaleDateString("en-GB")}</span>
+                  {/* The day the money moved, not the day the row was typed.
+                      formatDate reads it in the business timezone, the way
+                      the khaata rows below already do. */}
+                  <span>{formatDate(payment.date || payment.created_at)}</span>
                 </div>
               </div>
               <Button
