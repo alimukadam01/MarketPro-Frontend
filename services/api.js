@@ -885,6 +885,58 @@ export const updateSalesInvoiceAndItems = async (
   }
 };
 
+// Cancelling is the one status transition a person makes - every other value
+// is derived from the invoice's lines and what is still owed - so it is an
+// action rather than a field on the form. The backend returns the goods to
+// stock on cancel and takes them out again on uncancel.
+export const cancelSalesInvoice = async (token, invoiceId) => {
+  try {
+    const res = await apiClient.post(
+      `/sales-invoices/${invoiceId}/cancel/`,
+      {},
+      {
+        headers: {
+          Authorization: token,
+        },
+      },
+    );
+
+    if (res.status === 200) {
+      return true;
+    }
+
+    console.log(res.data.detail);
+    return false;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+export const uncancelSalesInvoice = async (token, invoiceId) => {
+  try {
+    const res = await apiClient.post(
+      `/sales-invoices/${invoiceId}/uncancel/`,
+      {},
+      {
+        headers: {
+          Authorization: token,
+        },
+      },
+    );
+
+    if (res.status === 200) {
+      return true;
+    }
+
+    console.log(res.data.detail);
+    return false;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
 export const deleteProjectSalesInvoice = async (token, projectId, projectSalesInvoiceId) => {
   try {
     const res = await apiClient.delete(`/projects/${projectId}/sales-invoices/${projectSalesInvoiceId}/`, {

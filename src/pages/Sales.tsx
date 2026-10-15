@@ -88,7 +88,7 @@ const cols = [
           value
         )}`}
       >
-        {SalesInvoiceStatusMap[value]}
+        {SalesInvoiceStatusMap[value] ?? value}
       </span>
     ),
   },
@@ -136,10 +136,14 @@ const filter_fields_template = {
   total: "",
 };
 
-// Order status, as stored. The free-text box this replaces suggested
-// "pending, completed, cancelled", none of which are values the column holds -
-// it keeps single-letter codes, and DjangoFilterBackend matches them exactly,
-// so the field could not match anything a user typed.
+// Order status. The free-text box this replaces suggested "pending,
+// completed, cancelled", none of which are values the backend holds - it keeps
+// single-letter codes and matches them exactly, so the field could not match
+// anything a user typed.
+//
+// Overdue is in this list even though no row stores it: the column holds only
+// D, C or X, and SalesInvoiceFilter.filter_status works Overdue out from what
+// is still owed past the due date.
 const status_options = Object.entries(SalesInvoiceStatusMap).map(
   ([value, label]) => ({ value, label })
 );

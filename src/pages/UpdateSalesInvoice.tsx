@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Send, Trash2, Undo2 } from "lucide-react";
+import { Ban, Plus, Send, Trash2, Undo2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
@@ -19,6 +19,7 @@ import {
   dateInputToDateTime,
   derivePaymentStatus,
   getPaymentStatusColor,
+  getStatusColor,
   nullIfBlank,
   todayForInput
 } from "../../services/utils"
@@ -29,6 +30,8 @@ import {
   updateSalesInvoiceAndItems,
   getSalesInvoiceDetail,
   getInvoicePDFData,
+  cancelSalesInvoice,
+  uncancelSalesInvoice,
   projectsAPIPackage
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
@@ -172,6 +175,40 @@ const UpdateSalesInvoice = () => {
   const totalAmount = subtotal - discountAmount + taxAmount
   const selectedProduct = products[watch("newItemProduct")]
   const paymentStatus = derivePaymentStatus(amountPaid, totalAmount)
+  // Read from the form so the badge updates when populateInvoiceFields runs
+  // and after a cancel refetches the record. It is shown, never submitted.
+  const status = watch("status")
+
+  const [statusPending, setStatusPending] = useState(false)
+
+  // Cancelling returns the goods to stock and takes the invoice out of the
+  // customer's ledger; reinstating does both in reverse. The record is
+  // refetched rather than patched locally, because the server also rewrites
+  // the line-level deduction flags.
+  const changeCancellation = async (action, request, successMessage) => {
+    if (!invoice_id) return
+    setStatusPending(true)
+    try {
+      const success = await request(token, invoice_id)
+      if (success) {
+        toast.success(successMessage)
+        await fetchSalesInvoice()
+      } else {
+        toast.error(`Failed to ${action} the invoice.`)
+      }
+    } catch (error) {
+      console.log(`Error trying to ${action} the invoice:`, error)
+      toast.error(`Failed to ${action} the invoice.`)
+    } finally {
+      setStatusPending(false)
+    }
+  }
+
+  const cancelInvoice = () => changeCancellation(
+    "cancel", cancelSalesInvoice, "Invoice cancelled. Its items are back in stock.")
+
+  const reinstateInvoice = () => changeCancellation(
+    "reinstate", uncancelSalesInvoice, "Invoice reinstated. Its items left stock again.")
 
   const onSubmit = async (data) => {
 
@@ -188,7 +225,9 @@ const UpdateSalesInvoice = () => {
       // empty input posts "" which the API rejects outright.
       date_issued: dateInputToDateTime(data.date_issued),
       date_due: nullIfBlank(data.date_due),
-      status: data.status,
+      // status is deliberately absent. It is derived on the server from the
+      // invoice's lines and what is still owed, and posting a value would be
+      // ignored - sending one was how this field used to be overwritten.
       project: data.project,
       // The type is never defaulted here. It comes from the record through
       // the form, and an absent one would be dropped by JSON.stringify and
@@ -524,25 +563,45 @@ const UpdateSalesInvoice = () => {
                 </div>
               </div>
 
+              {/* Read-only, like Payment Status beside it. Draft, Completed
+                  and Overdue are all derived from the invoice, so the only
+                  transition left to make is cancelling it. */}
               <div className="flex gap-6">
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="status">Status</Label>
-                  <Controller
-                    name="status"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(SalesInvoiceStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  <Label>Status</Label>
+                  <div className="flex h-10 items-center">
+                    <span
+                      className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap ${getStatusColor(status)}`}
+                    >
+                      {SalesInvoiceStatusMap[status] ?? status}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex-1 space-y-1">
+                  <Label>&nbsp;</Label>
+                  <div className="flex h-10 items-center">
+                    {status === "X" ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={statusPending}
+                        onClick={reinstateInvoice}
+                      >
+                        <Undo2 className="w-4 h-4 mr-2" />
+                        Reinstate Invoice
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={statusPending}
+                        onClick={cancelInvoice}
+                      >
+                        <Ban className="w-4 h-4 mr-2" />
+                        Cancel Invoice
+                      </Button>
                     )}
-                  />
+                  </div>
                 </div>
               </div>
             </div>

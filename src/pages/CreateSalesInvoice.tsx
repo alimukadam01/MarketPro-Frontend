@@ -14,7 +14,6 @@ import CustomFilter from "../components/layout/CustomFilter"
 import {
   addOrMergeInvoiceItem,
   PaymentStatusMap,
-  SalesInvoiceStatusMap,
   createIdMap,
   createNestedIdMap,
   derivePaymentStatus,
@@ -73,7 +72,6 @@ const CreateSalesInvoice = () => {
       discount: "0.0",
       tax: "0.0",
       amount_paid: "0.0",
-      status: "C",
       project: project_id ? String(project_id) : null,
       newItemProduct: "",
       newItemQuantity: 0,
@@ -365,27 +363,6 @@ const CreateSalesInvoice = () => {
                 </div>
               </div>
 
-              <div className="flex gap-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="status">Status</Label>
-                  <Controller
-                    name="status"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(SalesInvoiceStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-              </div>
             </div>
 
             {/* Second Column */}

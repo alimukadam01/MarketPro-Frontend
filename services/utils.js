@@ -1,12 +1,14 @@
 import { BASE_URL } from './api'
 
+// Derived on the backend from the invoice itself: no lines -> Draft, lines
+// -> Completed, a balance past the due date -> Overdue. Cancelled is the only
+// value a person sets. "Sent" and "Partially Completed" no longer exist - the
+// latter was never a document state, just a record of how much stock had left.
 export const SalesInvoiceStatusMap = {
   D: "Draft",
-  S: "Sent",
   O: "Overdue",
   X: "Cancelled",
   C: "Completed",
-  PC: "Partially Completed",
 };
 
 export const PurchaseInvoiceStatusMap = {
@@ -63,14 +65,12 @@ const ConfigKeys = [
 ];
 
 export const getStatusColor = (status) => {
-  console.log(status);
-
   switch (status) {
     case "C":
     case "R":
       return "bg-green-100 text-green-700";
     case "D":
-    case "PC":
+    // Still reached: PQStatusMap uses S for a sent quotation.
     case "S":
       return "bg-yellow-100 text-yellow-700";
     case "X":
