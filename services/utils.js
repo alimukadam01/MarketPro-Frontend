@@ -81,6 +81,48 @@ export const getStatusColor = (status) => {
   }
 };
 
+// Extra charges in the shape the API accepts: labels trimmed, amounts turned
+// into numbers, and the empty rows a form inevitably leaves behind dropped.
+//
+// <Input> yields strings, so an untouched amount is "" and Number("") is 0
+// while float("") on the server raises - the rows have to be cleaned here
+// either way.
+//
+// Returns { error } instead of a list for a row that is half filled. An amount
+// with no label is refused by the server, and naming the row is a good deal
+// better than the generic failure toast the caller would otherwise show.
+export const normaliseExtraCharges = (rows) => {
+  const charges = [];
+
+  for (let index = 0; index < (rows || []).length; index += 1) {
+    const row = rows[index];
+    const label = String(row?.label ?? "").trim();
+    const amount = parseFloat(row?.amount);
+    const hasAmount = Number.isFinite(amount) && amount !== 0;
+
+    // Wholly untouched: not an error, just a row nobody filled in.
+    if (!label && !hasAmount) continue;
+
+    if (!label) {
+      return { error: `Extra charge ${index + 1} needs a label.` };
+    }
+    if (row?.amount !== "" && !Number.isFinite(amount)) {
+      return { error: `The amount on "${label}" is not a number.` };
+    }
+    if (amount < 0) {
+      return { error: `The amount on "${label}" cannot be negative.` };
+    }
+
+    // A label with no amount is dropped rather than refused, matching the
+    // server: it is a row someone started and abandoned.
+    if (!hasAmount) continue;
+
+    charges.push({ label, amount: Math.round(amount * 100) / 100 });
+  }
+
+  return { charges };
+};
+
 // Mirrors the payment_status property on the invoice models.
 export const derivePaymentStatus = (amountPaid, total) => {
   const paid = Number(amountPaid) || 0;

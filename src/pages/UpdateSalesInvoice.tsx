@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Ban, Plus, Send, Trash2, Undo2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
 import {
   addOrMergeInvoiceItem,
   PaymentStatusMap,
@@ -20,6 +20,7 @@ import {
   derivePaymentStatus,
   getPaymentStatusColor,
   getStatusColor,
+  normaliseExtraCharges,
   nullIfBlank,
   todayForInput
 } from "../../services/utils"
@@ -74,6 +75,9 @@ type SalesInvoiceFormValues = {
   discount_type: string
   tax: string | number
   tax_type: string
+  // Amounts arrive as numbers from the record and leave the inputs as
+  // strings, so both are allowed and normaliseExtraCharges settles it.
+  extra_charges: { label: string; amount: string | number }[]
   status: string
   project: string | null
   items: SalesInvoiceFormItem[]
@@ -148,6 +152,7 @@ const UpdateSalesInvoice = () => {
       discount_type: "percentage",
       tax: "0.0",
       tax_type: "percentage",
+      extra_charges: [],
       status: "",
       project: null,
       items: [],
@@ -172,7 +177,15 @@ const UpdateSalesInvoice = () => {
     .reduce((sum, item) => sum + item.total, 0)
   const discountAmount = discountType === "percentage" ? (subtotal * discount) / 100 : discount
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
-  const totalAmount = subtotal - discountAmount + taxAmount
+
+  // After the tax and outside the subtotal, matching SalesInvoice.adjust_totals.
+  const { fields: chargeFields, append: appendCharge, remove: removeCharge } =
+    useFieldArray({ control, name: "extra_charges" })
+  const extraCharges = watch("extra_charges") || []
+  const chargesTotal = extraCharges.reduce(
+    (sum, charge) => sum + (parseFloat(String(charge?.amount)) || 0), 0)
+
+  const totalAmount = subtotal - discountAmount + taxAmount + chargesTotal
   const selectedProduct = products[watch("newItemProduct")]
   const paymentStatus = derivePaymentStatus(amountPaid, totalAmount)
   // Read from the form so the badge updates when populateInvoiceFields runs
@@ -216,6 +229,14 @@ const UpdateSalesInvoice = () => {
     // holds everything about the invoice, including the toggles and the paid
     // figure, and a spread would post all of it - so listing the payload is
     // what keeps a new form field from silently becoming a new API field.
+    // Before the payload, so a half-filled row is named on screen rather than
+    // coming back as a bare failure toast.
+    const { charges, error } = normaliseExtraCharges(data.extra_charges)
+    if (error) {
+      toast.error(error)
+      return
+    }
+
     const payload = {
       invoice_number: data.invoice_number,
       customer: data.customer,
@@ -240,6 +261,7 @@ const UpdateSalesInvoice = () => {
         "value": parseFloat(String(data.tax)) || 0,
         "type": data.tax_type
       },
+      extra_charges: charges,
       items: (data.items || []).map(item => ({
         id: item.id,
         product_id: item.product.id,
@@ -300,6 +322,7 @@ const UpdateSalesInvoice = () => {
       date_due,
       discount,
       tax,
+      extra_charges,
       status,
       projects,
       amount_paid,
@@ -321,6 +344,7 @@ const UpdateSalesInvoice = () => {
       discount_type: discount?.type || "percentage",
       tax: tax?.value ?? "0.0",
       tax_type: tax?.type || "percentage",
+      extra_charges: extra_charges || [],
       status: status || "",
       project: projects?.length > 0 ? String(projects[0].project) : null,
       items: (invoice_items || []).map((item) => ({
@@ -728,11 +752,61 @@ const UpdateSalesInvoice = () => {
                 </div>
               </div>
 
+              {/* Delivery, labour, a cutting fee. Added after the tax, and
+                  left out of the revenue and profit figures, since the money
+                  is collected alongside the sale rather than earned on it. */}
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center justify-between">
+                  <Label>Extra Charges</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => appendCharge({ label: "", amount: "" })}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Charge
+                  </Button>
+                </div>
+
+                {chargeFields.map((field, index) => (
+                  <div className="flex gap-3 items-start" key={field.id}>
+                    <Input
+                      className="flex-1"
+                      placeholder="Delivery"
+                      {...register(`extra_charges.${index}.label`)}
+                    />
+                    <Input
+                      className="w-32"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      {...register(`extra_charges.${index}.amount`)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => removeCharge(index)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
               <div className="flex gap-6 mb-6">
                 <div className="flex-1 space-y-1">
                   <Label htmlFor="subtotal">Subtotal</Label>
                   <Input id="subtotal" value={subtotal.toLocaleString()} readOnly />
                 </div>
+                {chargesTotal > 0 ? (
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="chargesTotal">Extra Charges</Label>
+                    <Input id="chargesTotal" value={chargesTotal.toLocaleString()} readOnly />
+                  </div>
+                ) : null}
                 <div className="flex-1 space-y-1">
                   <Label htmlFor="totalAmount">Total</Label>
                   <Input id="totalAmount" value={totalAmount.toLocaleString()} readOnly className="font-semibold" />

@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
 import CustomFilter from "../components/layout/CustomFilter"
 import {
   addOrMergeInvoiceItem,
@@ -19,6 +19,7 @@ import {
   derivePaymentStatus,
   generateInvoiceNumber,
   getPaymentStatusColor,
+  normaliseExtraCharges,
   todayForInput,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
@@ -33,6 +34,9 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
 import { Combobox } from "@/components/ui/combobox";
+
+// Amounts arrive from <Input> as strings and from a record as numbers.
+type ExtraCharge = { label: string; amount: string | number }
 
 const CreateSalesInvoice = () => {
   const { pending, run } = usePending();
@@ -72,6 +76,7 @@ const CreateSalesInvoice = () => {
       discount: "0.0",
       tax: "0.0",
       amount_paid: "0.0",
+      extra_charges: [],
       project: project_id ? String(project_id) : null,
       newItemProduct: "",
       newItemQuantity: 0,
@@ -115,7 +120,19 @@ const CreateSalesInvoice = () => {
   const [taxType, setTaxType] = useState("percentage")
   const discountAmount = discountType === "percentage" ? (subtotal * discount) / 100 : discount
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
-  const totalAmount = subtotal - discountAmount + taxAmount
+
+  // Charges are added after the tax and are not part of the subtotal, matching
+  // SalesInvoice.adjust_totals - so a percentage tax is never charged on a
+  // delivery fee. Amounts come out of <Input> as strings.
+  const { fields: chargeFields, append: appendCharge, remove: removeCharge } =
+    useFieldArray({ control, name: "extra_charges" })
+  // Annotated because useForm on this page has no type parameter, so watch()
+  // infers `never` for a field the defaults declare as an empty array.
+  const extraCharges: ExtraCharge[] = watch("extra_charges") || []
+  const chargesTotal = extraCharges.reduce(
+    (sum, charge) => sum + (parseFloat(String(charge?.amount)) || 0), 0)
+
+  const totalAmount = subtotal - discountAmount + taxAmount + chargesTotal
   const selectedProduct = products[watch("newItemProduct")]
   const paymentStatus = derivePaymentStatus(watch("amount_paid"), totalAmount)
 
@@ -139,11 +156,21 @@ const CreateSalesInvoice = () => {
       unit_price: item.unit_price,
     }))
 
+    // Cleaned here rather than posted raw: the inputs hold strings, and an
+    // empty row left on the form would be refused by the API with nothing on
+    // screen to say which one.
+    const { charges, error } = normaliseExtraCharges(data.extra_charges)
+    if (error) {
+      toast.error(error)
+      return
+    }
+
     try {
       const success = await postSalesInvoiceAndItems(token, {
         ...rest,
         tax: tax,
         discount: discount,
+        extra_charges: charges,
         items: items
       })
 
@@ -465,11 +492,62 @@ const CreateSalesInvoice = () => {
                 </div>
               </div>
 
+              {/* Delivery, labour, a cutting fee - whatever this shop adds on
+                  top of the goods. Added after the tax, and left out of the
+                  revenue and profit figures, since the money is collected
+                  alongside the sale rather than earned on it. */}
+              <div className="space-y-3 mb-6">
+                <div className="flex items-center justify-between">
+                  <Label>Extra Charges</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => appendCharge({ label: "", amount: "" })}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Charge
+                  </Button>
+                </div>
+
+                {chargeFields.map((field, index) => (
+                  <div className="flex gap-3 items-start" key={field.id}>
+                    <Input
+                      className="flex-1"
+                      placeholder="Delivery"
+                      {...register(`extra_charges.${index}.label`)}
+                    />
+                    <Input
+                      className="w-32"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0.00"
+                      {...register(`extra_charges.${index}.amount`)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => removeCharge(index)}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
               <div className="flex gap-6 mb-6">
                 <div className="flex-1 space-y-1">
                   <Label htmlFor="subtotal">Subtotal</Label>
                   <Input id="subtotal" value={subtotal.toLocaleString()} readOnly />
                 </div>
+                {chargesTotal > 0 ? (
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="chargesTotal">Extra Charges</Label>
+                    <Input id="chargesTotal" value={chargesTotal.toLocaleString()} readOnly />
+                  </div>
+                ) : null}
                 <div className="flex-1 space-y-1">
                   <Label htmlFor="totalAmount">Total</Label>
                   <Input id="totalAmount" value={totalAmount.toLocaleString()} readOnly className="font-semibold" />
