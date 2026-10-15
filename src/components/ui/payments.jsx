@@ -31,6 +31,7 @@ import {
   getTransactionStatusColor,
   todayForInput,
   formatDate,
+  getImageUrl,
 } from "../../../services/utils";
 
 function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPaymentsChanged }) {
@@ -42,6 +43,9 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
   const [settlement, setSettlement] = useState(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
+  // A photo of the slip, the cheque or the handwritten receipt. One per
+  // payment, stored on the transaction the receipt is mirrored into.
+  const [imageFile, setImageFile] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [account, setAccount] = useState("");
   const [chequeNumber, setChequeNumber] = useState("");
@@ -122,6 +126,7 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
   const resetForm = () => {
     setAmount("");
     setDescription("");
+    setImageFile(null);
     setChequeNumber("");
     setChequeDueDate("");
     setPaymentDate(todayForInput());
@@ -160,7 +165,21 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
           }
         }
 
-        const success = await createPayment(token, invoiceId, isSalesPayment, payload);
+        // FormData only when there is a file. Without one the plain object
+        // keeps the amount a number and the account an integer, instead of
+        // leaving the server to parse strings back out of a multipart body.
+        let body = payload;
+        if (imageFile) {
+          body = new FormData();
+          Object.entries(payload).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== "") {
+              body.append(key, value);
+            }
+          });
+          body.append("image", imageFile);
+        }
+
+        const success = await createPayment(token, invoiceId, isSalesPayment, body);
         if (success) {
           toast.success("Payment created successfully!");
           resetForm();
@@ -330,6 +349,20 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
             />
           </div>
 
+          <div className="space-y-1">
+            <Label htmlFor="payment-image">Photo</Label>
+            <input
+              id="payment-image"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium"
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional. A photo of the slip, the cheque or the receipt.
+            </p>
+          </div>
+
           <SubmitButton
             type="button"
             pending={saving}
@@ -377,6 +410,22 @@ function Payments({ invoiceId, invoiceTotal, isSalesPayment, open, setOpen, onPa
                   <span>{formatDate(payment.date || payment.created_at)}</span>
                 </div>
               </div>
+              {/* getImageUrl leaves a presigned S3 link alone and puts the
+                  host in front of a local /media/... path. */}
+              {payment.image && (
+                <a
+                  href={getImageUrl(payment.image)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="shrink-0"
+                >
+                  <img
+                    src={getImageUrl(payment.image)}
+                    alt="Payment"
+                    className="h-10 w-10 rounded object-cover border border-border"
+                  />
+                </a>
+              )}
               <Button
                 type="button"
                 variant="unstyled"

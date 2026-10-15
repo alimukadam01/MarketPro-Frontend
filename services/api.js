@@ -2194,10 +2194,79 @@ export const getPaymentsList = async (token, invoiceId, is_sales_payment) => {
   }
 }
 
+// An invoice carries several photos - the signed delivery note, the goods as
+// they arrived, the supplier's own bill. Nested under the invoice, so which
+// one an image belongs to never travels in the payload.
+export const getInvoiceImages = async (token, invoiceId, is_sales_invoice) => {
+  try {
+    const res = await apiClient.get(
+      `${is_sales_invoice ? "sales" : "purchase"}-invoices/${invoiceId}/images/`,
+      { headers: { Authorization: token } },
+    );
+
+    if (res.status !== 200) {
+      console.log("Error fetching invoice images");
+      return null;
+    }
+
+    return res.data;
+  } catch (error) {
+    console.log("Error fetching invoice images:", error);
+    return null;
+  }
+};
+
+export const uploadInvoiceImage = async (token, invoiceId, is_sales_invoice, formData) => {
+  try {
+    const res = await apiClient.post(
+      `${is_sales_invoice ? "sales" : "purchase"}-invoices/${invoiceId}/images/`,
+      formData,
+      {
+        headers: {
+          Authorization: token,
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
+
+    if (res.status === 201) return true;
+
+    console.log("Error uploading invoice image.");
+    return false;
+  } catch (error) {
+    console.log("Error uploading invoice image:", error);
+    return false;
+  }
+};
+
+export const deleteInvoiceImage = async (token, invoiceId, is_sales_invoice, imageId) => {
+  try {
+    const res = await apiClient.delete(
+      `${is_sales_invoice ? "sales" : "purchase"}-invoices/${invoiceId}/images/${imageId}/`,
+      { headers: { Authorization: token } },
+    );
+
+    if (res.status === 204) return true;
+
+    console.log("Error deleting invoice image.");
+    return false;
+  } catch (error) {
+    console.log("Error deleting invoice image:", error);
+    return false;
+  }
+};
+
+// `data` may be a plain object or a FormData. A payment can carry a photo of
+// the slip or the cheque, and a file only reaches the server as multipart -
+// but the dialog sends a plain object when there is no photo, which keeps the
+// numbers typed rather than stringified.
 export const createPayment = async (token, invoiceId, is_sales_payment, data) => {
   try {
+    const isMultipart = typeof FormData !== "undefined" && data instanceof FormData;
     const res = await apiClient.post(`${is_sales_payment? 'sales': 'purchase'}-invoices/${invoiceId}/payments/`, data, {
-      headers: { Authorization: token },
+      headers: isMultipart
+        ? { Authorization: token, "Content-Type": "multipart/form-data" }
+        : { Authorization: token },
     });
     if (res.status === 201) return true;
     console.log("Error creating payment.");

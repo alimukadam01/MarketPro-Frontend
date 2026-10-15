@@ -32,6 +32,7 @@ import {
 } from "../../services/api"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import Payments from "@/components/ui/payments";
+import InvoiceImages from "@/components/ui/invoice-images";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
 import { Combobox } from "@/components/ui/combobox";
@@ -641,6 +642,11 @@ const UpdatePurchaseInvoice = () => {
               </div>
             </div>
           </form>
+
+          {/* Outside the form on purpose: each photo is uploaded on its own,
+              so an Enter in the caption box must not submit the invoice. */}
+          <InvoiceImages invoiceId={invoice_id} isSalesInvoice={false} />
+
           <Payments invoiceId={invoice_id} invoiceTotal={totalAmount} open={paymentsOpen} setOpen={setPaymentsOpen} isSalesPayment={false} onPaymentsChanged={fetchPurchaseInvoice} />
         </main>
       </div>
