@@ -11,13 +11,18 @@ export const SalesInvoiceStatusMap = {
   C: "Completed",
 };
 
+// Exactly PurchaseInvoice.PURCHASE_INVOICE_STATUS_CHOICES, in that order. This
+// used to offer "S" (Sent) and "X" (Cancelled), neither of which the backend
+// accepts - it rejected both - and it has no Sent at all.
+//
+// Note that "C" is CANCELLED here but COMPLETED on a sales invoice: colour a
+// purchase status with getPurchaseStatusColor, never getStatusColor.
 export const PurchaseInvoiceStatusMap = {
   D: "Draft",
-  S: "Sent",
-  O: "Overdue",
-  X: "Cancelled",
   R: "Received",
   PR: "Partially Received",
+  C: "Cancelled",
+  O: "Overdue",
 };
 
 export const PaymentStatusMap = {
@@ -63,6 +68,23 @@ const ConfigKeys = [
   "accounting",
   "targets",
 ];
+
+// The purchase-side twin of getStatusColor below. Separate because the two
+// models disagree on "C": shared, a cancelled purchase was painted green.
+export const getPurchaseStatusColor = (status) => {
+  switch (status) {
+    case "R":
+      return "bg-green-100 text-green-700";
+    case "D":
+    case "PR":
+      return "bg-yellow-100 text-yellow-700";
+    case "C":
+    case "O":
+      return "bg-red-100 text-red-700";
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
+};
 
 export const getStatusColor = (status) => {
   switch (status) {
