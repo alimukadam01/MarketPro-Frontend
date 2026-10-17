@@ -1,31 +1,24 @@
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner"
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Ban, Plus, Send, Trash2, Undo2 } from "lucide-react";
+import { Ban, Download, ImageIcon, Plus, Send, Trash2, Undo2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import {
   addOrMergeInvoiceItem,
-  PaymentStatusMap,
-  SalesInvoiceStatusMap,
   createIdMap,
   createNestedIdMap,
   dateInputToDateTime,
-  derivePaymentStatus,
-  getPaymentStatusColor,
-  getStatusColor,
   normaliseExtraCharges,
   nullIfBlank,
   todayForInput
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
+  applyHeldPayments,
   getAvailableProductsList,
   getCustomersList,
   updateSalesInvoiceAndItems,
@@ -35,16 +28,23 @@ import {
   uncancelSalesInvoice,
   projectsAPIPackage
 } from "../../services/api"
-import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import ReturnItem from "@/components/ui/return-item";
-import Payments from "@/components/ui/payments";
+import Payments, { EMPTY_PENDING_PAYMENTS } from "@/components/ui/payments";
 import InvoiceImages from "@/components/ui/invoice-images";
 import WalkInCustomer from "@/components/ui/walk-in-customer";
 import { useInvoiceActions } from "@/hooks/use-invoice-actions";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
 import { Combobox } from "@/components/ui/combobox";
-import { Spinner } from "@/components/ui/spinner";
+import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
+import { InvoiceItemsTable, RowAction } from "@/components/invoice/InvoiceItemsTable";
+import { ExtraChargesEditor } from "@/components/invoice/ExtraChargesEditor";
+import {
+  AmountToggleInput,
+  InvoiceSummaryCard,
+  PaymentButton,
+  SalesStatusPill,
+} from "@/components/invoice/InvoiceRail";
 
 type SalesInvoiceFormItem = {
   id: number
@@ -91,12 +91,19 @@ type SalesInvoiceFormValues = {
 const UpdateSalesInvoice = () => {
   const { pending, run } = usePending();
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   // True until the record arrives, which the spinner beside the title
   // reports. A failure is the only thing that toasts.
   const [detailLoading, setDetailLoading] = useState(true);
   const [returnItemWindowOpen, setReturnItemWindowOpen] = useState(false)
   const [paymentsOpen, setPaymentsOpen] = useState(false)
+  // What the payments dialog holds until Update Invoice: payments to add,
+  // payments and refunds to delete. Nothing in the dialog reaches the server
+  // before then, so it always works against the total this page shows.
+  const [heldPayments, setHeldPayments] = useState(EMPTY_PENDING_PAYMENTS)
+  const [imagesOpen, setImagesOpen] = useState(false)
+  // Not form data: it labels the Images button. Seeded from the record and
+  // kept current by the dialog, which never refetches the invoice.
+  const [imageCount, setImageCount] = useState(0)
   const [itemReturned, setItemReturned] = useState(false)
   const [returningItem, setReturningItem] = useState(null)
   const [products, setProducts] = useState([])
@@ -180,15 +187,22 @@ const UpdateSalesInvoice = () => {
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
 
   // After the tax and outside the subtotal, matching SalesInvoice.adjust_totals.
-  const { fields: chargeFields, append: appendCharge, remove: removeCharge } =
-    useFieldArray({ control, name: "extra_charges" })
   const extraCharges = watch("extra_charges") || []
   const chargesTotal = extraCharges.reduce(
     (sum, charge) => sum + (parseFloat(String(charge?.amount)) || 0), 0)
 
   const totalAmount = subtotal - discountAmount + taxAmount + chargesTotal
+
+  // Paid, as it will stand after Update: the saved figure, less the cleared
+  // payments held for deletion, plus the cleared ones held to add. A cheque
+  // pays nothing until it clears, here as on the server.
+  const clearedOf = (rows) => rows
+    .filter((p) => !p.status || p.status === "C")
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0)
+  const livePaid = Number(amountPaid || 0)
+    - clearedOf(heldPayments.deletes)
+    + clearedOf(heldPayments.adds)
   const selectedProduct = products[watch("newItemProduct")]
-  const paymentStatus = derivePaymentStatus(amountPaid, totalAmount)
   // Read from the form so the badge updates when populateInvoiceFields runs
   // and after a cancel refetches the record. It is shown, never submitted.
   const status = watch("status")
@@ -226,10 +240,6 @@ const UpdateSalesInvoice = () => {
 
   const onSubmit = async (data) => {
 
-    // Named field by field rather than spread from the form. The form now
-    // holds everything about the invoice, including the toggles and the paid
-    // figure, and a spread would post all of it - so listing the payload is
-    // what keeps a new form field from silently becoming a new API field.
     // Before the payload, so a half-filled row is named on screen rather than
     // coming back as a bare failure toast.
     const { charges, error } = normaliseExtraCharges(data.extra_charges)
@@ -238,6 +248,10 @@ const UpdateSalesInvoice = () => {
       return
     }
 
+    // Named field by field rather than spread from the form. The form now
+    // holds everything about the invoice, including the toggles and the paid
+    // figure, and a spread would post all of it - so listing the payload is
+    // what keeps a new form field from silently becoming a new API field.
     const payload = {
       invoice_number: data.invoice_number,
       customer: data.customer,
@@ -272,16 +286,35 @@ const UpdateSalesInvoice = () => {
     }
 
     try {
-      const success = await updateSalesInvoiceAndItems(token, invoice_id, payload)
+      // The dialog's held deletions go first and its new payments last, with
+      // the invoice update between - the order the server's refund rule needs.
+      const { updated, failures } = await applyHeldPayments(
+        token, invoice_id, true, heldPayments,
+        () => updateSalesInvoiceAndItems(token, invoice_id, payload))
 
-      if (success) {
-        toast.success("Sales invoice updated successfully!")
-        navigate(-1);
-      } else {
+      if (!updated) {
         toast.error("Failed to update sales invoice.")
+        // A held deletion may already have gone through; show what is saved.
+        if (heldPayments.deletes.length || heldPayments.refundDeletes.length) {
+          setHeldPayments(EMPTY_PENDING_PAYMENTS)
+          fetchSalesInvoice()
+        }
+        return
       }
+
+      setHeldPayments(EMPTY_PENDING_PAYMENTS)
+      if (failures) {
+        // The invoice is saved; say exactly what was not, and stay here so it
+        // can be done again.
+        toast.warning(`Invoice updated, but ${failures} payment change${failures > 1 ? "s" : ""} could not be saved. Check the payments and try again.`)
+        fetchSalesInvoice()
+        return
+      }
+
+      toast.success("Sales invoice updated successfully!")
+      navigate(-1);
     } catch (error) {
-      console.log("Error creating sales invoice:", error)
+      console.log("Error updating sales invoice:", error)
     }
   }
 
@@ -289,7 +322,10 @@ const UpdateSalesInvoice = () => {
     if (product && quantity > 0) {
       const selectedProduct = products[product]
       const newInvoiceItem = {
-        id: invoiceItems.length + 1,
+        // Negative, so it can never equal a saved line's id (the update
+        // treats a matching id as that line) or repeat after a delete,
+        // which length + 1 did - and deleting one then removed both.
+        id: -(Date.now() + Math.random()),
         product: selectedProduct.product,
         quantity,
         unit_price,
@@ -365,14 +401,12 @@ const UpdateSalesInvoice = () => {
 
   // Returns are one item at a time, so the row being returned is held here
   // rather than derived from a selection.
-  const handleReturnClick = (e, item) => {
-    e.preventDefault();
+  const handleReturnClick = (item) => {
     setReturningItem(item);
     setReturnItemWindowOpen(true);
   }
 
-  const handleDeleteItem = (e, id) => {
-    e.preventDefault();
+  const handleDeleteItem = (id) => {
     setValue("items", invoiceItems.filter(item => item.id !== id));
   }
 
@@ -405,6 +439,7 @@ const UpdateSalesInvoice = () => {
       const salesInvoice = await getSalesInvoiceDetail(token, invoice_id)
       if (salesInvoice) {
         populateInvoiceFields(salesInvoice)
+        setImageCount(salesInvoice.images?.length || 0)
       } else {
         toast.error("Failed to fetch sales invoice")
       }
@@ -506,397 +541,205 @@ const UpdateSalesInvoice = () => {
     setReturningItem(null)
   }, [itemReturned == true])
 
-  {
-    console.log(watch("project"))
-  }
+  const summaryLines = [
+    { label: "Subtotal", value: subtotal },
+    ...(discountAmount ? [{ label: "Discount", value: discountAmount, sign: "−" as const }] : []),
+    ...(taxAmount ? [{
+      label: taxType === "percentage" ? `Tax (${tax}%)` : "Tax",
+      value: taxAmount,
+      sign: "+" as const,
+    }] : []),
+    // One line for all of them; each charge is already listed under Extra
+    // Charges, so repeating them here only made the card longer.
+    ...(chargesTotal ? [{ label: "Extra charges", value: chargesTotal, sign: "+" as const }] : []),
+  ]
+
+  const unitCount = invoiceItems
+    .filter((item) => !item.is_returned)
+    .reduce((sum, item) => sum + Number(item.quantity || 0), 0)
 
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar onCollapseChange={setSidebarCollapsed} />
-      <div className={`${sidebarCollapsed ? "ml-16" : "ml-64"} transition-all duration-300 flex flex-col`}>
-        <Header />
-
-        <main className="flex-1 p-6 space-y-6">
-          {/* Breadcrumb */}
-          <DynamicBreadCrumb />
-
-          <form onSubmit={handleSubmit(run(onSubmit))} className="flex flex-row gap-12">
-            {/* First Column */}
-            <div className="flex flex-col flex-wrap flex-1">
-              <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Invoice Details{detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="invoice_number">Invoice no. (optional)</Label>
-                  <Input id="invoice_number" {...register("invoice_number")} placeholder="Enter invoice number" />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="customer">Customer</Label>
-                  <Controller
-                    name="customer"
-                    control={control}
-                    render={({ field }) => (
-                      <Combobox
-                        id="customer"
-                        options={customerOptions}
-                        value={field.value}
-                        onChange={field.onChange}
-                        loading={customersLoading}
-                        placeholder="Select customer"
-                        emptyText="No customers yet. Add one first."
-                        notFoundText="No customer matches that."
-                      />
-                    )}
-                  />
-                </div>
-              </div>
-
-              <div className="mb-6 space-y-1">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea id="notes" {...register("notes")} placeholder="Add any additional notes here..." rows={4} />
-              </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="date_issued">Date Issued</Label>
-                  <Input id="date_issued" type="date" {...register("date_issued")} />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="date_due">Date Due</Label>
-                  <Input id="date_due" type="date" {...register("date_due")} />
-                </div>
-              </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="discount">Discount</Label>
-                  <div className="relative">
-                    <Input id="discount" {...register("discount")} placeholder="0.0" />
-                    <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {discountType === "percentage" ? <Button type="button" variant="outline" onClick={() => setValue("discount_type", "amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setValue("discount_type", "percentage")}>PKR</Button>}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="tax">Tax</Label>
-                  <div className="relative">
-                    <Input id="tax" {...register("tax")} placeholder="0.0" />
-                    <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {taxType === "percentage" ? <Button type="button" variant="outline" onClick={() => setValue("tax_type", "amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setValue("tax_type", "percentage")}>PKR</Button>}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Read-only, like Payment Status beside it. Draft, Completed
-                  and Overdue are all derived from the invoice, so the only
-                  transition left to make is cancelling it. */}
-              <div className="flex gap-6">
-                <div className="flex-1 space-y-1">
-                  <Label>Status</Label>
-                  <div className="flex h-10 items-center">
-                    <span
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap ${getStatusColor(status)}`}
-                    >
-                      {SalesInvoiceStatusMap[status] ?? status}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label>&nbsp;</Label>
-                  <div className="flex h-10 items-center">
-                    {status === "X" ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={statusPending}
-                        onClick={reinstateInvoice}
-                      >
-                        <Undo2 className="w-4 h-4 mr-2" />
-                        Reinstate Invoice
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        disabled={statusPending}
-                        onClick={cancelInvoice}
-                      >
-                        <Ban className="w-4 h-4 mr-2" />
-                        Cancel Invoice
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </div>
+    <InvoiceScreen
+      title="Sales Invoice"
+      status={<SalesStatusPill status={status} />}
+      loading={detailLoading}
+      onSubmit={handleSubmit(run(onSubmit))}
+      titleActions={
+        <>
+          {/* Shown once the PDF data has loaded; both need it. */}
+          {pdfData && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => sendOnWhatsApp(invoice_id, pdfData)}
+                disabled={isBusy}
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {isSending ? "Preparing…" : "Send on WhatsApp"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => downloadInvoice(invoice_id, pdfData)}
+                disabled={isBusy}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {isDownloading ? "Preparing…" : "Download PDF"}
+              </Button>
+            </>
+          )}
+          <Button type="button" variant="outline" onClick={() => setImagesOpen(true)}>
+            <ImageIcon className="h-4 w-4 mr-2" />
+            Images
+            {imageCount > 0 && (
+              <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
+                {imageCount}
+              </span>
+            )}
+          </Button>
+        </>
+      }
+      fields={
+        <div className="grid grid-cols-4 gap-6">
+          <div className="space-y-1">
+            <Label htmlFor="customer">Customer</Label>
+            <Controller
+              name="customer"
+              control={control}
+              render={({ field }) => (
+                <Combobox
+                  id="customer"
+                  options={customerOptions}
+                  value={field.value}
+                  onChange={field.onChange}
+                  loading={customersLoading}
+                  placeholder="Select customer"
+                  emptyText="No customers yet. Add one first."
+                  notFoundText="No customer matches that."
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="invoice_number">Invoice no.</Label>
+            <Input id="invoice_number" {...register("invoice_number")} placeholder="Enter invoice number" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="date_issued">Date Issued</Label>
+            <Input id="date_issued" type="date" {...register("date_issued")} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="date_due">Date Due</Label>
+            <Input id="date_due" type="date" {...register("date_due")} />
+          </div>
+        </div>
+      }
+      rail={
+        <>
+          <InvoiceSummaryCard lines={summaryLines} total={totalAmount} />
+          {/* Typed adjustments sit with the figures they change, between
+              the summary and the payment. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="discount">Discount</Label>
+              <AmountToggleInput
+                id="discount"
+                type={discountType}
+                onToggle={() => setValue("discount_type", discountType === "percentage" ? "amount" : "percentage")}
+                inputProps={register("discount")}
+              />
             </div>
-
-            {/* Second Column */}
-            <div className="flex flex-col flex-wrap flex-1">
-              <h2 className="text-lg font-semibold mb-6">Add Invoice Item</h2>
-
-              <div className="flex gap-6 mb-6">
-                <div className="w-[60%] space-y-1">
-                  <Label htmlFor="newItemProduct">Select Product</Label>
-                  <Controller
-                    name="newItemProduct"
-                    control={control}
-                    render={({ field }) => (
-                      <Combobox
-                        id="newItemProduct"
-                        options={productOptions}
-                        value={field.value}
-                        onChange={field.onChange}
-                        loading={productsLoading}
-                        placeholder="Select product"
-                        emptyText="No stocked products yet."
-                        notFoundText="No product matches that."
-                      />
-                    )}
-                  />
-                </div>
-                <div className="w-[20%] space-y-1">
-                  <Label htmlFor="newItemQuantity">Quantity</Label>
-                  <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
-                </div>
-                <div className="w-[20%] space-y-1">
-                  <Label htmlFor="newItemPrice">Unit Price</Label>
-                  <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
-                </div>
-                <div className="w-[20%] flex items-end">
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemPrice") || 0.0)))
-                    }
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Item
-                  </Button>
-                </div>
-              </div>
-
-              {/* Invoice Items Header */}
-              <div className="flex justify-between items-center mb-0.5">
-                <h3 className="text-lg font-semibold">Invoice Items</h3>
-              </div>
-
-              {/* Invoice Items */}
-              {/* Measured in-browser: 188px puts this row exactly level with Discount/Tax
-                  in the left column. */}
-              <div className="mb-6">
-                <div className="space-y-[10px] h-[188px] overflow-y-auto">
-                  {/* Sticky rather than lifted out of the scroll box, so the
-                      header can never drift out of step with the rows when a
-                      scrollbar appears. */}
-                  <div className="sticky top-0 z-10 bg-background flex items-center gap-2">
-                    <div className="bg-card rounded-lg border min-h-[35px] py-0.5 flex flex-1 items-center px-4">
-                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] items-center gap-4 w-full text-sm font-medium text-muted-foreground">
-                        <div>id</div>
-                        <div>product</div>
-                        <div>quantity</div>
-                        <div>unit price</div>
-                        <div>total</div>
-                      </div>
-                    </div>
-                    {/* Keeps the header aligned with rows, which carry two
-                        16px action buttons outside the card. */}
-                    <div className="w-4" />
-                    <div className="w-4" />
-                  </div>
-
-                  {invoiceItems && invoiceItems.map((item, idx) => {
-                    const isReturned = item.is_returned;
-                    return (
-                      <div key={item.id} className="flex items-center gap-2">
-                        <div
-                          className={`bg-card rounded-lg min-h-[35px] py-0.5 flex flex-1 items-center px-4 border border-border ${isReturned ? "opacity-50" : ""}`}
-                        >
-                          <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] items-center gap-4 w-full text-sm">
-                            <div>{idx + 1}</div>
-                            <div className="font-medium">
-                              {item.product.base.name} ({item.product.name})
-                            </div>
-                            <div>{item.quantity}</div>
-                            <div>{item.unit_price}</div>
-                            <div className="font-semibold">{item.total}</div>
-                          </div>
-                        </div>
-                        <div className="flex items-center h-7">
-                          <Button
-                            type="button"
-                            variant="unstyled"
-                            className="p-0 hover:text-primary"
-                            title="Return item"
-                            disabled={isReturned}
-                            onClick={(e) => handleReturnClick(e, item)}
-                          >
-                            <Undo2 cursor={'pointer'} />
-                          </Button>
-                        </div>
-                        <div className="flex items-center h-7">
-                          <Button
-                            type="button"
-                            variant="unstyled"
-                            className="p-0 hover:text-red-500"
-                            title="Delete item"
-                            disabled={isReturned}
-                            onClick={(e) => handleDeleteItem(e, item.id)}
-                          >
-                            <Trash2 cursor={'pointer'} />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Delivery, labour, a cutting fee. Added after the tax, and
-                  left out of the revenue and profit figures, since the money
-                  is collected alongside the sale rather than earned on it. */}
-              <div className="space-y-3 mb-6">
-                <div className="flex items-center justify-between">
-                  <Label>Extra Charges</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => appendCharge({ label: "", amount: "" })}
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Add Charge
-                  </Button>
-                </div>
-
-                {chargeFields.map((field, index) => (
-                  <div className="flex gap-3 items-start" key={field.id}>
-                    <Input
-                      className="flex-1"
-                      placeholder="Delivery"
-                      {...register(`extra_charges.${index}.label`)}
-                    />
-                    <Input
-                      className="w-32"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      placeholder="0.00"
-                      {...register(`extra_charges.${index}.amount`)}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      onClick={() => removeCharge(index)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="subtotal">Subtotal</Label>
-                  <Input id="subtotal" value={subtotal.toLocaleString()} readOnly />
-                </div>
-                {chargesTotal > 0 ? (
-                  <div className="flex-1 space-y-1">
-                    <Label htmlFor="chargesTotal">Extra Charges</Label>
-                    <Input id="chargesTotal" value={chargesTotal.toLocaleString()} readOnly />
-                  </div>
-                ) : null}
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="totalAmount">Total</Label>
-                  <Input id="totalAmount" value={totalAmount.toLocaleString()} readOnly className="font-semibold" />
-                </div>
-              </div>
-
-              <div className="flex gap-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="amount_paid">Amount Paid</Label>
-                  {/* Driven by the payments dialog, never typed into, so it is
-                      disabled rather than readOnly - readOnly still takes focus
-                      and reads as an editable field. */}
-                  <Input
-                    id="amount_paid"
-                    className="disabled:opacity-100 disabled:cursor-default"
-                    value={`PKR ${Number(amountPaid).toLocaleString()}`}
-                    disabled
-                  />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label>Payment Status</Label>
-                  <div className="flex h-10 items-center">
-                    <span
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap ${getPaymentStatusColor(paymentStatus)}`}
-                    >
-                      {PaymentStatusMap[paymentStatus]}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 mt-6">
-                <div className="flex justify-end gap-3">
-                  <Controller
-                    name="project"
-                    control={control}
-                    render={({ field }) => (
-                      <Combobox
-                        id="project"
-                        className="w-36"
-                        options={projectOptions}
-                        value={field.value ?? ""}
-                        onChange={(val) => field.onChange(val || null)}
-                        loading={projectsLoading}
-                        placeholder="Add to project"
-                        emptyText="No projects yet."
-                        notFoundText="No project matches that."
-                        clearable
-                      />
-                    )}
-                  />
-                  <Button type="button" variant="outline" className="w-36" onClick={() => setPaymentsOpen(true)}>Add Payment</Button>
-                </div>
-                <div className="flex justify-end gap-3">
-                  {
-                    pdfData &&
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-44"
-                        onClick={() => sendOnWhatsApp(invoice_id, pdfData)}
-                        disabled={isBusy}
-                      >
-                        <Send className="w-4 h-4 mr-2" />
-                        {isSending ? "Preparing…" : "Send on WhatsApp"}
-                      </Button>
-                      <Button
-                        type="button"
-                        className="w-36"
-                        onClick={() => downloadInvoice(invoice_id, pdfData)}
-                        disabled={isBusy}
-                      >
-                        {isDownloading ? "Preparing…" : "Download PDF"}
-                      </Button>
-                    </>
-                  }
-                  <SubmitButton type="submit" className="w-36" pending={pending} pendingLabel="Updating…">Update Invoice</SubmitButton>
-                </div>
-              </div>
+            <div className="space-y-1">
+              <Label htmlFor="tax">Tax</Label>
+              <AmountToggleInput
+                id="tax"
+                type={taxType}
+                onToggle={() => setValue("tax_type", taxType === "percentage" ? "amount" : "percentage")}
+                inputProps={register("tax")}
+              />
             </div>
-          </form>
-
-          {/* Outside the form on purpose: each photo is uploaded on its own,
-              so an Enter in the caption box must not submit the invoice. */}
-          <InvoiceImages invoiceId={invoice_id} isSalesInvoice={true} />
-
-          <Payments invoiceId={invoice_id} invoiceTotal={totalAmount} isSalesPayment={true} open={paymentsOpen} setOpen={setPaymentsOpen} onPaymentsChanged={fetchSalesInvoice} />
-
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              {...register("notes")}
+              placeholder="Add any additional notes here..."
+              rows={2}
+              className="[@media(max-height:820px)]:min-h-[60px]"
+            />
+          </div>
+          <PaymentButton total={totalAmount} paid={livePaid} onClick={() => setPaymentsOpen(true)} />
+          <Controller
+            name="project"
+            control={control}
+            render={({ field }) => (
+              <Combobox
+                id="project"
+                className="w-full"
+                options={projectOptions}
+                value={field.value ?? ""}
+                onChange={(val) => field.onChange(val || null)}
+                loading={projectsLoading}
+                placeholder="Add to project"
+                emptyText="No projects yet."
+                notFoundText="No project matches that."
+                clearable
+              />
+            )}
+          />
+          <SubmitButton type="submit" className="w-full" pending={pending} pendingLabel="Updating…">Update Invoice</SubmitButton>
+          {/* Cancelling is the one status a person sets; everything else is
+              derived from the invoice. It returns the goods to stock. */}
+          {status === "X" ? (
+            <Button type="button" variant="outline" className="w-full" disabled={statusPending} onClick={reinstateInvoice}>
+              <Undo2 className="w-4 h-4 mr-2" />
+              Reinstate Invoice
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
+              disabled={statusPending || detailLoading}
+              onClick={cancelInvoice}
+            >
+              <Ban className="w-4 h-4 mr-2" />
+              Cancel Invoice
+            </Button>
+          )}
+        </>
+      }
+      side={
+        <Controller
+          name="extra_charges"
+          control={control}
+          render={({ field }) => (
+            <ExtraChargesEditor charges={field.value} onChange={field.onChange} />
+          )}
+        />
+      }
+      dialogs={
+        <>
+          <Payments
+            invoiceId={invoice_id}
+            invoiceTotal={totalAmount}
+            isSalesPayment={true}
+            open={paymentsOpen}
+            setOpen={setPaymentsOpen}
+            pending={heldPayments}
+            onPendingChange={setHeldPayments}
+            // A sale with no lines is a draft, and a draft bills nothing.
+            billsTotal={invoiceItems.length > 0}
+          />
+          <InvoiceImages
+            invoiceId={invoice_id}
+            isSalesInvoice={true}
+            open={imagesOpen}
+            setOpen={setImagesOpen}
+            onCountChange={setImageCount}
+          />
           {returningItem && <ReturnItem
             invoiceId={invoice_id}
             invoiceItem={returningItem}
@@ -907,12 +750,86 @@ const UpdateSalesInvoice = () => {
             }}
             setItemReturned={setItemReturned}
           />}
-
           <WalkInCustomer {...walkInDialogProps} />
-
-        </main>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <InvoiceSection
+        title="Invoice Items"
+        first
+        pinned={
+          <>
+            <div className="flex gap-4 items-end">
+              <div className="flex-1 min-w-0 space-y-1">
+                <Label htmlFor="newItemProduct">Product</Label>
+                <Controller
+                  name="newItemProduct"
+                  control={control}
+                  render={({ field }) => (
+                    <Combobox
+                      id="newItemProduct"
+                      options={productOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                      loading={productsLoading}
+                      placeholder="Select product"
+                      emptyText="No stocked products yet."
+                      notFoundText="No product matches that."
+                    />
+                  )}
+                />
+              </div>
+              <div className="w-28 space-y-1">
+                <Label htmlFor="newItemQuantity">Quantity</Label>
+                <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
+              </div>
+              <div className="w-32 space-y-1">
+                <Label htmlFor="newItemPrice">Unit Price</Label>
+                <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
+              </div>
+              <Button
+                type="button"
+                onClick={() =>
+                  addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemPrice") || 0.0)))
+                }
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
+              </Button>
+            </div>
+            <InvoiceItemsTable columns={["Product", "Quantity", "Unit Price", "Total"]} actionCount={2} rows={[]} headerOnly />
+          </>
+        }
+        aside={invoiceItems.length > 0 ? `${invoiceItems.length} items · ${unitCount} units` : undefined}
+      >
+        <InvoiceItemsTable
+          rowsOnly
+          columns={["Product", "Quantity", "Unit Price", "Total"]}
+          actionCount={2}
+          emptyText="No items on this invoice."
+          rows={invoiceItems.map((item, idx) => ({
+            key: `${item.id}-${idx}`,
+            dimmed: item.is_returned,
+            cells: [
+              `${item.product.base.name} (${item.product.name})`,
+              item.quantity,
+              Number(item.unit_price).toLocaleString(),
+              Number(item.total).toLocaleString(),
+            ],
+            actions: (
+              <>
+                <RowAction label="Return item" tone="primary" disabled={item.is_returned} onClick={() => handleReturnClick(item)}>
+                  <Undo2 className="h-5 w-5" />
+                </RowAction>
+                <RowAction label="Delete item" disabled={item.is_returned} onClick={() => handleDeleteItem(item.id)}>
+                  <Trash2 className="h-5 w-5" />
+                </RowAction>
+              </>
+            ),
+          }))}
+        />
+      </InvoiceSection>
+    </InvoiceScreen>
   );
 }
 

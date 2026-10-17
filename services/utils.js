@@ -259,7 +259,7 @@ export function transformExpense(data) {
   return {
     id: data.id,
     name: data.name,
-    category: ExpenseCategoryMap[data.category] || "-",
+    category: ExpenseCategoryLabels[data.category] || "-",
     desc: data.desc,
     amount: data.amount,
     created_at: formatDate(data.created_at)
@@ -572,12 +572,21 @@ export const SourceKindMap = {
 // table placeholder and the route guard all say the same thing.
 export const ACCESS_DENIED_MESSAGE = "Access not granted. Please contact Admin.";
 
+// The categories a person can pick for an expense.
 export const ExpenseCategoryMap = {
   kiraya: "Rent",
   bijli: "Electricity",
   tankhwa: "Salaries",
   transport: "Transport",
   mutafarriq: "Miscellaneous",
+};
+
+// Every category an expense can carry, for showing one. Adds the
+// invoice-extra-charge category, which the system records from a sales
+// invoice's charges and nobody picks by hand - the API refuses it.
+export const ExpenseCategoryLabels = {
+  ...ExpenseCategoryMap,
+  invoice_extra_charge: "Invoice Extra Charge",
 };
 
 export const getTransactionStatusColor = (status) => {
