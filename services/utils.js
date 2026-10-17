@@ -1,21 +1,28 @@
 import { BASE_URL } from './api'
 
+// Derived on the backend from the invoice itself: no lines -> Draft, lines
+// -> Completed, a balance past the due date -> Overdue. Cancelled is the only
+// value a person sets. "Sent" and "Partially Completed" no longer exist - the
+// latter was never a document state, just a record of how much stock had left.
 export const SalesInvoiceStatusMap = {
   D: "Draft",
-  S: "Sent",
   O: "Overdue",
   X: "Cancelled",
   C: "Completed",
-  PC: "Partially Completed",
 };
 
+// Exactly PurchaseInvoice.PURCHASE_INVOICE_STATUS_CHOICES, in that order. This
+// used to offer "S" (Sent) and "X" (Cancelled), neither of which the backend
+// accepts - it rejected both - and it has no Sent at all.
+//
+// Note that "C" is CANCELLED here but COMPLETED on a sales invoice: colour a
+// purchase status with getPurchaseStatusColor, never getStatusColor.
 export const PurchaseInvoiceStatusMap = {
   D: "Draft",
-  S: "Sent",
-  O: "Overdue",
-  X: "Cancelled",
   R: "Received",
   PR: "Partially Received",
+  C: "Cancelled",
+  O: "Overdue",
 };
 
 export const PaymentStatusMap = {
@@ -62,15 +69,30 @@ const ConfigKeys = [
   "targets",
 ];
 
-export const getStatusColor = (status) => {
-  console.log(status);
+// The purchase-side twin of getStatusColor below. Separate because the two
+// models disagree on "C": shared, a cancelled purchase was painted green.
+export const getPurchaseStatusColor = (status) => {
+  switch (status) {
+    case "R":
+      return "bg-green-100 text-green-700";
+    case "D":
+    case "PR":
+      return "bg-yellow-100 text-yellow-700";
+    case "C":
+    case "O":
+      return "bg-red-100 text-red-700";
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
+};
 
+export const getStatusColor = (status) => {
   switch (status) {
     case "C":
     case "R":
       return "bg-green-100 text-green-700";
     case "D":
-    case "PC":
+    // Still reached: PQStatusMap uses S for a sent quotation.
     case "S":
       return "bg-yellow-100 text-yellow-700";
     case "X":
@@ -79,6 +101,48 @@ export const getStatusColor = (status) => {
     default:
       return "bg-gray-100 text-gray-700";
   }
+};
+
+// Extra charges in the shape the API accepts: labels trimmed, amounts turned
+// into numbers, and the empty rows a form inevitably leaves behind dropped.
+//
+// <Input> yields strings, so an untouched amount is "" and Number("") is 0
+// while float("") on the server raises - the rows have to be cleaned here
+// either way.
+//
+// Returns { error } instead of a list for a row that is half filled. An amount
+// with no label is refused by the server, and naming the row is a good deal
+// better than the generic failure toast the caller would otherwise show.
+export const normaliseExtraCharges = (rows) => {
+  const charges = [];
+
+  for (let index = 0; index < (rows || []).length; index += 1) {
+    const row = rows[index];
+    const label = String(row?.label ?? "").trim();
+    const amount = parseFloat(row?.amount);
+    const hasAmount = Number.isFinite(amount) && amount !== 0;
+
+    // Wholly untouched: not an error, just a row nobody filled in.
+    if (!label && !hasAmount) continue;
+
+    if (!label) {
+      return { error: `Extra charge ${index + 1} needs a label.` };
+    }
+    if (row?.amount !== "" && !Number.isFinite(amount)) {
+      return { error: `The amount on "${label}" is not a number.` };
+    }
+    if (amount < 0) {
+      return { error: `The amount on "${label}" cannot be negative.` };
+    }
+
+    // A label with no amount is dropped rather than refused, matching the
+    // server: it is a row someone started and abandoned.
+    if (!hasAmount) continue;
+
+    charges.push({ label, amount: Math.round(amount * 100) / 100 });
+  }
+
+  return { charges };
 };
 
 // Mirrors the payment_status property on the invoice models.
@@ -195,7 +259,7 @@ export function transformExpense(data) {
   return {
     id: data.id,
     name: data.name,
-    category: ExpenseCategoryMap[data.category] || "-",
+    category: ExpenseCategoryLabels[data.category] || "-",
     desc: data.desc,
     amount: data.amount,
     created_at: formatDate(data.created_at)
@@ -508,12 +572,21 @@ export const SourceKindMap = {
 // table placeholder and the route guard all say the same thing.
 export const ACCESS_DENIED_MESSAGE = "Access not granted. Please contact Admin.";
 
+// The categories a person can pick for an expense.
 export const ExpenseCategoryMap = {
   kiraya: "Rent",
   bijli: "Electricity",
   tankhwa: "Salaries",
   transport: "Transport",
   mutafarriq: "Miscellaneous",
+};
+
+// Every category an expense can carry, for showing one. Adds the
+// invoice-extra-charge category, which the system records from a sales
+// invoice's charges and nobody picks by hand - the API refuses it.
+export const ExpenseCategoryLabels = {
+  ...ExpenseCategoryMap,
+  invoice_extra_charge: "Invoice Extra Charge",
 };
 
 export const getTransactionStatusColor = (status) => {

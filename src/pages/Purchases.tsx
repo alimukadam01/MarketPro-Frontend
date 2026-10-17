@@ -7,7 +7,7 @@ import { MetricCard } from "@/components/dashboard/MetricCard";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import CustomFilter from "@/components/layout/CustomFilter";
 import {
-  getStatusColor,
+  getPurchaseStatusColor,
   getPaymentStatusColor,
   PurchaseInvoiceStatusMap,
   PaymentStatusMap,
@@ -78,11 +78,11 @@ const cols = [
     label: "Status",
     render: (value) => (
       <span
-        className={`px-2 py-0.25 rounded-full text-xs font-medium whitespace-nowrap ${getStatusColor(
+        className={`px-2 py-0.25 rounded-full text-xs font-medium whitespace-nowrap ${getPurchaseStatusColor(
           value
         )}`}
       >
-        {PurchaseInvoiceStatusMap[value]}
+        {PurchaseInvoiceStatusMap[value] ?? value}
       </span>
     ),
   },

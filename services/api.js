@@ -826,8 +826,11 @@ export const postSalesInvoiceAndItems = async (token, invoiceData) => {
         },
       },
     );
+    // The created invoice rather than `true`: still truthy for the callers
+    // that only test it, and it carries the id a create screen needs to attach
+    // the images and payments held on screen until now.
     if (res.status === 201) {
-      return true;
+      return res.data;
     }
     console.log(res.data.detail);
     return false;
@@ -866,6 +869,58 @@ export const updateSalesInvoiceAndItems = async (
     const res = await apiClient.post(
       `/sales-invoices/${invoiceId}/update-with-items/`,
       invoiceData,
+      {
+        headers: {
+          Authorization: token,
+        },
+      },
+    );
+
+    if (res.status === 200) {
+      return true;
+    }
+
+    console.log(res.data.detail);
+    return false;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+// Cancelling is the one status transition a person makes - every other value
+// is derived from the invoice's lines and what is still owed - so it is an
+// action rather than a field on the form. The backend returns the goods to
+// stock on cancel and takes them out again on uncancel.
+export const cancelSalesInvoice = async (token, invoiceId) => {
+  try {
+    const res = await apiClient.post(
+      `/sales-invoices/${invoiceId}/cancel/`,
+      {},
+      {
+        headers: {
+          Authorization: token,
+        },
+      },
+    );
+
+    if (res.status === 200) {
+      return true;
+    }
+
+    console.log(res.data.detail);
+    return false;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+export const uncancelSalesInvoice = async (token, invoiceId) => {
+  try {
+    const res = await apiClient.post(
+      `/sales-invoices/${invoiceId}/uncancel/`,
+      {},
       {
         headers: {
           Authorization: token,
@@ -1033,8 +1088,11 @@ export const postPurchaseInvoiceAndItems = async (token, invoiceData) => {
         },
       },
     );
+    // The created invoice rather than `true`: still truthy for the callers
+    // that only test it, and it carries the id a create screen needs to attach
+    // the images and payments held on screen until now.
     if (res.status === 201) {
-      return true;
+      return res.data;
     }
     console.log(res.data.detail);
     return false;
@@ -2142,10 +2200,143 @@ export const getPaymentsList = async (token, invoiceId, is_sales_payment) => {
   }
 }
 
+// The request body for one payment. A plain object, or FormData when a photo
+// of the slip or cheque comes with it - a file only travels as multipart. Used
+// by the payments dialog and by attachStagedToInvoice, so a payment recorded
+// straight away and one held until its invoice exists are sent identically.
+export const paymentRequestBody = (fields, imageFile) => {
+  if (!imageFile) return fields;
+  const body = new FormData();
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      body.append(key, value);
+    }
+  });
+  body.append("image", imageFile);
+  return body;
+};
+
+// Sends what a create screen held on screen while the invoice did not exist:
+// its payments, then its images, all against the new invoice's id.
+//
+// One at a time, not in parallel: the server checks each payment against what
+// is still owed, and that figure depends on the payments before it.
+//
+// Never throws. The invoice is already created by the time this runs, so a
+// failure here is reported as a count, and the caller says "created, but".
+export const attachStagedToInvoice = async (
+  token,
+  invoiceId,
+  is_sales_invoice,
+  { payments = [], images = [] },
+) => {
+  let paymentFailures = 0;
+  let imageFailures = 0;
+
+  for (const payment of payments) {
+    try {
+      const ok = await createPayment(
+        token,
+        invoiceId,
+        is_sales_invoice,
+        paymentRequestBody(payment.fields, payment.imageFile),
+      );
+      if (!ok) paymentFailures += 1;
+    } catch (error) {
+      console.log("Error attaching a payment:", error);
+      paymentFailures += 1;
+    }
+  }
+
+  for (const image of images) {
+    try {
+      const formData = new FormData();
+      formData.append("image", image.file);
+      if (image.caption) formData.append("caption", image.caption);
+      const ok = await uploadInvoiceImage(token, invoiceId, is_sales_invoice, formData);
+      if (!ok) imageFailures += 1;
+    } catch (error) {
+      console.log("Error attaching an image:", error);
+      imageFailures += 1;
+    }
+  }
+
+  return { paymentFailures, imageFailures };
+};
+
+// An invoice carries several photos - the signed delivery note, the goods as
+// they arrived, the supplier's own bill. Nested under the invoice, so which
+// one an image belongs to never travels in the payload.
+export const getInvoiceImages = async (token, invoiceId, is_sales_invoice) => {
+  try {
+    const res = await apiClient.get(
+      `${is_sales_invoice ? "sales" : "purchase"}-invoices/${invoiceId}/images/`,
+      { headers: { Authorization: token } },
+    );
+
+    if (res.status !== 200) {
+      console.log("Error fetching invoice images");
+      return null;
+    }
+
+    return res.data;
+  } catch (error) {
+    console.log("Error fetching invoice images:", error);
+    return null;
+  }
+};
+
+export const uploadInvoiceImage = async (token, invoiceId, is_sales_invoice, formData) => {
+  try {
+    const res = await apiClient.post(
+      `${is_sales_invoice ? "sales" : "purchase"}-invoices/${invoiceId}/images/`,
+      formData,
+      {
+        headers: {
+          Authorization: token,
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
+
+    if (res.status === 201) return true;
+
+    console.log("Error uploading invoice image.");
+    return false;
+  } catch (error) {
+    console.log("Error uploading invoice image:", error);
+    return false;
+  }
+};
+
+export const deleteInvoiceImage = async (token, invoiceId, is_sales_invoice, imageId) => {
+  try {
+    const res = await apiClient.delete(
+      `${is_sales_invoice ? "sales" : "purchase"}-invoices/${invoiceId}/images/${imageId}/`,
+      { headers: { Authorization: token } },
+    );
+
+    if (res.status === 204) return true;
+
+    console.log("Error deleting invoice image.");
+    return false;
+  } catch (error) {
+    console.log("Error deleting invoice image:", error);
+    return false;
+  }
+};
+
+// `data` may be a plain object or a FormData. A payment can carry a photo of
+// the slip or the cheque, and a file only reaches the server as multipart -
+// but the dialog sends a plain object when there is no photo, which keeps the
+// numbers typed rather than stringified.
 export const createPayment = async (token, invoiceId, is_sales_payment, data) => {
   try {
+    const isMultipart = typeof FormData !== "undefined" && data instanceof FormData;
     const res = await apiClient.post(`${is_sales_payment? 'sales': 'purchase'}-invoices/${invoiceId}/payments/`, data, {
-      headers: { Authorization: token },
+      headers: isMultipart
+        ? { Authorization: token, "Content-Type": "multipart/form-data" }
+        : { Authorization: token },
     });
     if (res.status === 201) return true;
     console.log("Error creating payment.");
@@ -2182,6 +2373,66 @@ export const deletePayment = async (token, invoiceId, is_sales_payment, paymentI
     console.log("Error deleting payment:", error);
     return false;
   }
+};
+
+// Deletes one of an invoice's automatic refunds (recorded when an update left
+// it paid for more than it bills). The excess then stays with the party, as
+// credit on their khaata.
+export const deleteInvoiceRefund = async (token, invoiceId, is_sales_invoice, transactionId) => {
+  try {
+    const res = await apiClient.post(
+      `${is_sales_invoice ? "sales" : "purchase"}-invoices/${invoiceId}/delete-refund/`,
+      { transaction_id: transactionId },
+      { headers: { Authorization: token } },
+    );
+    if (res.status === 200) return true;
+    console.log("Error deleting refund.");
+    return false;
+  } catch (error) {
+    console.log("Error deleting refund:", error);
+    return false;
+  }
+};
+
+// Runs what an update screen held until Update Invoice, around the invoice's
+// own update: deletions BEFORE it and new payments AFTER it. The order is the
+// server's refund rule - a payment deleted first is not counted as paid when
+// the update works out whether the invoice is now overpaid, and a new payment
+// is checked against the updated total.
+//
+// `update` is the invoice update call; this returns { updated, failures },
+// where failures counts the held actions that did not go through. Never
+// throws.
+export const applyHeldPayments = async (
+  token,
+  invoiceId,
+  is_sales_invoice,
+  held,
+  update,
+) => {
+  let failures = 0;
+
+  for (const payment of held.deletes || []) {
+    if (!(await deletePayment(token, invoiceId, is_sales_invoice, payment.id))) failures += 1;
+  }
+  for (const refundId of held.refundDeletes || []) {
+    if (!(await deleteInvoiceRefund(token, invoiceId, is_sales_invoice, refundId))) failures += 1;
+  }
+
+  let updated = false;
+  try {
+    updated = await update();
+  } catch (error) {
+    console.log("Error updating invoice:", error);
+  }
+  // Without the update, a new payment would be checked against the old
+  // total, so none is sent.
+  if (!updated) return { updated: false, failures };
+
+  const { paymentFailures } = await attachStagedToInvoice(
+    token, invoiceId, is_sales_invoice, { payments: held.adds || [], images: [] });
+
+  return { updated: true, failures: failures + paymentFailures };
 };
 
 // ---------------------------------------------------------------------------

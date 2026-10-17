@@ -228,7 +228,12 @@ const Invoice = ({ token, invoice_id, invoice: invoiceProp = null }) => {
 
   // Mirrors SalesInvoice.adjust_totals: both are worked out on the raw
   // subtotal — tax is NOT charged on the discounted figure — and
-  // total = subtotal + tax - discount. Kept in step so the lines add up.
+  // total = subtotal + tax - discount + extra charges. Kept in step so the
+  // lines add up.
+  //
+  // The extra charges sit outside sub_total on purpose, which is what lets a
+  // percentage tax be recomputed here from sub_total without taxing a
+  // delivery fee.
   const modifierAmount = (entry) => {
     if (!entry || !entry.value) return 0
     return entry.type === "percentage"
@@ -241,6 +246,13 @@ const Invoice = ({ token, invoice_id, invoice: invoiceProp = null }) => {
 
   const discountAmount = modifierAmount(invoice.discount)
   const taxAmount = modifierAmount(invoice.tax)
+
+  // Printed one per line rather than as a single "Charges" figure: a customer
+  // asked to pay a delivery fee should see that is what it is. The rows are
+  // already cleaned and totalled server-side.
+  const extraCharges = (invoice.extra_charges || []).filter(
+    (charge) => charge && Number(charge.amount)
+  )
 
   return (
     <Document>
@@ -339,6 +351,13 @@ const Invoice = ({ token, invoice_id, invoice: invoiceProp = null }) => {
             <Text style={styles.totalLabel}>Subtotal</Text>
             <Text>{money(invoice.sub_total)}</Text>
           </View>
+
+          {extraCharges.map((charge, index) => (
+            <View style={styles.totalRow} key={`${charge.label}-${index}`}>
+              <Text style={styles.totalLabel}>{charge.label}</Text>
+              <Text>{money(charge.amount)}</Text>
+            </View>
+          ))}
 
           <View style={styles.netRow}>
             <Text style={styles.netLabel}>NET AMOUNT</Text>
