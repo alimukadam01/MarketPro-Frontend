@@ -1,44 +1,51 @@
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner"
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { ImageIcon, Plus, Trash2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
-import CustomFilter from "../components/layout/CustomFilter"
 import {
   addOrMergeInvoiceItem,
-  PaymentStatusMap,
-  SalesInvoiceStatusMap,
   createIdMap,
   createNestedIdMap,
-  derivePaymentStatus,
   generateInvoiceNumber,
-  getPaymentStatusColor,
+  normaliseExtraCharges,
   todayForInput,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
+  attachStagedToInvoice,
   getActiveBusiness,
   getAvailableProductsList,
   getCustomersList,
   postSalesInvoiceAndItems,
   projectsAPIPackage
 } from "../../services/api"
-import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
 import { Combobox } from "@/components/ui/combobox";
+import Payments from "@/components/ui/payments";
+import InvoiceImages from "@/components/ui/invoice-images";
+import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
+import { InvoiceItemsTable, RowAction } from "@/components/invoice/InvoiceItemsTable";
+import { ExtraChargesEditor, type ExtraCharge } from "@/components/invoice/ExtraChargesEditor";
+import {
+  AmountToggleInput,
+  InvoiceSummaryCard,
+  PaymentButton,
+  SalesStatusPill,
+} from "@/components/invoice/InvoiceRail";
+
+// What the payments dialog holds for an invoice that does not exist yet.
+type StagedPayment = { id: string; amount: number; status: string; fields: object; imageFile?: File | null }
+type StagedImage = { id: string; file: File; caption: string; preview: string }
 
 const CreateSalesInvoice = () => {
   const { pending, run } = usePending();
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   const [invoiceItems, setInvoiceItems] = useState([])
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
@@ -48,19 +55,27 @@ const CreateSalesInvoice = () => {
   const [productsLoading, setProductsLoading] = useState(true)
   const [customersLoading, setCustomersLoading] = useState(true)
   const [projectsLoading, setProjectsLoading] = useState(true)
+  // Payments and images are added before the invoice exists, so they are held
+  // here and sent once it has been created.
+  const [stagedPayments, setStagedPayments] = useState<StagedPayment[]>([])
+  const [stagedImages, setStagedImages] = useState<StagedImage[]>([])
+  const [paymentsOpen, setPaymentsOpen] = useState(false)
+  const [imagesOpen, setImagesOpen] = useState(false)
   const { token } = useAuth()
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
   const location = useLocation()
   const project_id = location.state?.project_id || null
 
-  // react-hook-form setup
   // Cached at login. Sessions that predate that caching fall back to a fetch
   // below, so nobody has to sign in again to get an invoice number.
   const [businessName, setBusinessName] = useState(
     () => localStorage.getItem("mp-business-name") || ""
   )
 
+  // amount_paid is gone from here: a payment is added through the payments
+  // dialog, with its account, method and date, rather than posted as a bare
+  // figure that became a receipt with none of those.
   const { register, handleSubmit, control, watch, reset, setValue, getValues } = useForm({
     defaultValues: {
       invoice_number: businessName
@@ -72,8 +87,7 @@ const CreateSalesInvoice = () => {
       date_due: todayForInput(),
       discount: "0.0",
       tax: "0.0",
-      amount_paid: "0.0",
-      status: "C",
+      extra_charges: [] as ExtraCharge[],
       project: project_id ? String(project_id) : null,
       newItemProduct: "",
       newItemQuantity: 0,
@@ -109,17 +123,38 @@ const CreateSalesInvoice = () => {
     reset({ ...getValues(), invoice_number: generateInvoiceNumber(businessName) })
   }, [businessName, getValues, reset])
 
-  const discount = parseFloat(watch("discount") || 0)
-  const tax = parseFloat(watch("tax") || 0)
+  const discount = parseFloat(String(watch("discount") || 0))
+  const tax = parseFloat(String(watch("tax") || 0))
 
   const subtotal = invoiceItems.reduce((sum, item) => sum + item.total, 0)
   const [discountType, setDiscountType] = useState("percentage")
   const [taxType, setTaxType] = useState("percentage")
   const discountAmount = discountType === "percentage" ? (subtotal * discount) / 100 : discount
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
-  const totalAmount = subtotal - discountAmount + taxAmount
+
+  // Charges are added after the tax and are not part of the subtotal, matching
+  // SalesInvoice.adjust_totals - so a percentage tax is never charged on a
+  // delivery fee.
+  const extraCharges: ExtraCharge[] = watch("extra_charges") || []
+  const chargesTotal = extraCharges.reduce(
+    (sum, charge) => sum + (parseFloat(String(charge?.amount)) || 0), 0)
+
+  const totalAmount = subtotal - discountAmount + taxAmount + chargesTotal
   const selectedProduct = products[watch("newItemProduct")]
-  const paymentStatus = derivePaymentStatus(watch("amount_paid"), totalAmount)
+
+  // Only cleared money pays the invoice; a staged cheque stays pending.
+  const stagedPaid = stagedPayments
+    .filter((payment) => payment.status === "C")
+    .reduce((sum, payment) => sum + Number(payment.amount), 0)
+
+  // A preview of what the server will derive once it is saved: no lines is a
+  // draft, lines are completed, and a balance past the due date is overdue.
+  const dateDue = watch("date_due")
+  const previewStatus = invoiceItems.length === 0
+    ? "D"
+    : dateDue && dateDue < todayForInput() && totalAmount - stagedPaid > 0.005
+      ? "O"
+      : "C"
 
   const onSubmit = async (data) => {
 
@@ -141,22 +176,49 @@ const CreateSalesInvoice = () => {
       unit_price: item.unit_price,
     }))
 
+    // Cleaned here rather than posted raw, so a malformed row is named on
+    // screen instead of coming back as a bare failure.
+    const { charges, error } = normaliseExtraCharges(data.extra_charges)
+    if (error) {
+      toast.error(error)
+      return
+    }
+
     try {
-      const success = await postSalesInvoiceAndItems(token, {
+      const created = await postSalesInvoiceAndItems(token, {
         ...rest,
         tax: tax,
         discount: discount,
+        extra_charges: charges,
         items: items
       })
 
-      if (success) {
-        toast.success("Sales invoice created successfully!")
-        navigate(-1);
-      } else {
+      if (!created) {
         toast.error("Failed to create sales invoice.")
+        return
       }
+
+      // The invoice exists from here on. A payment or image that fails now is
+      // reported as exactly that, and the new invoice is opened so it can be
+      // added again - not reported as a failed create.
+      const { paymentFailures, imageFailures } = await attachStagedToInvoice(
+        token, created.id, true, { payments: stagedPayments, images: stagedImages })
+
+      if (paymentFailures || imageFailures) {
+        const missed = [
+          paymentFailures && `${paymentFailures} payment${paymentFailures > 1 ? "s" : ""}`,
+          imageFailures && `${imageFailures} image${imageFailures > 1 ? "s" : ""}`,
+        ].filter(Boolean).join(" and ")
+        toast.warning(`Invoice created, but ${missed} could not be saved. Add ${paymentFailures + imageFailures > 1 ? "them" : "it"} again here.`)
+        navigate("/sales/update-invoice", { state: { invoice_id: created.id }, replace: true })
+        return
+      }
+
+      toast.success("Sales invoice created successfully!")
+      navigate(-1);
     } catch (error) {
       console.log("Error creating sales invoice:", error)
+      toast.error("Failed to create sales invoice.")
     }
   }
 
@@ -165,7 +227,10 @@ const CreateSalesInvoice = () => {
     if (product && quantity > 0) {
       const selectedProduct = products[product]
       const newInvoiceItem = {
-        id: invoiceItems.length + 1,
+        // Negative, so it can never equal a saved line's id (the update
+        // treats a matching id as that line) or repeat after a delete,
+        // which length + 1 did - and deleting one then removed both.
+        id: -(Date.now() + Math.random()),
         product: selectedProduct.product,
         quantity,
         unit_price,
@@ -182,8 +247,7 @@ const CreateSalesInvoice = () => {
     }
   }
 
-  const handleDeleteItem = (e, id) => {
-    e.preventDefault();
+  const handleDeleteItem = (id) => {
     setInvoiceItems(invoiceItems.filter(item => item.id !== id));
   }
 
@@ -278,272 +342,234 @@ const CreateSalesInvoice = () => {
     }
   }, [selectedProduct])
 
+  const summaryLines = [
+    { label: "Subtotal", value: subtotal },
+    ...(discountAmount ? [{ label: "Discount", value: discountAmount, sign: "−" as const }] : []),
+    ...(taxAmount ? [{
+      label: taxType === "percentage" ? `Tax (${tax}%)` : "Tax",
+      value: taxAmount,
+      sign: "+" as const,
+    }] : []),
+    // One line for all of them; each charge is already listed under Extra
+    // Charges, so repeating them here only made the card longer.
+    ...(chargesTotal ? [{ label: "Extra charges", value: chargesTotal, sign: "+" as const }] : []),
+  ]
+
+  const unitCount = invoiceItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar onCollapseChange={setSidebarCollapsed} />
-      <div className={`${sidebarCollapsed ? "ml-16" : "ml-64"} transition-all duration-300 flex flex-col`}>
-        <Header />
-
-        <main className="flex-1 p-6 space-y-6">
-          {/* Breadcrumb */}
-          <DynamicBreadCrumb />
-
-          <form onSubmit={handleSubmit(run(onSubmit))} className="flex flex-row gap-12">
-            {/* First Column */}
-            <div className="flex flex-col flex-wrap flex-1">
-              <h2 className="text-lg font-semibold mb-6">Invoice Details</h2>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="invoice_number">Invoice no.</Label>
-                  {/* The explanation rides on `title` rather than a line of its
-                      own: the two form columns are independent stacks with no
-                      cross-column alignment, so any extra height on this side
-                      knocks Status out of line with Amount Paid opposite. */}
-                  <Input
-                    id="invoice_number"
-                    title="Generated automatically — edit it if you number invoices differently."
-                    {...register("invoice_number")}
-                    placeholder="Enter invoice number"
-                  />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="customer">Customer</Label>
-                  <Controller
-                    name="customer"
-                    control={control}
-                    render={({ field }) => (
-                      <Combobox
-                        id="customer"
-                        options={customerOptions}
-                        value={field.value}
-                        onChange={field.onChange}
-                        loading={customersLoading}
-                        placeholder="Select customer"
-                        emptyText="No customers yet. Add one first."
-                        notFoundText="No customer matches that."
-                      />
-                    )}
-                  />
-                </div>
-              </div>
-
-              <div className="mb-6 space-y-1">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea id="notes" {...register("notes")} placeholder="Add any additional notes here..." rows={4} />
-              </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="date_issued">Date Issued</Label>
-                  <Input id="date_issued" type="date" {...register("date_issued")} />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="date_due">Date Due</Label>
-                  <Input id="date_due" type="date" {...register("date_due")} />
-                </div>
-              </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="discount">Discount</Label>
-                  <div className="relative">
-                    <Input id="discount" {...register("discount")} placeholder="0.0" />
-                    <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {discountType === "percentage" ? <Button type="button" variant="outline" onClick={() => setDiscountType("amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setDiscountType("percentage")}>PKR</Button>}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="tax">Tax</Label>
-                  <div className="relative">
-                    <Input id="tax" {...register("tax")} placeholder="0.0" />
-                    <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {taxType === "percentage" ? <Button type="button" variant="outline" onClick={() => setTaxType("amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setTaxType("percentage")}>PKR</Button>}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="status">Status</Label>
-                  <Controller
-                    name="status"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(SalesInvoiceStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-              </div>
+    <InvoiceScreen
+      title="New Sales Invoice"
+      status={<SalesStatusPill status={previewStatus} />}
+      onSubmit={handleSubmit(run(onSubmit))}
+      titleActions={
+        <Button type="button" variant="outline" onClick={() => setImagesOpen(true)}>
+          <ImageIcon className="h-4 w-4 mr-2" />
+          Images
+          {stagedImages.length > 0 && (
+            <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
+              {stagedImages.length}
+            </span>
+          )}
+        </Button>
+      }
+      fields={
+        <div className="grid grid-cols-4 gap-6">
+          <div className="space-y-1">
+            <Label htmlFor="customer">Customer</Label>
+            <Controller
+              name="customer"
+              control={control}
+              render={({ field }) => (
+                <Combobox
+                  id="customer"
+                  options={customerOptions}
+                  value={field.value}
+                  onChange={field.onChange}
+                  loading={customersLoading}
+                  placeholder="Select customer"
+                  emptyText="No customers yet. Add one first."
+                  notFoundText="No customer matches that."
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="invoice_number">Invoice no.</Label>
+            <Input
+              id="invoice_number"
+              title="Generated automatically — edit it if you number invoices differently."
+              {...register("invoice_number")}
+              placeholder="Enter invoice number"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="date_issued">Date Issued</Label>
+            <Input id="date_issued" type="date" {...register("date_issued")} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="date_due">Date Due</Label>
+            <Input id="date_due" type="date" {...register("date_due")} />
+          </div>
+        </div>
+      }
+      rail={
+        <>
+          <InvoiceSummaryCard lines={summaryLines} total={totalAmount} />
+          {/* Typed adjustments sit with the figures they change, between
+              the summary and the payment. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="discount">Discount</Label>
+              <AmountToggleInput
+                id="discount"
+                type={discountType}
+                onToggle={() => setDiscountType(discountType === "percentage" ? "amount" : "percentage")}
+                inputProps={register("discount")}
+              />
             </div>
-
-            {/* Second Column */}
-            <div className="flex flex-col flex-wrap flex-1">
-              <h2 className="text-lg font-semibold mb-6">Add Invoice Item</h2>
-
-              <div className="flex gap-6 mb-6">
-                <div className="w-[60%] space-y-1">
-                  <Label htmlFor="newItemProduct">Select Product</Label>
-                  <Controller
-                    name="newItemProduct"
-                    control={control}
-                    render={({ field }) => (
-                      <Combobox
-                        id="newItemProduct"
-                        options={productOptions}
-                        value={field.value}
-                        onChange={field.onChange}
-                        loading={productsLoading}
-                        placeholder="Select product"
-                        emptyText="No stocked products yet."
-                        notFoundText="No product matches that."
-                      />
-                    )}
-                  />
-                </div>
-                <div className="w-[20%] space-y-1">
-                  <Label htmlFor="newItemQuantity">Quantity</Label>
-                  <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
-                </div>
-                <div className="w-[20%] space-y-1">
-                  <Label htmlFor="newItemPrice">Unit Price</Label>
-                  <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
-                </div>
-                <div className="w-[20%] flex items-end">
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      addItem(watch("newItemProduct"), parseInt(watch("newItemQuantity") || 0), parseFloat(watch("newItemPrice") || 0.0))
-                    }
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Item
-                  </Button>
-                </div>
-              </div>
-
-              {/* Invoice Items Header */}
-              <div className="flex justify-between items-center mb-0.5">
-                <h3 className="text-lg font-semibold">Invoice Items</h3>
-              </div>
-
-              {/* Invoice Items */}
-              {/* Measured in-browser: 188px puts this row exactly level with Discount/Tax
-                  in the left column. */}
-              <div className="mb-6">
-                <div className="space-y-[10px] h-[188px] overflow-y-auto">
-                  {/* Sticky rather than lifted out of the scroll box, so the
-                      header can never drift out of step with the rows when a
-                      scrollbar appears. */}
-                  <div className="sticky top-0 z-10 bg-background flex items-center gap-2">
-                    <div className="bg-card rounded-lg border min-h-[35px] py-0.5 flex flex-1 items-center px-4">
-                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] items-center gap-4 w-full text-sm font-medium text-muted-foreground">
-                        <div>id</div>
-                        <div>product</div>
-                        <div>quantity</div>
-                        <div>unit price</div>
-                        <div>total</div>
-                      </div>
-                    </div>
-                    {/* Matches the 16px delete button sitting outside each row. */}
-                    <div className="w-4" />
-                  </div>
-
-                  {invoiceItems && invoiceItems.map((item, idx) => (
-                    <div key={item.id} className="flex items-center gap-2">
-                      <div className="bg-card rounded-lg min-h-[35px] py-0.5 flex flex-1 items-center px-4 border border-border">
-                        <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] items-center gap-4 w-full text-sm">
-                          <div>{idx + 1}</div>
-                          <div className="font-medium">{item.product.base.name} ({item.product.name})</div>
-                          <div>{item.quantity}</div>
-                          <div>{item.unit_price}</div>
-                          <div className="font-semibold">{item.total}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center h-7">
-                        <Button
-                          type="button"
-                          variant="unstyled"
-                          className="p-0 hover:text-red-500"
-                          title="Delete item"
-                          onClick={(e) => handleDeleteItem(e, item.id)}
-                        >
-                          <Trash2 cursor={'pointer'} />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="subtotal">Subtotal</Label>
-                  <Input id="subtotal" value={subtotal.toLocaleString()} readOnly />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="totalAmount">Total</Label>
-                  <Input id="totalAmount" value={totalAmount.toLocaleString()} readOnly className="font-semibold" />
-                </div>
-              </div>
-
-              <div className="flex gap-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="amount_paid">Amount Paid</Label>
-                  <div className="relative">
-                    <Input id="amount_paid" {...register("amount_paid")} placeholder="0.0" />
-                  </div>
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label>Payment Status</Label>
-                  <div className="flex h-10 items-center">
-                    <span
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap ${getPaymentStatusColor(paymentStatus)}`}
-                    >
-                      {PaymentStatusMap[paymentStatus]}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-3 mt-6">
+            <div className="space-y-1">
+              <Label htmlFor="tax">Tax</Label>
+              <AmountToggleInput
+                id="tax"
+                type={taxType}
+                onToggle={() => setTaxType(taxType === "percentage" ? "amount" : "percentage")}
+                inputProps={register("tax")}
+              />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              {...register("notes")}
+              placeholder="Add any additional notes here..."
+              rows={2}
+              className="[@media(max-height:820px)]:min-h-[60px]"
+            />
+          </div>
+          <PaymentButton total={totalAmount} paid={stagedPaid} onClick={() => setPaymentsOpen(true)} />
+          <Controller
+            name="project"
+            control={control}
+            render={({ field }) => (
+              <Combobox
+                id="project"
+                className="w-full"
+                options={projectOptions}
+                value={field.value ?? ""}
+                onChange={(val) => field.onChange(val || null)}
+                loading={projectsLoading}
+                placeholder="Add to project"
+                emptyText="No projects yet."
+                notFoundText="No project matches that."
+                clearable
+              />
+            )}
+          />
+          <SubmitButton type="submit" className="w-full" pending={pending} pendingLabel="Creating…">Create Invoice</SubmitButton>
+        </>
+      }
+      side={
+        <Controller
+          name="extra_charges"
+          control={control}
+          render={({ field }) => (
+            <ExtraChargesEditor charges={field.value} onChange={field.onChange} />
+          )}
+        />
+      }
+      dialogs={
+        <>
+          <Payments
+            invoiceId={null}
+            invoiceTotal={totalAmount}
+            isSalesPayment={true}
+            open={paymentsOpen}
+            setOpen={setPaymentsOpen}
+            stagedPayments={stagedPayments}
+            onStagedChange={setStagedPayments}
+          />
+          <InvoiceImages
+            invoiceId={null}
+            isSalesInvoice={true}
+            open={imagesOpen}
+            setOpen={setImagesOpen}
+            staged={stagedImages}
+            onStagedChange={setStagedImages}
+          />
+        </>
+      }
+    >
+      <InvoiceSection
+        title="Invoice Items"
+        first
+        pinned={
+          <>
+            <div className="flex gap-4 items-end">
+              <div className="flex-1 min-w-0 space-y-1">
+                <Label htmlFor="newItemProduct">Product</Label>
                 <Controller
-                  name="project"
+                  name="newItemProduct"
                   control={control}
                   render={({ field }) => (
                     <Combobox
-                      id="project"
-                      className="w-48"
-                      options={projectOptions}
-                      value={field.value ?? ""}
-                      onChange={(val) => field.onChange(val || null)}
-                      loading={projectsLoading}
-                      placeholder="Add to project"
-                      emptyText="No projects yet."
-                      notFoundText="No project matches that."
-                      clearable
+                      id="newItemProduct"
+                      options={productOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                      loading={productsLoading}
+                      placeholder="Select product"
+                      emptyText="No stocked products yet."
+                      notFoundText="No product matches that."
                     />
                   )}
                 />
-                <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">Create Invoice</SubmitButton>
               </div>
+              <div className="w-28 space-y-1">
+                <Label htmlFor="newItemQuantity">Quantity</Label>
+                <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
+              </div>
+              <div className="w-32 space-y-1">
+                <Label htmlFor="newItemPrice">Unit Price</Label>
+                <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
+              </div>
+              <Button
+                type="button"
+                onClick={() =>
+                  addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemPrice") || 0.0)))
+                }
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Item
+              </Button>
             </div>
-          </form>
-        </main>
-      </div>
-    </div>
+            <InvoiceItemsTable columns={["Product", "Quantity", "Unit Price", "Total"]} rows={[]} headerOnly />
+          </>
+        }
+        aside={invoiceItems.length > 0 ? `${invoiceItems.length} items · ${unitCount} units` : undefined}
+      >
+        <InvoiceItemsTable
+          rowsOnly
+          columns={["Product", "Quantity", "Unit Price", "Total"]}
+          emptyText="No items yet. Pick a product above to add the first one."
+          rows={invoiceItems.map((item) => ({
+            key: item.id,
+            cells: [
+              `${item.product.base.name} (${item.product.name})`,
+              item.quantity,
+              Number(item.unit_price).toLocaleString(),
+              Number(item.total).toLocaleString(),
+            ],
+            actions: (
+              <RowAction label="Delete item" onClick={() => handleDeleteItem(item.id)}>
+                <Trash2 className="h-5 w-5" />
+              </RowAction>
+            ),
+          }))}
+        />
+      </InvoiceSection>
+    </InvoiceScreen>
   );
 }
 
