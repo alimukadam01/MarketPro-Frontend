@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/ui/combobox";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { PeriodMetricCard } from "@/components/dashboard/PeriodMetricCard";
 import PartyLedgerSection from "@/components/ui/party-ledger";
 import PartyActions from "@/components/ui/party-actions";
 import RecordPaymentDialog from "@/components/ui/record-payment-dialog";
@@ -53,7 +54,7 @@ const CONFIG = {
         stateKey: "customer_id",
         endpoint: (id) => `/customers/${id}/`,
         fetchDetail: (token, id) => getCustomerDetail(token, id),
-        fetchSummary: (token, id) => getCustomerSummary(token, id),
+        fetchSummary: (token, id, period = null) => getCustomerSummary(token, id, period),
         ledgerArgs: (id) => ({ customer_id: id }),
         idArg: (id) => ({ customerId: id }),
         ledgerTitle: "Customer Ledger",
@@ -66,7 +67,7 @@ const CONFIG = {
         stateKey: "supplier_id",
         endpoint: (id) => `/suppliers/${id}/`,
         fetchDetail: (token, id) => suppliersAPIPackage.detail(token, id),
-        fetchSummary: (token, id) => getSupplierSummary(token, id),
+        fetchSummary: (token, id, period = null) => getSupplierSummary(token, id, period),
         ledgerArgs: (id) => ({ supplier_id: id }),
         idArg: (id) => ({ supplierId: id }),
         ledgerTitle: "Supplier Ledger",
@@ -385,12 +386,18 @@ export function PartyDetail({ party }: { party: "customer" | "supplier" }) {
                         <MetricCard
                             title="Outstanding Balance"
                             value={formatCurrency(summary?.balance)}
+                            hint="As of today"
                             loading={summaryLoading}
                         />
-                        <MetricCard
+                        {/* Its own period: what was billed to this party over
+                            it. The balance beside it is always everything. */}
+                        <PeriodMetricCard
                             title="Total Business"
-                            value={formatCurrency(summary?.total_business)}
-                            loading={summaryLoading}
+                            storageKey={`${party}-total-business`}
+                            defaultPeriod={{ key: "year" }}
+                            fetcher={(period) => config.fetchSummary(token, party_id, period)}
+                            pick={(data: { total_business: number }) => formatCurrency(data.total_business)}
+                            errorMessage={`Failed to fetch ${party} total business.`}
                         />
                         {canSeeAccounting && (
                             <MetricCard

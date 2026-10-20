@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { PeriodSwitch } from "@/components/ui/period-switch";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   getStatusColor,
@@ -13,13 +14,13 @@ import {
   PaymentStatusMap,
   listCountLabel,
   createIdMap,
+  formatCurrency,
 } from "../../services/utils";
+import { PAGE_PERIODS, periodHint } from "../../services/periods";
 import { useAuth } from "../../services/AuthProvider"
 import {
   getSalesInvoiceList,
-  getTotalSalesDaily,
-  getTotalItemsSoldDaily,
-  getTotalSalesInvoicesDaily,
+  getSalesSummary,
   bulkDeleteSalesInvoice,
   deleteSalesInvoice,
   getCustomersList,
@@ -41,6 +42,7 @@ import { useInvoiceActions } from "@/hooks/use-invoice-actions";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useListPeriod, useOnChange } from "@/hooks/use-period";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each customer.
 
@@ -126,10 +128,8 @@ const filter_fields_template = {
   customer__name: "",
   status: "",
   payment_status: "",
-  // Ranges, not single dates. date_issued is a DateTimeField, so an exact
-  // match would have to be the precise instant rather than the day.
-  date_issued_from: "",
-  date_issued_to: "",
+  // No invoice-date range here: the page's period switch is that filter, and
+  // two of them could disagree. Ranges, not single dates, for the due date.
   date_due_from: "",
   date_due_to: "",
   sub_total: "",
@@ -166,13 +166,13 @@ const Sales = () => {
   // "no records" before it has asked. Cleared in a finally, never on
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
-  const [totalSalesDaily, setTotalSalesDaily] = useState(null);
-  const [totalSalesDailyLoading, setTotalSalesDailyLoading] = useState(true);
-  const [totalItemsSoldDaily, setTotalItemsSoldDaily] = useState(null);
-  const [totalItemsSoldDailyLoading, setTotalItemsSoldDailyLoading] = useState(true);
-  const [totalInvoicesDaily, setTotalInvoicesDaily] = useState(null);
-  const [totalInvoicesDailyLoading, setTotalInvoicesDailyLoading] = useState(true);
   const { token } = useAuth() || null;
+  // The page switch, and the cards worked out from the rows the table shows.
+  const list = useListPeriod(
+    (query) => getSalesSummary(token, query),
+    "Failed to fetch the sales figures.",
+  );
+  const summary = list.summary;
   const { getPermissions } = useAuth()
   const permissions = getPermissions("sales")
   const [isDeleted, setIsDeleted] = useState(false);
@@ -242,11 +242,13 @@ const Sales = () => {
     });
   };
 
-  const fetchSalesInvoices = async (searchQuery = null) => {
+  // `query` is the search or the filter that produced it; left out, the
+  // current one is kept (a refetch after a delete or a period change).
+  const fetchSalesInvoices = async (query?: string | null) => {
     if (!token) return;
 
     try {
-      const res = await getSalesInvoiceList(token, searchQuery);
+      const res = await getSalesInvoiceList(token, list.track(query));
       if (res) {
         setSalesData(res);
       } else {
@@ -269,60 +271,6 @@ const Sales = () => {
 
   useEffect(() => {
 
-    const fetchTotalSalesDaily = async ()=>{
-      if (!token) return;
-
-      try {
-        const res = await getTotalSalesDaily(token);
-        if (res != null) {
-          setTotalSalesDaily(res);
-        } else {
-          toast.error("Failed to fetch total sales data.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total sales data.");
-        console.error("Error fetching total sales data:", error);
-      } finally {
-        setTotalSalesDailyLoading(false);
-      }
-    }
-
-    const fetchTotalItemsSoldDaily = async ()=>{
-      if (!token) return;
-
-      try {
-        const res = await getTotalItemsSoldDaily(token);
-        if (res !== null) {
-          setTotalItemsSoldDaily(res);
-        } else {
-          toast.error("Failed to fetch total items sold data.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total items sold data.");
-        console.error("Error fetching total items sold data:", error);
-      } finally {
-        setTotalItemsSoldDailyLoading(false);
-      }
-    }
-
-    const fetchTotalInvoicesDaily = async ()=>{
-      if (!token) return;
-
-      try {
-        const res = await getTotalSalesInvoicesDaily(token);
-        if (res !== null) {
-          setTotalInvoicesDaily(res);
-        } else {
-          toast.error("Failed to fetch total invoices data.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total invoices data.");
-        console.error("Error fetching total invoices data:", error);
-      } finally {
-        setTotalInvoicesDailyLoading(false);
-      }
-    }
-
     const fetchCustomers = async () => {
       if (!token) return;
 
@@ -341,12 +289,12 @@ const Sales = () => {
       }
     }
 
-    fetchTotalInvoicesDaily()
-    fetchTotalItemsSoldDaily()
-    fetchTotalSalesDaily()
     fetchCustomers()
     fetchSalesInvoices();
   }, [token, isDeleted])
+
+  // A new period refetches the rows, and with them the cards.
+  useOnChange(list.period, () => fetchSalesInvoices());
 
   // The filter sends customer__name, so the option value is the name rather
   // than the id - that is the field the API exposes, and picking from a list
@@ -396,8 +344,6 @@ const Sales = () => {
       options: payment_status_options,
       anyLabel: "Any payment status",
     },
-    date_issued_from: { label: "Issued From", type: "date" },
-    date_issued_to: { label: "Issued To", type: "date" },
     date_due_from: { label: "Due From", type: "date" },
     date_due_to: { label: "Due To", type: "date" },
     sub_total: {
@@ -429,7 +375,7 @@ const Sales = () => {
           <div className="space-y-1">
             <DynamicBreadCrumb />
 
-            <div className="flex-1  justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center space-x-3">
                 <ArrowLeft
                   className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary"
@@ -442,29 +388,49 @@ const Sales = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Narrows the cards and the table together. */}
+              <PeriodSwitch
+                label="Period for the cards and the table"
+                options={PAGE_PERIODS}
+                value={list.period}
+                onChange={list.setPeriod}
+                allowCustom
+              />
             </div>
           </div>
 
-          {/* Key Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* Key Metrics Cards - from the same rows the table shows. Invoiced
+              is what was billed; received is the money that came in. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             <MetricCard
-              title="Total Sales Today"
-              value={`PKR ${totalSalesDaily}`}
-              loading={totalSalesDailyLoading}
+              title="Sales Invoiced"
+              value={formatCurrency(summary?.sales_invoiced)}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              valueLoading={list.summaryRefreshing}
             />
-            
             <MetricCard
-              title="Total Invoices Today"
-              value={totalInvoicesDaily}
-              loading={totalInvoicesDailyLoading}
+              title="Payments Received"
+              value={formatCurrency(summary?.payments_received)}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              valueLoading={list.summaryRefreshing}
             />
-            
             <MetricCard
-              title="Total Items Sold Today"
-              value={totalItemsSoldDaily}
-              loading={totalItemsSoldDailyLoading}
+              title="Invoices Raised"
+              value={summary?.invoices_raised}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              valueLoading={list.summaryRefreshing}
             />
-            
+            <MetricCard
+              title="Items Sold"
+              value={summary?.items_sold}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              valueLoading={list.summaryRefreshing}
+            />
           </div>
 
           {/* Sales Records Section.

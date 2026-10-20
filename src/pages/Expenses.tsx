@@ -5,16 +5,18 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { PeriodSwitch } from "@/components/ui/period-switch";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   transformExpense,
   listCountLabel,
+  formatCurrency,
 } from "../../services/utils";
+import { PAGE_PERIODS, periodHint } from "../../services/periods";
 import { useAuth } from "../../services/AuthProvider"
 import {
   expensesAPIPackage,
-  getTotalExpensesMonthly,
-  getTotalExpenseAmountMonthly
+  getExpensesSummary,
 } from "../../services/api";
 import {
   ArrowLeft,
@@ -29,6 +31,7 @@ import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useListPeriod, useOnChange } from "@/hooks/use-period";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -79,15 +82,13 @@ const Expenses = () => {
   // "no records" before it has asked. Cleared in a finally, never on
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
-  const [totalExpenses, setTotalExpenses] = useState(null);
-  // Its own flag: this counter and the table are separate
-  // requests, and one must not speak for the other.
-  const [totalExpensesLoading, setTotalExpensesLoading] = useState(true);
-  const [totalExpenseAmount, setTotalExpenseAmount] = useState(null);
-  // Its own flag: this counter and the table are separate
-  // requests, and one must not speak for the other.
-  const [totalExpenseAmountLoading, setTotalExpenseAmountLoading] = useState(true);
   const { token } = useAuth() || null;
+  // The page switch, and the cards worked out from the rows the table shows.
+  const list = useListPeriod(
+    (query) => getExpensesSummary(token, query),
+    "Failed to fetch the expense figures.",
+  );
+  const summary = list.summary;
   const { getPermissions } = useAuth()
   const permissions = getPermissions("expenses")
   const [isDeleted, setIsDeleted] = useState(false);
@@ -146,11 +147,13 @@ const Expenses = () => {
     });
   };
 
-  const fetchExpenses = async (searchQuery = null) => {
+  // `query` is the search or the filter that produced it; left out, the
+  // current one is kept (a refetch after a delete or a period change).
+  const fetchExpenses = async (query?: string | null) => {
     if (!token) return;
 
     try {
-      const res = await expensesAPIPackage.list(token, searchQuery, true);
+      const res = await expensesAPIPackage.list(token, list.track(query), true);
       if (res) {
         
         setExpensesData(res.map(transformExpense));
@@ -174,46 +177,11 @@ const Expenses = () => {
 
   useEffect(() => {
 
-    const fetchTotalExpenses = async () => {
-      if (!token) return;
-
-      try {
-        const res = await getTotalExpensesMonthly(token);
-        if (res !== null) {
-          setTotalExpenses(res);
-        } else {
-          toast.error("Failed to fetch total expenses.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total expenses.");
-        console.error("Error fetching total expenses:", error);
-      } finally {
-        setTotalExpensesLoading(false);
-      }
-    }
-
-    const fetchTotalExpenseAmount = async () => {
-      if (!token) return;
-      
-      try {
-        const res = await getTotalExpenseAmountMonthly(token);
-        if (res !== null) {
-          setTotalExpenseAmount(res);
-        } else {
-          toast.error("Failed to fetch total expenses.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total expenses.");
-        console.error("Error fetching total expenses:", error);
-      } finally {
-        setTotalExpenseAmountLoading(false);
-      }
-    }
-    
-    fetchTotalExpenseAmount()
-    fetchTotalExpenses()
     fetchExpenses();
   }, [token, isDeleted])
+
+  // A new period refetches the rows, and with them the cards.
+  useOnChange(list.period, () => fetchExpenses());
 
 
   return (
@@ -232,7 +200,7 @@ const Expenses = () => {
           <div className="space-y-1">
             <DynamicBreadCrumb />
 
-            <div className="flex-1  justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center space-x-3">
                 <ArrowLeft
                   className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary"
@@ -245,21 +213,34 @@ const Expenses = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Narrows the cards and the table together. An expense has no
+                  date of its own, so this goes by when it was recorded. */}
+              <PeriodSwitch
+                label="Period for the cards and the table"
+                options={PAGE_PERIODS}
+                value={list.period}
+                onChange={list.setPeriod}
+                allowCustom
+              />
             </div>
           </div>
 
-          {/* Key Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* Key Metrics Cards - from the same rows the table shows. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             <MetricCard
-              title="Total Expenses this month"
-              value={totalExpenses}
-              loading={totalExpensesLoading}
+              title="Expenses"
+              value={summary?.expense_count}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              valueLoading={list.summaryRefreshing}
             />
-            
             <MetricCard
-              title="Total Expense Amount this month"
-              value={totalExpenseAmount}
-              loading={totalExpenseAmountLoading}
+              title="Expense Amount"
+              value={formatCurrency(summary?.expense_amount)}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              valueLoading={list.summaryRefreshing}
             />
           </div>
 

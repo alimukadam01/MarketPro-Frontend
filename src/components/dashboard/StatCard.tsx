@@ -9,6 +9,12 @@ interface StatCardProps {
    */
   loading?: boolean;
   className?: string;
+  /** Extra classes for the title - a chart's heading is black, not grey. */
+  titleClassName?: string;
+  /** Set beside the title, e.g. a chart's period line. */
+  titleAside?: React.ReactNode;
+  /** At the right end of the title row, e.g. a period switch. */
+  action?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -30,10 +36,22 @@ interface StatCardProps {
  * matching the first time the padding or the type scale changed, and the row
  * would jump as the data landed - the reflow the placeholder exists to avoid.
  */
-export function StatCard({ title, loading = false, className, children }: StatCardProps) {
+export function StatCard({
+  title, loading = false, className, titleClassName, titleAside, action, children,
+}: StatCardProps) {
+  // The title is a heading's size and weight, on the 32px line the period
+  // switch sits on, so the two read as one row whether or not there is one.
   const body = (
     <>
-      <div className="text-sm text-muted-foreground mb-2">{title}</div>
+      <div className="mb-2 flex min-h-8 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-baseline gap-3">
+          <div className={cn("text-xl leading-8 font-semibold text-muted-foreground", titleClassName)}>
+            {title}
+          </div>
+          {titleAside}
+        </div>
+        {action}
+      </div>
       {children}
     </>
   );

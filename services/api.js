@@ -10,6 +10,7 @@ import {
   transformProductVariant,
   formatConfig,
 } from "./utils";
+import { withPeriod } from "./periods";
 
 const DEBUG = true;
 
@@ -2756,9 +2757,10 @@ export const getPayables = async (token) => {
   }
 };
 
-export const getCustomerSummary = async (token, customerId) => {
+// `period` narrows Total Business only; the balance is always everything.
+export const getCustomerSummary = async (token, customerId, period = null) => {
   try {
-    const res = await apiClient.get(`/customers/${customerId}/summary/`, {
+    const res = await apiClient.get(`/customers/${customerId}/summary/${withPeriod("", period)}`, {
       headers: { Authorization: token },
     });
     if (res.status === 200) {
@@ -2771,9 +2773,9 @@ export const getCustomerSummary = async (token, customerId) => {
   }
 };
 
-export const getSupplierSummary = async (token, supplierId) => {
+export const getSupplierSummary = async (token, supplierId, period = null) => {
   try {
-    const res = await apiClient.get(`/suppliers/${supplierId}/summary/`, {
+    const res = await apiClient.get(`/suppliers/${supplierId}/summary/${withPeriod("", period)}`, {
       headers: { Authorization: token },
     });
     if (res.status === 200) {
@@ -2834,9 +2836,10 @@ export const getDailySummary = async (token, date = null) => {
   }
 };
 
-export const getProfitEstimate = async (token) => {
+// With a period the response also carries `selected` - the estimate for it.
+export const getProfitEstimate = async (token, period = null) => {
   try {
-    const res = await apiClient.get("accounting-kpis/profit-estimate/", {
+    const res = await apiClient.get(`accounting-kpis/profit-estimate/${withPeriod("", period)}`, {
       headers: { Authorization: token },
     });
     if (res.status == 200) {
@@ -3008,4 +3011,58 @@ export const duplicateTarget = async (token, id) => {
     console.log("Error duplicating target:", error);
     return false;
   }
+};
+
+// ── Period summaries and trends ──────────────────────────────────────────────
+// A list page sends its table's own query (search or filters) with the period
+// added (withPeriod), so its cards describe exactly the rows it shows. The
+// dashboard sends a period alone.
+
+const getSummary = async (token, path, query) => {
+  try {
+    const res = await apiClient.get(`${path}${query || ""}`, {
+      headers: { Authorization: token },
+    });
+    if (res.status === 200) {
+      return res.data;
+    }
+    return null;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getSalesSummary = (token, query = "") =>
+  getSummary(token, "/sales-invoices/summary/", query);
+
+export const getPurchasesSummary = (token, query = "") =>
+  getSummary(token, "/purchase-invoices/summary/", query);
+
+export const getExpensesSummary = (token, query = "") =>
+  getSummary(token, "/expenses/summary/", query);
+
+export const getTransactionsSummary = (token, query = "") =>
+  getSummary(token, "/transactions/summary/", query);
+
+export const getReturnedItemsSummary = (token, query = "") =>
+  getSummary(token, "/returned-items/summary/", query);
+
+// { trend: [{ label, value, ... }], period: { key, date_from, date_to } }
+export const getSalesTrend = (token, period) =>
+  getSummary(token, "sales-kpis/sales-trend/", withPeriod("", period));
+
+export const getExpensesTrend = (token, period) =>
+  getSummary(token, "expenses-kpis/expenses-trend/", withPeriod("", period));
+
+// The Book of Business: the day book and its summary over a period or a
+// custom range. Each returns the payload with its date_from / date_to.
+export const getBook = async (token, period) => {
+  const data = await getSummary(token, "accounting-kpis/day-book/", withPeriod("", period));
+  return data ? data.day_book : null;
+};
+
+export const getBookSummary = async (token, period) => {
+  const data = await getSummary(token, "accounting-kpis/daily-summary/", withPeriod("", period));
+  return data ? data.daily_summary : null;
 };

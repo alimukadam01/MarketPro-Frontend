@@ -1,11 +1,17 @@
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { formatDate } from "../../../services/utils";
+import { PeriodSwitch } from "@/components/ui/period-switch";
+
+type Period = { key: string; from?: string; to?: string };
 
 interface ChartCardProps {
   title: string;
-  /** Null while loading. Never pass a zero-filled array - see `loading`. */
-  data: { day: string; value: number }[] | null;
+  /**
+   * One point per bucket - an hour, a day, a week or a month, as the period
+   * decides - labelled for the axis. Null while loading; never pass a
+   * zero-filled array (see `loading`).
+   */
+  data: { label?: string; day?: string; value: number }[] | null;
   color?: string;
   valueLabel?: string;
   /**
@@ -17,12 +23,28 @@ interface ChartCardProps {
    * state as null and pass loading instead.
    */
   loading?: boolean;
+  /** The period line, set beside the heading in a smaller size. */
+  hint?: string;
+  /** Give all three to put a period switch in the card's corner. */
+  period?: Period;
+  periodOptions?: { key: string; label: string }[];
+  onPeriodChange?: (period: Period) => void;
 }
 
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Older trends (the Accounting cash chart) send { day: "YYYY-MM-DD" } rather
+// than a ready label; they get "20 Oct".
+const withLabels = (data) => data && data.map((point) => {
+  if (point.label || !point.day) return point;
+  const [, month, day] = point.day.split("-").map(Number);
+  return { ...point, label: `${day} ${MONTHS[month - 1]}` };
+});
+
 /**
- * A trend line on a card.
+ * A trend on a card: a line with the area under it shaded in its colour.
  *
  * Shares StatCard with MetricCard, so the chrome, the title and the whole-card
  * placeholder are defined once. They stay separate components because this one
@@ -30,7 +52,24 @@ const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`
  * on twenty - merging them would drag the charting library into every list
  * page's chunk.
  */
-export function ChartCard({ title, data, color = "#8b5cf6", valueLabel = "Amount", loading = false }: ChartCardProps) {
+export function ChartCard({
+  title, data, color = "#8b5cf6", valueLabel = "Amount", loading = false,
+  hint, period, periodOptions, onPeriodChange,
+}: ChartCardProps) {
+  // Unique per chart: two charts sharing a gradient id would both paint with
+  // whichever was defined first.
+  const gradientId = `chart-fill-${title.replace(/\W+/g, "-").toLowerCase()}`;
+
+  const action = period && periodOptions && onPeriodChange ? (
+    <PeriodSwitch
+      size="card"
+      label={`${title} period`}
+      options={periodOptions}
+      value={period}
+      onChange={onPeriodChange}
+    />
+  ) : null;
+
   return (
     // overflow-hidden is the backstop: ResponsiveContainer measures its parent
     // and writes a fixed pixel width onto the chart, so if it ever lags behind
@@ -41,21 +80,31 @@ export function ChartCard({ title, data, color = "#8b5cf6", valueLabel = "Amount
       title={title}
       loading={loading || !data}
       className="overflow-hidden min-w-0"
+      titleClassName="text-foreground whitespace-nowrap"
+      titleAside={hint ? (
+        <span className="truncate text-base text-muted-foreground">{hint}</span>
+      ) : null}
+      action={action}
     >
       <div className="h-48 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
+          <AreaChart data={withLabels(data)} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={color} stopOpacity={0.25} />
+                <stop offset="100%" stopColor={color} stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
             <XAxis
-              dataKey="day"
-              tick={false}
-              axisLine={false}
-              allowDataOverflow={false}
+              dataKey="label"
+              tickLine={false}
+              axisLine={{ stroke: "hsl(var(--border))" }}
+              tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+              interval="preserveStartEnd"
+              minTickGap={24}
             />
             <YAxis hide />
-            {/* The x axis has no visible ticks, so the tooltip is where the
-                date and amount for a point are read. */}
             <Tooltip
-              labelFormatter={(day) => formatDate(day)}
               formatter={(value) => [formatCurrency(value), valueLabel]}
               contentStyle={{
                 backgroundColor: "hsl(var(--card))",
@@ -67,15 +116,16 @@ export function ChartCard({ title, data, color = "#8b5cf6", valueLabel = "Amount
               itemStyle={{ color: "hsl(var(--foreground))" }}
               cursor={{ stroke: "hsl(var(--border))" }}
             />
-            <Line
+            <Area
               type="monotone"
               dataKey="value"
               stroke={color}
               strokeWidth={2}
-              dot={true}
+              fill={`url(#${gradientId})`}
+              dot={false}
               activeDot={true}
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </StatCard>

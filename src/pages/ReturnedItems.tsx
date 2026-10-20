@@ -5,16 +5,18 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { PeriodSwitch } from "@/components/ui/period-switch";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   transformReturnedItem,
   createIdMap,
   listCountLabel,
 } from "../../services/utils";
+import { PAGE_PERIODS, periodHint } from "../../services/periods";
 import { useAuth } from "../../services/AuthProvider"
 import {
   returnedItemsAPIPackage,
-  getTotalReturnedItems,
+  getReturnedItemsSummary,
   returnReturnedItemToSalesInvoice,
   returnReturnedItemToInventory
 } from "../../services/api";
@@ -32,6 +34,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { useBusyAction } from "@/hooks/use-busy-action";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useListPeriod, useOnChange } from "@/hooks/use-period";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -78,11 +81,13 @@ const ReturnedItems = () => {
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
   const [returnedItemsIdMap, setReturnedItemsIdMap] = useState([])
-  const [totalReturnedItems, setTotalReturnedItems] = useState(null);
-  // Its own flag: this counter and the table are separate
-  // requests, and one must not speak for the other.
-  const [totalReturnedItemsLoading, setTotalReturnedItemsLoading] = useState(true);
   const { token } = useAuth() || null
+  // The page switch, and the cards worked out from the rows the table shows.
+  const list = useListPeriod(
+    (query) => getReturnedItemsSummary(token, query),
+    "Failed to fetch the returned item figures.",
+  )
+  const summary = list.summary
   const { getPermissions } = useAuth()
   const permissions = getPermissions("returned_items")
   const [isDeleted, setIsDeleted] = useState(false)
@@ -172,14 +177,13 @@ const ReturnedItems = () => {
     });
   };
 
-  const fetchReturnedItems = async (searchQuery = null) => {
+  // `query` is the search or the filter that produced it; left out, the
+  // current one is kept (a refetch after a delete or a period change).
+  const fetchReturnedItems = async (query?: string | null) => {
     if (!token) return;
 
     try {
-      const res = await returnedItemsAPIPackage.list(token, searchQuery);
-      if (searchQuery){
-        console.log(res)
-      }
+      const res = await returnedItemsAPIPackage.list(token, list.track(query));
       if (res) {
         setReturnedItemsData(res.map(transformReturnedItem))
         setReturnedItemsIdMap(createIdMap(res))
@@ -203,27 +207,11 @@ const ReturnedItems = () => {
 
   useEffect(() => {
 
-    const fetchTotalReturnedItems = async () => {
-      if (!token) return;
-
-      try {
-        const res = await getTotalReturnedItems(token);
-        if (res!==null) {
-          setTotalReturnedItems(res);
-        } else {
-          toast.error("Failed to fetch total returned items.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total returned items.");
-        console.error("Error fetching total returned items:", error);
-      } finally {
-        setTotalReturnedItemsLoading(false);
-      }
-    }
-
-    fetchTotalReturnedItems()
     fetchReturnedItems();
   }, [token, isDeleted])
+
+  // A new period refetches the rows, and with them the cards.
+  useOnChange(list.period, () => fetchReturnedItems());
 
 
   return (
@@ -242,7 +230,7 @@ const ReturnedItems = () => {
           <div className="space-y-1">
             <DynamicBreadCrumb />
 
-            <div className="flex-1  justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center space-x-3">
                 <ArrowLeft
                   className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary"
@@ -255,15 +243,34 @@ const ReturnedItems = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Narrows the cards and the table together. A return has no
+                  date of its own, so this goes by when it was recorded. */}
+              <PeriodSwitch
+                label="Period for the cards and the table"
+                options={PAGE_PERIODS}
+                value={list.period}
+                onChange={list.setPeriod}
+                allowCustom
+              />
             </div>
           </div>
 
-          {/* Key Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* Key Metrics Cards - from the same rows the table shows. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             <MetricCard
-              title="Total Returned Items"
-              value={totalReturnedItems}
-              loading={totalReturnedItemsLoading}
+              title="Returned Items"
+              value={summary?.returned_items}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              valueLoading={list.summaryRefreshing}
+            />
+            <MetricCard
+              title="Units Returned"
+              value={summary?.returned_quantity}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              valueLoading={list.summaryRefreshing}
             />
           </div>
 
