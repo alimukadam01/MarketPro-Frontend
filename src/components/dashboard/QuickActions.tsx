@@ -29,7 +29,8 @@ export function QuickActions() {
   return (
     <Card className="shadow-sm">  
       <CardHeader>
-        <CardTitle>Quick Actions</CardTitle>
+        {/* The dashboard's one heading size, shared with its cards and charts. */}
+        <CardTitle className="text-xl leading-8 tracking-normal">Quick Actions</CardTitle>
       </CardHeader>
       
       <CardContent>

@@ -17,7 +17,8 @@ export function RecentSales({ recentSales, loading = false }) {
   return (
     <Card className="shadow-sm">
       <CardHeader>
-        <CardTitle>Recent Sales</CardTitle>
+        {/* The dashboard's one heading size, shared with its cards and charts. */}
+        <CardTitle className="text-xl leading-8 tracking-normal">Recent Sales</CardTitle>
       </CardHeader>
       <CardContent>
         <Table>

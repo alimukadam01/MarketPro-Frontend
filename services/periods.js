@@ -90,7 +90,9 @@ const NAMES = {
  * the figure then covers fewer rows than the period alone would.
  */
 export const periodHint = (period, filtered = false) => {
-  if (!period) return undefined;
+  // Not known yet (still loading): a blank line, so the card keeps its
+  // height and does not grow when the period arrives.
+  if (!period) return " ";
   let text;
   if (period.key === "all" || !period.date_from) {
     text = "All time";

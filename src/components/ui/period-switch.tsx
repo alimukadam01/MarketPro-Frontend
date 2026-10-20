@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { defaultCustomRange } from "../../../services/periods";
 
@@ -27,30 +27,60 @@ interface PeriodSwitchProps {
  *
  * Custom opens in place rather than in a pop-up, so the switch never gets
  * longer: the other options collapse to nothing, Custom slides to the left,
- * and the From / To fields and a clear button grow into the room they leave.
- * Every part animates on max-width, padding, margin and opacity. A changed
- * date applies at once - there is no Apply step - and only when the range is
- * whole and in order.
+ * and the From / To fields grow into the room they leave, with an apply (✓)
+ * and a clear (✕) button. Every part animates on max-width, padding, margin
+ * and opacity.
+ *
+ * Nothing applies until ✓ is pressed (or Enter in a date field): picking two
+ * dates is several steps, and refetching the page after each one would show
+ * figures for ranges nobody asked for. ✕ leaves Custom and goes back to
+ * `clearTo` - All time on a list page.
  */
 export function PeriodSwitch({
   options, value, onChange, size = "page", allowCustom = false, clearTo, label,
 }: PeriodSwitchProps) {
-  const custom = value.key === "custom";
+  const applied = value.key === "custom";
   const page = size === "page";
   const id = useId();
 
-  // The fields are edited here and only reach onChange as a valid range, so a
-  // half-typed date never refetches the page.
+  // Open while a range is applied or being picked. The range in the fields is
+  // a draft until it is applied.
+  const [editing, setEditing] = useState(false);
+  const open = applied || editing;
   const [draft, setDraft] = useState({ from: value.from || "", to: value.to || "" });
-  useEffect(() => {
-    if (custom) setDraft({ from: value.from || "", to: value.to || "" });
-  }, [custom, value.from, value.to]);
 
-  const editDate = (field: "from" | "to", text: string) => {
-    const next = { ...draft, [field]: text };
-    setDraft(next);
-    if (next.from && next.to && next.from <= next.to) {
-      onChange({ key: "custom", from: next.from, to: next.to });
+  // An applied range shows in the fields; leaving Custom from outside (a
+  // parent reset) closes them.
+  useEffect(() => {
+    if (applied) setDraft({ from: value.from || "", to: value.to || "" });
+    else setEditing(false);
+  }, [applied, value.from, value.to]);
+
+  const valid = Boolean(draft.from && draft.to && draft.from <= draft.to);
+  const unchanged = applied && draft.from === value.from && draft.to === value.to;
+
+  const startCustom = () => {
+    if (open) return;
+    const fresh = defaultCustomRange();
+    setDraft({ from: fresh.from, to: fresh.to });
+    setEditing(true);
+  };
+
+  const apply = () => {
+    if (!valid || unchanged) return;
+    onChange({ key: "custom", from: draft.from, to: draft.to });
+    setEditing(false);
+  };
+
+  const clear = () => {
+    setEditing(false);
+    onChange(clearTo || { key: options[0].key });
+  };
+
+  const onFieldKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      apply();
     }
   };
 
@@ -62,6 +92,11 @@ export function PeriodSwitch({
       ? "pointer-events-none max-w-0 px-0 mr-0 opacity-0"
       : cn("max-w-[140px] opacity-100", page ? "px-3 mr-0.5" : "px-2.5 mr-0.5"),
     selected ? "bg-white text-foreground shadow-sm" : "text-gray-600 hover:text-foreground",
+  );
+
+  const iconButton = cn(
+    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-sm",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
   );
 
   return (
@@ -77,12 +112,12 @@ export function PeriodSwitch({
         <button
           key={option.key}
           type="button"
-          aria-pressed={!custom && value.key === option.key}
-          aria-hidden={custom}
-          disabled={custom}
-          tabIndex={custom ? -1 : 0}
+          aria-pressed={!applied && value.key === option.key}
+          aria-hidden={open}
+          disabled={open}
+          tabIndex={open ? -1 : 0}
           onClick={() => onChange({ key: option.key })}
-          className={segment(!custom && value.key === option.key, custom)}
+          className={segment(!open && value.key === option.key, open)}
         >
           {option.label}
         </button>
@@ -92,18 +127,18 @@ export function PeriodSwitch({
         <>
           <button
             type="button"
-            aria-pressed={custom}
-            onClick={() => { if (!custom) onChange(defaultCustomRange()); }}
-            className={segment(custom, false)}
+            aria-pressed={open}
+            onClick={startCustom}
+            className={segment(open, false)}
           >
             Custom
           </button>
 
           <div
-            aria-hidden={!custom}
+            aria-hidden={!open}
             className={cn(
               "flex items-center gap-2 overflow-hidden whitespace-nowrap transition-all duration-300",
-              custom ? "ml-1.5 max-w-[440px] opacity-100" : "ml-0 max-w-0 opacity-0",
+              open ? "ml-1.5 max-w-[480px] opacity-100" : "ml-0 max-w-0 opacity-0",
             )}
           >
             <label htmlFor={`${id}-from`} className="text-sm text-muted-foreground">From</label>
@@ -112,8 +147,9 @@ export function PeriodSwitch({
               type="date"
               value={draft.from}
               max={draft.to || undefined}
-              disabled={!custom}
-              onChange={(e) => editDate("from", e.target.value)}
+              disabled={!open}
+              onChange={(e) => setDraft({ ...draft, from: e.target.value })}
+              onKeyDown={onFieldKey}
               className="h-8 rounded-sm border-0 bg-white px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <label htmlFor={`${id}-to`} className="text-sm text-muted-foreground">To</label>
@@ -122,16 +158,31 @@ export function PeriodSwitch({
               type="date"
               value={draft.to}
               min={draft.from || undefined}
-              disabled={!custom}
-              onChange={(e) => editDate("to", e.target.value)}
+              disabled={!open}
+              onChange={(e) => setDraft({ ...draft, to: e.target.value })}
+              onKeyDown={onFieldKey}
               className="h-8 rounded-sm border-0 bg-white px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <button
               type="button"
+              aria-label="Apply custom range"
+              title="Apply"
+              disabled={!open || !valid || unchanged}
+              onClick={apply}
+              className={cn(
+                iconButton,
+                "text-primary hover:bg-white disabled:pointer-events-none disabled:text-gray-400",
+              )}
+            >
+              <Check className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
               aria-label="Clear custom range"
-              disabled={!custom}
-              onClick={() => onChange(clearTo || { key: options[0].key })}
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-sm text-gray-600 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              title="Clear"
+              disabled={!open}
+              onClick={clear}
+              className={cn(iconButton, "text-gray-600 hover:bg-white hover:text-foreground")}
             >
               <X className="h-4 w-4" />
             </button>

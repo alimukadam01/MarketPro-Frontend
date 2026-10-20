@@ -1,4 +1,4 @@
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { StatCard } from "@/components/dashboard/StatCard";
 import { PeriodSwitch } from "@/components/ui/period-switch";
 
@@ -78,6 +78,8 @@ export function ChartCard({
     // a grid/flex parent.
     <StatCard
       title={title}
+      // The chart frame stays on screen while it loads; the spinner beside
+      // the title says so, and the line draws in when the data lands.
       loading={loading || !data}
       className="overflow-hidden min-w-0"
       titleClassName="text-foreground whitespace-nowrap"
@@ -88,23 +90,18 @@ export function ChartCard({
     >
       <div className="h-48 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={withLabels(data)} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+          <AreaChart data={withLabels(data) || []} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={color} stopOpacity={0.25} />
                 <stop offset="100%" stopColor={color} stopOpacity={0.02} />
               </linearGradient>
             </defs>
-            <XAxis
-              dataKey="label"
-              tickLine={false}
-              axisLine={{ stroke: "hsl(var(--border))" }}
-              tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-              interval="preserveStartEnd"
-              minTickGap={24}
-            />
             <YAxis hide />
+            {/* No x axis: the period line beside the heading says what the
+                chart covers, and the tooltip names each point. */}
             <Tooltip
+              labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ""}
               formatter={(value) => [formatCurrency(value), valueLabel]}
               contentStyle={{
                 backgroundColor: "hsl(var(--card))",
@@ -122,8 +119,9 @@ export function ChartCard({
               stroke={color}
               strokeWidth={2}
               fill={`url(#${gradientId})`}
-              dot={false}
-              activeDot={true}
+              // Every point always shown, not only the one under the cursor.
+              dot={{ r: 3, fill: color, stroke: color, strokeWidth: 1 }}
+              activeDot={{ r: 5 }}
             />
           </AreaChart>
         </ResponsiveContainer>
