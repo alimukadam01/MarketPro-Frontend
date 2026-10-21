@@ -18,6 +18,54 @@ export function usePersistentPeriod(storageKey: string, fallback: Period) {
 }
 
 /**
+ * A list's search and its filters, kept apart and sent together.
+ *
+ * The search box and the filter dialog both call the page's fetch function
+ * with a query string, and each used to replace the other: typing a search
+ * dropped the applied filters, and applying filters dropped the search. The
+ * argument now says what changed:
+ *
+ *   undefined           refetch with the current search and filters
+ *                       (after a delete, a period change, first load)
+ *   null                the search box was cleared
+ *   "?search=..."       a new search (useDebouncedSearch / formatSearchQuery)
+ *   "" or "?a=b&..."    new filters from the dialog ("" = cleared)
+ *
+ * and `track` returns both combined.
+ *
+ *   const list = useListQuery();
+ *   const fetchRows = async (query?: string | null) => {
+ *     const rows = await api.list(token, list.track(query));
+ *   };
+ */
+export function useListQuery() {
+  const searchRef = useRef("");
+  const filtersRef = useRef("");
+
+  const track = (query?: string | null) => {
+    if (query === null) {
+      searchRef.current = "";
+    } else if (query !== undefined) {
+      if (query.startsWith("?search=")) searchRef.current = query;
+      else filtersRef.current = query;
+    }
+    return combineQueries(searchRef.current, filtersRef.current);
+  };
+
+  return { track };
+}
+
+/** "?search=ali" + "?status=C" -> "?search=ali&status=C" ("" when neither). */
+export function combineQueries(...queries: string[]) {
+  const params = new URLSearchParams();
+  queries.forEach((query) => {
+    new URLSearchParams((query || "").replace(/^\?/, "")).forEach((value, key) => params.set(key, value));
+  });
+  const text = params.toString();
+  return text ? `?${text}` : "";
+}
+
+/**
  * Fetches whatever a card shows for a period, again whenever the period (or
  * refreshKey) changes.
  *
@@ -85,7 +133,7 @@ export function usePeriodFetch<T>(
  *
  *   const list = useListPeriod((q) => getSalesSummary(token, q), "Failed to …");
  *   const fetchRows = async (query?: string | null) => {
- *     const q = list.track(query);          // undefined keeps the current query
+ *     const q = list.track(query);          // see useListQuery for what query means
  *     const rows = await getSalesInvoiceList(token, q);
  *     …
  *   };
@@ -107,7 +155,7 @@ export function useListPeriod(
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryRefreshing, setSummaryRefreshing] = useState(false);
 
-  const queryRef = useRef<string | null>(null);
+  const query = useListQuery();
   const latest = useRef(0);
   // Read when track() runs, which may be from a closure older than the last
   // period change (the search hook's debounce), so it cannot be state alone.
@@ -141,9 +189,9 @@ export function useListPeriod(
     }
   };
 
-  const track = (query?: string | null) => {
-    if (query !== undefined) queryRef.current = query;
-    const withThePeriod = withPeriod(queryRef.current, periodRef.current);
+  // The search and the filters (useListQuery's rules), with the period added.
+  const track = (change?: string | null) => {
+    const withThePeriod = withPeriod(query.track(change), periodRef.current);
     loadSummary(withThePeriod);
     return withThePeriod;
   };

@@ -23,6 +23,8 @@ import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useListQuery } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 
 // A failed fetch leaves these null, and the card still renders because its
 // loading flag has cleared. "PKR 0" and "null Items" both state a figure the
@@ -49,35 +51,20 @@ const cols = [
   { key: "last_updated", label: "Last Updated" },
 ]
 
+// Track code is left to the search box.
 const filter_fields_template = {
-  product__name: "",
-  product__base__name: "",
-  location__name: "",
-  track_code: "",
+  product: "",
+  location: "",
+  stock_level: "",
+  price_min: "",
+  price_max: "",
 };
 
-const filter_fields_mapper = {
-  product__base__name: {
-    label: "Product Name",
-    type: "text",
-    placeholder: "Enter Product name",
-  },
-  product__name: {
-    label: "Product Variant Name",
-    type: "text",
-    placeholder: "Enter Product Variant name",
-  },
-  location__name: {
-    label: "Location Name",
-    type: "text",
-    placeholder: "Enter Location name",
-  },
-  track_code: {
-    label: "Track Code",
-    type: "text",
-    placeholder: "Enter Track Code",
-  },
-};
+const stock_level_options = [
+  { value: "in_stock", label: "In stock" },
+  { value: "low", label: "Low (at or below reorder level)" },
+  { value: "out", label: "Out of stock" },
+];
 
 const InventoryOverview = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
@@ -98,8 +85,40 @@ const InventoryOverview = () => {
   const [totalRestocksReq, setTotalRestocksReq] = useState(null);
   const [totalRestocksReqLoading, setTotalRestocksReqLoading] = useState(true);
   const { token } = useAuth() || null
-  const { getPermissions } = useAuth()
+  const { getPermissions, user } = useAuth()
   const permissions = getPermissions("inventory")
+  // The search and the filters, kept together so one never drops the other.
+  const listQuery = useListQuery()
+  // How many filters are on, for the Filter button.
+  const [filterCount, setFilterCount] = useState(0)
+  const options = useFilterOptions(token, user, ["products", "locations"])
+
+  const filter_fields_mapper = {
+    // A product covers all its variants.
+    product: {
+      label: "Product",
+      type: "combobox",
+      fullWidth: true,
+      options: options.products,
+      loading: options.loading.products,
+      placeholder: "Any product",
+      emptyText: "No products yet.",
+      notFoundText: "No product matches that.",
+    },
+    location: {
+      label: "Location",
+      type: "select",
+      options: options.locations,
+      anyLabel: "Any location",
+    },
+    stock_level: {
+      label: "Stock level",
+      type: "select",
+      options: stock_level_options,
+      anyLabel: "Any level",
+    },
+    price: { label: "Unit price (PKR)", type: "range", input: "number", keys: ["price_min", "price_max"], fullWidth: true },
+  }
   const businessId = localStorage.getItem("mp-business-id") || null
   const [isDeleted, setIsDeleted] = useState(false)
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
@@ -162,11 +181,13 @@ const InventoryOverview = () => {
     setFilterWindowOpen(!filterWindowOpen);
   };
 
-  const fetchInventoryItems = async (searchQuery = null) => {
+  // `query` is the search or the filter that produced it; left out, the
+  // current one is kept (a refetch after a delete).
+  const fetchInventoryItems = async (query?: string | null) => {
     if (!token) return
 
     try {
-      const res = await getInventoryItemList(token, businessId, searchQuery)
+      const res = await getInventoryItemList(token, businessId, listQuery.track(query))
       if (res) {
         setInventoryData(res)
       } else {
@@ -353,7 +374,7 @@ const InventoryOverview = () => {
                   type="button"
                 >
                   <Filter className="w-4 h-4" />
-                  <span>Filter</span>
+                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                 </Button>
               </div>
 
@@ -406,6 +427,7 @@ const InventoryOverview = () => {
             dataFetcher={fetchInventoryItems}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
+            onActiveChange={setFilterCount}
           />
         </main>
       </div>

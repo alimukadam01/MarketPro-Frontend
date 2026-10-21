@@ -30,6 +30,8 @@ import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useListQuery } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -42,16 +44,14 @@ const cols = [
 ];
 
 const filter_fields_template = {
-  unit__name: ""
+  unit: "",
+  is_active: "",
 };
 
-const filter_fields_mapper = {
-  unit__name: {
-    label: "Unit",
-    type: "text",
-    placeholder: "Enter unit",
-  },
-};
+const active_options = [
+  { value: "true", label: "Active" },
+  { value: "false", label: "Inactive" },
+];
 
 const Products = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -66,8 +66,28 @@ const Products = () => {
   // requests, and one must not speak for the other.
   const [totalProductsLoading, setTotalProductsLoading] = useState(true);
   const { token } = useAuth() || null;
-  const { getPermissions } = useAuth()
+  const { getPermissions, user } = useAuth()
   const permissions = getPermissions("products")
+  // The search and the filters, kept together so one never drops the other.
+  const listQuery = useListQuery()
+  // How many filters are on, for the Filter button.
+  const [filterCount, setFilterCount] = useState(0)
+  const options = useFilterOptions(token, user, ["units"])
+
+  const filter_fields_mapper = {
+    unit: {
+      label: "Unit",
+      type: "select",
+      options: options.units,
+      anyLabel: "Any unit",
+    },
+    is_active: {
+      label: "Status",
+      type: "select",
+      options: active_options,
+      anyLabel: "Any status",
+    },
+  }
   const [isDeleted, setIsDeleted] = useState(false);
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();
@@ -125,11 +145,13 @@ const Products = () => {
     });
   };
 
-  const fetchProducts = async (searchQuery = null) => {
+  // `query` is the search or the filter that produced it; left out, the
+  // current one is kept (a refetch after a delete).
+  const fetchProducts = async (query?: string | null) => {
     if (!token) return;
 
     try {
-      const res = await getProductsList(token, searchQuery, true);
+      const res = await getProductsList(token, listQuery.track(query), true);
       if (res) {
         setProductsData(res);
       } else {
@@ -245,7 +267,7 @@ const Products = () => {
                   type="button"
                 >
                   <Filter className="w-4 h-4" />
-                  <span>Filter</span>
+                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                 </Button>
               </div>
 
@@ -308,6 +330,7 @@ const Products = () => {
             dataFetcher={fetchProducts}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
+            onActiveChange={setFilterCount}
           />
         </main>
       </div>

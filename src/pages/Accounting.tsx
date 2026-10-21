@@ -42,6 +42,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useListPeriod, useOnChange } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 import { PAGE_PERIODS, periodHint } from "../../services/periods";
 
 const subModules = [
@@ -81,11 +82,16 @@ const cols = [
     },
 ];
 
+// No date: the page's period switch is that filter.
 const filter_fields_template = {
     type: "",
     status: "",
     payment_method: "",
-    date: "",
+    account: "",
+    customer: "",
+    supplier: "",
+    amount_min: "",
+    amount_max: "",
 };
 
 // Values mirror Transaction.TYPE_CHOICES / STATUS_CHOICES /
@@ -127,13 +133,6 @@ const payment_method_options = [
     { value: "cheque", label: "Cheque" },
 ];
 
-const filter_fields_mapper = {
-    type: { label: "Type", type: "select", options: transaction_type_options, anyLabel: "Any type" },
-    status: { label: "Status", type: "select", options: transaction_status_options, anyLabel: "Any status" },
-    payment_method: { label: "Method", type: "select", options: payment_method_options, anyLabel: "Any method" },
-    date: { label: "Date", type: "date", placeholder: "" },
-};
-
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
 
 const Accounting = () => {
@@ -150,8 +149,41 @@ const Accounting = () => {
     const [selectedRows, setSelectedRows] = useState([]);
     const [isDeleted, setIsDeleted] = useState(false);
     const [filterWindowOpen, setFilterWindowOpen] = useState(false);
-    const { token, getPermissions } = useAuth();
+    const { token, getPermissions, user } = useAuth();
     const permissions = getPermissions("accounting");
+    // How many filters are on, for the Filter button.
+    const [filterCount, setFilterCount] = useState(0);
+    const options = useFilterOptions(token, user, ["accounts", "customers", "suppliers"]);
+
+    const filter_fields_mapper = {
+        type: { label: "Type", type: "select", options: transaction_type_options, anyLabel: "Any type" },
+        status: { label: "Status", type: "select", options: transaction_status_options, anyLabel: "Any status" },
+        payment_method: { label: "Method", type: "select", options: payment_method_options, anyLabel: "Any method" },
+        account: { label: "Account", type: "select", options: options.accounts, anyLabel: "Any account" },
+        // A receipt or payment against the party, on account or against one
+        // of their invoices.
+        customer: {
+            label: "Customer",
+            type: "combobox",
+            fullWidth: true,
+            options: options.customers,
+            loading: options.loading.customers,
+            placeholder: "Any customer",
+            emptyText: "No customers yet.",
+            notFoundText: "No customer matches that.",
+        },
+        supplier: {
+            label: "Supplier",
+            type: "combobox",
+            fullWidth: true,
+            options: options.suppliers,
+            loading: options.loading.suppliers,
+            placeholder: "Any supplier",
+            emptyText: "No suppliers yet.",
+            notFoundText: "No supplier matches that.",
+        },
+        amount: { label: "Amount (PKR)", type: "range", input: "number", keys: ["amount_min", "amount_max"], fullWidth: true },
+    };
     // The page switch, and money in / out across the rows the table shows.
     const list = useListPeriod(
         (query) => getTransactionsSummary(token, query),
@@ -434,7 +466,7 @@ const Accounting = () => {
                                         onClick={() => setFilterWindowOpen(!filterWindowOpen)}
                                     >
                                         <Filter className="w-4 h-4 mr-2" />
-                                        <span>Filter</span>
+                                        <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                                     </Button>
                                 </div>
 
@@ -510,6 +542,7 @@ const Accounting = () => {
                                 dataFetcher={fetchTransactions}
                                 open={filterWindowOpen}
                                 setOpen={setFilterWindowOpen}
+                                onActiveChange={setFilterCount}
                             />
                         </>
                     )}

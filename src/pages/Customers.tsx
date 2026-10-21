@@ -33,6 +33,8 @@ import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useListQuery } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -45,15 +47,7 @@ const cols = [
 ];
 
 const filter_fields_template = {
-  city__name: ""
-};
-
-const filter_fields_mapper = {
-  city__name: {
-    label: "City",
-    type: "text",
-    placeholder: "Enter city name",
-  },
+  city: "",
 };
 
 const Customers = () => {
@@ -69,8 +63,26 @@ const Customers = () => {
   // requests, and one must not speak for the other.
   const [totalCustomersLoading, setTotalCustomersLoading] = useState(true);
   const { token } = useAuth() || null;
-  const { getPermissions } = useAuth()
+  const { getPermissions, user } = useAuth()
   const permissions = getPermissions("customers")
+  // The search and the filters, kept together so one never drops the other.
+  const listQuery = useListQuery()
+  // How many filters are on, for the Filter button.
+  const [filterCount, setFilterCount] = useState(0)
+  const options = useFilterOptions(token, user, ["cities"])
+
+  const filter_fields_mapper = {
+    city: {
+      label: "City",
+      type: "combobox",
+      fullWidth: true,
+      options: options.cities,
+      loading: options.loading.cities,
+      placeholder: "Any city",
+      emptyText: "No cities yet.",
+      notFoundText: "No city matches that.",
+    },
+  }
   const [isDeleted, setIsDeleted] = useState(false);
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();
@@ -127,11 +139,13 @@ const Customers = () => {
     });
   };
 
-  const fetchCustomers = async (searchQuery = null) => {
+  // `query` is the search or the filter that produced it; left out, the
+  // current one is kept (a refetch after a delete).
+  const fetchCustomers = async (query?: string | null) => {
     if (!token) return;
 
     try {
-      const res = await getCustomersList(token, searchQuery, true);
+      const res = await getCustomersList(token, listQuery.track(query), true);
       if (res) {
         setCustomersData(res.map(transformCustomer));
       } else {
@@ -246,7 +260,7 @@ const Customers = () => {
                   type="button"
                 >
                   <Filter className="w-4 h-4" />
-                  <span>Filter</span>
+                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                 </Button>
               </div>
 
@@ -311,6 +325,7 @@ const Customers = () => {
             dataFetcher={fetchCustomers}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
+            onActiveChange={setFilterCount}
           />
         </main>
       </div>

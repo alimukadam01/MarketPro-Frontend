@@ -11,6 +11,7 @@ import {
   transformExpense,
   listCountLabel,
   formatCurrency,
+  ExpenseCategoryLabels,
 } from "../../services/utils";
 import { PAGE_PERIODS, periodHint } from "../../services/periods";
 import { useAuth } from "../../services/AuthProvider"
@@ -32,6 +33,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useListPeriod, useOnChange } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -44,35 +46,20 @@ const cols = [
   { key: "created_at", label: "Expense Date" },
 ];
 
+// Name and description are left to the search box; the expense date to the
+// page's period switch.
 const filter_fields_template = {
-  name: "",
   category: "",
-  desc: "",
-  amount: ""
+  amount_min: "",
+  amount_max: "",
+  account: "",
 };
 
-const filter_fields_mapper = {
-  name: {
-    label: "Name",
-    type: "text",
-    placeholder: "Enter Expense Name",
-  },
-  category: {
-    label: "Category",
-    type: "text",
-    placeholder: "kiraya, bijli, tankhwa, transport, mutafarriq",
-  },
-  desc: {
-    label: "Description",
-    type: "text",
-    placeholder: "Enter Expense Description",
-  },
-  amount: {
-    label: "Amount",
-    type: "number",
-    placeholder: "Enter Expense Amount",
-  },
-};
+// Every category an expense can carry, including the one the system records
+// from an invoice's extra charges, since those show in this list too.
+const category_options = Object.entries(ExpenseCategoryLabels).map(
+  ([value, label]) => ({ value, label: label as string })
+);
 
 const Expenses = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -89,8 +76,27 @@ const Expenses = () => {
     "Failed to fetch the expense figures.",
   );
   const summary = list.summary;
-  const { getPermissions } = useAuth()
+  const { getPermissions, user } = useAuth()
   const permissions = getPermissions("expenses")
+  // How many filters are on, for the Filter button.
+  const [filterCount, setFilterCount] = useState(0);
+  const options = useFilterOptions(token, user, ["accounts"]);
+
+  const filter_fields_mapper = {
+    category: {
+      label: "Category",
+      type: "select",
+      options: category_options,
+      anyLabel: "Any category",
+    },
+    account: {
+      label: "Paid from",
+      type: "select",
+      options: options.accounts,
+      anyLabel: "Any account",
+    },
+    amount: { label: "Amount (PKR)", type: "range", input: "number", keys: ["amount_min", "amount_max"], fullWidth: true },
+  };
   const [isDeleted, setIsDeleted] = useState(false);
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();
@@ -274,7 +280,7 @@ const Expenses = () => {
                   type="button"
                 >
                   <Filter className="w-4 h-4" />
-                  <span>Filter</span>
+                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                 </Button>
               </div>
 
@@ -337,6 +343,7 @@ const Expenses = () => {
             dataFetcher={fetchExpenses}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
+            onActiveChange={setFilterCount}
           />
         </main>
       </div>

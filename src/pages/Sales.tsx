@@ -13,7 +13,6 @@ import {
   SalesInvoiceStatusMap,
   PaymentStatusMap,
   listCountLabel,
-  createIdMap,
   formatCurrency,
 } from "../../services/utils";
 import { PAGE_PERIODS, periodHint } from "../../services/periods";
@@ -23,7 +22,6 @@ import {
   getSalesSummary,
   bulkDeleteSalesInvoice,
   deleteSalesInvoice,
-  getCustomersList,
 } from "../../services/api";
 import {
   Download,
@@ -35,7 +33,7 @@ import {
   Lock,
   Send,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import WalkInCustomer from "@/components/ui/walk-in-customer";
 import { useInvoiceActions } from "@/hooks/use-invoice-actions";
@@ -43,6 +41,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useListPeriod, useOnChange } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each customer.
 
@@ -117,23 +116,18 @@ const cols = [
   { key: "pending_balance", label: "Pending Balance" },
 ];
 
-/** Only what the filter's customer picker reads off a customer. */
-type FilterCustomer = {
-  name?: string
-  phone_number?: string
-  city?: { name?: string }
-}
-
 const filter_fields_template = {
-  customer__name: "",
+  customer: "",
   status: "",
   payment_status: "",
   // No invoice-date range here: the page's period switch is that filter, and
   // two of them could disagree. Ranges, not single dates, for the due date.
   date_due_from: "",
   date_due_to: "",
-  sub_total: "",
-  total: "",
+  total_min: "",
+  total_max: "",
+  created_by: "",
+  project: "",
 };
 
 // Order status. The free-text box this replaces suggested "pending,
@@ -173,15 +167,15 @@ const Sales = () => {
     "Failed to fetch the sales figures.",
   );
   const summary = list.summary;
-  const { getPermissions } = useAuth()
+  const { getPermissions, user } = useAuth()
   const permissions = getPermissions("sales")
   const [isDeleted, setIsDeleted] = useState(false);
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   // Only the filter's customer picker needs these. Loaded alongside the page
   // rather than when the dialog opens, so the picker is never empty on the
   // first open.
-  const [customers, setCustomers] = useState<Record<string, FilterCustomer>>({});
-  const [customersLoading, setCustomersLoading] = useState(true);
+  // How many filters are on, for the Filter button.
+  const [filterCount, setFilterCount] = useState(0);
   const navigate = useNavigate();
   // Download never prompts. Sending prompts only for a counter sale, which has
   // no number to send to until the buyer is named.
@@ -271,63 +265,25 @@ const Sales = () => {
 
   useEffect(() => {
 
-    const fetchCustomers = async () => {
-      if (!token) return;
-
-      try {
-        const res = await getCustomersList(token);
-        if (res) {
-          setCustomers(createIdMap(res));
-        } else {
-          toast.error("Failed to fetch customers.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch customers.");
-        console.error("Error fetching customers:", error);
-      } finally {
-        setCustomersLoading(false);
-      }
-    }
-
-    fetchCustomers()
     fetchSalesInvoices();
   }, [token, isDeleted])
 
   // A new period refetches the rows, and with them the cards.
   useOnChange(list.period, () => fetchSalesInvoices());
 
-  // The filter sends customer__name, so the option value is the name rather
-  // than the id - that is the field the API exposes, and picking from a list
-  // means it always matches exactly, which the free-text box it replaces
-  // could not guarantee.
-  //
-  // Keyed by name so two customers sharing one cannot produce duplicate
-  // options; they would be indistinguishable in the list anyway, and the
-  // filter would return both either way.
-  const customerOptions = useMemo(() => {
-    const byName = new Map();
-    Object.values(customers).forEach((customer) => {
-      if (!customer?.name || byName.has(customer.name)) return;
-      byName.set(customer.name, {
-        value: customer.name,
-        label: customer.name,
-        keywords: [customer.phone_number, customer.city?.name].filter(Boolean),
-      });
-    });
-    return [...byName.values()];
-  }, [customers]);
+  // The filter's dropdowns, loaded with the page. Customers and projects are
+  // filtered by id, so two customers sharing a name stay apart.
+  const options = useFilterOptions(token, user, ["customers", "projects", "staff"]);
 
-  // Built here, not at module scope, because the customer options arrive from
-  // a fetch.
-  const filter_fields_mapper = useMemo(() => ({
-    customer__name: {
+  const filter_fields_mapper = {
+    customer: {
       label: "Customer",
       type: "combobox",
       // Spans the row: it is the field most often used, and a customer name
       // is far longer than a status or a date.
       fullWidth: true,
-      options: customerOptions,
-      loading: customersLoading,
+      options: options.customers,
+      loading: options.loading.customers,
       placeholder: "Any customer",
       emptyText: "No customers yet.",
       notFoundText: "No customer matches that.",
@@ -344,19 +300,25 @@ const Sales = () => {
       options: payment_status_options,
       anyLabel: "Any payment status",
     },
-    date_due_from: { label: "Due From", type: "date" },
-    date_due_to: { label: "Due To", type: "date" },
-    sub_total: {
-      label: "Subtotal",
-      type: "number",
-      placeholder: "Enter subtotal",
+    date_due: { label: "Due date", type: "range", input: "date", keys: ["date_due_from", "date_due_to"], fullWidth: true },
+    total: { label: "Total (PKR)", type: "range", input: "number", keys: ["total_min", "total_max"] },
+    created_by: {
+      label: "Entered by",
+      type: "select",
+      options: options.staff,
+      anyLabel: "Anyone",
     },
-    total: {
-      label: "Total",
-      type: "number",
-      placeholder: "Enter total",
+    project: {
+      label: "Project",
+      type: "combobox",
+      fullWidth: true,
+      options: options.projects,
+      loading: options.loading.projects,
+      placeholder: "Any project",
+      emptyText: "No projects yet.",
+      notFoundText: "No project matches that.",
     },
-  }), [customerOptions, customersLoading]);
+  };
 
 
   return (
@@ -463,7 +425,7 @@ const Sales = () => {
                   type="button"
                 >
                   <Filter className="w-4 h-4" />
-                  <span>Filter</span>
+                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                 </Button>
               </div>
 
@@ -552,6 +514,7 @@ const Sales = () => {
             dataFetcher={fetchSalesInvoices}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
+            onActiveChange={setFilterCount}
           />
         </main>
       </div>

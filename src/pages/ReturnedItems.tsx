@@ -11,6 +11,7 @@ import {
   transformReturnedItem,
   createIdMap,
   listCountLabel,
+  ReturnTypeMap,
 } from "../../services/utils";
 import { PAGE_PERIODS, periodHint } from "../../services/periods";
 import { useAuth } from "../../services/AuthProvider"
@@ -35,6 +36,7 @@ import { useBusyAction } from "@/hooks/use-busy-action";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useListPeriod, useOnChange } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -48,29 +50,23 @@ const cols = [
   { key: "return_type", label: "Added Back To" },
 ];
 
+// The return date is the page's period switch.
 const filter_fields_template = {
-  invoice_item__sales_invoice__id: "",
-  invoice_item__product__base__name: "",
-  invoice_item__product__name: "",
+  invoice_number: "",
+  product: "",
+  customer: "",
+  return_type: "",
+  is_damaged: "",
 };
 
-const filter_fields_mapper = {
-  invoice_item__sales_invoice__id: {
-    label: "Sales Invoice ID",
-    type: "number",
-    placeholder: "Enter invoice id",
-  },
-  invoice_item__product__base__name: {
-    label: "Product",
-    type: "text",
-    placeholder: "Enter product name",
-  },
-  invoice_item__product__name: {
-    label: "Product Variant",
-    type: "text",
-    placeholder: "Enter product variant name",
-  },
-};
+const return_type_options = Object.entries(ReturnTypeMap).map(
+  ([value, label]) => ({ value, label })
+);
+
+const damaged_options = [
+  { value: "true", label: "Damaged" },
+  { value: "false", label: "Not damaged" },
+];
 
 const ReturnedItems = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
@@ -88,8 +84,54 @@ const ReturnedItems = () => {
     "Failed to fetch the returned item figures.",
   )
   const summary = list.summary
-  const { getPermissions } = useAuth()
+  const { getPermissions, user } = useAuth()
   const permissions = getPermissions("returned_items")
+  // How many filters are on, for the Filter button.
+  const [filterCount, setFilterCount] = useState(0)
+  const options = useFilterOptions(token, user, ["products", "customers"])
+
+  const filter_fields_mapper = {
+    // The number printed on the invoice, matched in part: "7731" finds
+    // INV-7731. The internal id it replaced is never shown anywhere.
+    invoice_number: {
+      label: "Invoice number",
+      type: "text",
+      placeholder: "e.g. 7731",
+    },
+    // A product covers all its variants.
+    product: {
+      label: "Product",
+      type: "combobox",
+      fullWidth: true,
+      options: options.products,
+      loading: options.loading.products,
+      placeholder: "Any product",
+      emptyText: "No products yet.",
+      notFoundText: "No product matches that.",
+    },
+    customer: {
+      label: "Customer",
+      type: "combobox",
+      fullWidth: true,
+      options: options.customers,
+      loading: options.loading.customers,
+      placeholder: "Any customer",
+      emptyText: "No customers yet.",
+      notFoundText: "No customer matches that.",
+    },
+    return_type: {
+      label: "Return type",
+      type: "select",
+      options: return_type_options,
+      anyLabel: "Any type",
+    },
+    is_damaged: {
+      label: "Condition",
+      type: "select",
+      options: damaged_options,
+      anyLabel: "Any condition",
+    },
+  }
   const [isDeleted, setIsDeleted] = useState(false)
   const [filterWindowOpen, setFilterWindowOpen] = useState(false)
   const navigate = useNavigate()
@@ -303,7 +345,7 @@ const ReturnedItems = () => {
                   type="button"
                 >
                   <Filter className="w-4 h-4" />
-                  <span>Filter</span>
+                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                 </Button>
               </div>
 
@@ -380,6 +422,7 @@ const ReturnedItems = () => {
             dataFetcher={fetchReturnedItems}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
+            onActiveChange={setFilterCount}
           />
         </main>
       </div>

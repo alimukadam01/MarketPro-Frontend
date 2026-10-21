@@ -13,8 +13,6 @@ import {
   PurchaseInvoiceStatusMap,
   PaymentStatusMap,
   listCountLabel,
-  createIdMap,
-  formatPartyLabel,
   formatCurrency,
 } from "../../services/utils"
 import { PAGE_PERIODS, periodHint } from "../../services/periods";
@@ -26,16 +24,16 @@ import {
   getPurchasesSummary,
   getTotalPendingPurchaseInvoices,
   getTotalPendingPayment,
-  suppliersAPIPackage
 
 } from "../../services/api"
 import { Eye, ArrowLeft, Plus, Filter, Edit, Trash2, Lock } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
 import { useListPeriod, useOnChange } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 
 /**
  * The grid the table is laid out on.
@@ -111,15 +109,8 @@ const cols = [
   { key: "pending_balance", label: "Pending Balance" },
 ]
 
-/** Only what the filter's supplier picker reads off a supplier. */
-type FilterSupplier = {
-  name?: string
-  business_name?: string
-  phone?: string
-}
-
 const filter_fields_template = {
-  supplier__name: "",
+  supplier: "",
   status: "",
   payment_status: "",
   // No invoice-date range here: the page's period switch is that filter, and
@@ -128,8 +119,10 @@ const filter_fields_template = {
   delivery_to: "",
   date_due_from: "",
   date_due_to: "",
-  sub_total: "",
-  total: "",
+  total_min: "",
+  total_max: "",
+  created_by: "",
+  project: "",
 };
 
 // Order status, as stored. The free-text box this replaces suggested
@@ -163,15 +156,15 @@ const Purchases = () => {
   const [totalPendingPayment, setTotalPendingPayment] = useState(null);
   const [totalPendingPaymentLoading, setTotalPendingPaymentLoading] = useState(true);
   const { token } = useAuth() || null
-  const { getPermissions } = useAuth()
+  const { getPermissions, user } = useAuth()
   const permissions = getPermissions("purchases")
   const [isDeleted, setIsDeleted] = useState(false)
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   // Only the filter's supplier picker needs these. Loaded alongside the page
   // rather than when the dialog opens, so the picker is never empty on the
   // first open.
-  const [suppliers, setSuppliers] = useState<Record<string, FilterSupplier>>({});
-  const [suppliersLoading, setSuppliersLoading] = useState(true);
+  // How many filters are on, for the Filter button.
+  const [filterCount, setFilterCount] = useState(0);
   const navigate = useNavigate()
 
   const toggleRowSelection = (id: string) => {
@@ -298,67 +291,25 @@ const Purchases = () => {
       }
     }
 
-    const fetchSuppliers = async () => {
-      if (!token) return;
-
-      try {
-        const res = await suppliersAPIPackage.list(token)
-        if (res) {
-          setSuppliers(createIdMap(res))
-        } else {
-          toast.error("Failed to fetch suppliers.")
-        }
-      } catch (error) {
-        toast.error("Failed to fetch suppliers.")
-        console.error("Error fetching suppliers:", error)
-      } finally {
-        setSuppliersLoading(false);
-      }
-    }
-
-    fetchTotalPendingPayment()
-    fetchTotalPendingPurchaseInvoices()
-    fetchSuppliers()
     fetchPurchaseInvoices()
   }, [token, isDeleted])
 
   // A new period refetches the rows, and with them the cards.
   useOnChange(list.period, () => fetchPurchaseInvoices())
 
-  // The filter sends supplier__name, so the option value is the name rather
-  // than the id - that is the field the API exposes, and picking from a list
-  // means it always matches exactly, which the free-text box it replaces
-  // could not guarantee. The label is the fuller "name (business_name)",
-  // because every name here ends in the "(contact TBC)" placeholder and the
-  // firm is what a user actually recognises.
-  //
-  // Keyed by name so two suppliers sharing one cannot produce duplicate
-  // options; the filter would return both either way.
-  const supplierOptions = useMemo(() => {
-    const byName = new Map();
-    Object.values(suppliers).forEach((supplier: FilterSupplier) => {
-      if (!supplier?.name || byName.has(supplier.name)) return;
-      byName.set(supplier.name, {
-        value: supplier.name,
-        label: formatPartyLabel(supplier),
-        keywords: [supplier.business_name, supplier.phone].filter(Boolean),
-      });
-    });
-    return [...byName.values()];
-  }, [suppliers]);
+  // The filter's dropdowns, loaded with the page. Suppliers and projects are
+  // filtered by id, so two suppliers sharing a name stay apart.
+  const options = useFilterOptions(token, user, ["suppliers", "projects", "staff"]);
 
-  // Built here, not at module scope, because the supplier options arrive from
-  // a fetch.
-  const filter_fields_mapper = useMemo(() => ({
-    supplier__name: {
+  const filter_fields_mapper = {
+    supplier: {
       label: "Supplier",
       type: "combobox",
       // Spans the row: it is the field most often used, and these names are
-      // the longest text in the box - "name (business_name)", both of which
-      // carry the "(contact TBC)" placeholder.
+      // the longest text in the box - "name (business_name)".
       fullWidth: true,
-      options: supplierOptions,
-      loading: suppliersLoading,
+      options: options.suppliers,
+      loading: options.loading.suppliers,
       placeholder: "Any supplier",
       emptyText: "No suppliers yet.",
       notFoundText: "No supplier matches that.",
@@ -375,21 +326,26 @@ const Purchases = () => {
       options: payment_status_options,
       anyLabel: "Any payment status",
     },
-    delivery_from: { label: "Delivery From", type: "date" },
-    delivery_to: { label: "Delivery To", type: "date" },
-    date_due_from: { label: "Due From", type: "date" },
-    date_due_to: { label: "Due To", type: "date" },
-    sub_total: {
-      label: "Subtotal",
-      type: "number",
-      placeholder: "Enter subtotal",
+    delivery: { label: "Delivery date", type: "range", input: "date", keys: ["delivery_from", "delivery_to"], fullWidth: true },
+    date_due: { label: "Due date", type: "range", input: "date", keys: ["date_due_from", "date_due_to"], fullWidth: true },
+    total: { label: "Total (PKR)", type: "range", input: "number", keys: ["total_min", "total_max"] },
+    created_by: {
+      label: "Entered by",
+      type: "select",
+      options: options.staff,
+      anyLabel: "Anyone",
     },
-    total: {
-      label: "Total",
-      type: "number",
-      placeholder: "Enter total",
+    project: {
+      label: "Project",
+      type: "combobox",
+      fullWidth: true,
+      options: options.projects,
+      loading: options.loading.projects,
+      placeholder: "Any project",
+      emptyText: "No projects yet.",
+      notFoundText: "No project matches that.",
     },
-  }), [supplierOptions, suppliersLoading]);
+  };
 
 
   return (
@@ -497,7 +453,7 @@ const Purchases = () => {
                   type="button"
                 >
                   <Filter className="w-4 h-4" />
-                  <span>Filter</span>
+                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                 </Button>
               </div>
 
@@ -545,6 +501,7 @@ const Purchases = () => {
             dataFetcher={fetchPurchaseInvoices}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
+            onActiveChange={setFilterCount}
           />
         </main>
       </div>
