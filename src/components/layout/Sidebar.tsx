@@ -18,6 +18,7 @@ import {
   ClipboardList,
   Landmark,
   Target,
+  Home,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
@@ -25,6 +26,8 @@ import { useAuth } from "../../../services/AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
 
 const sidebarItems = [
+  // The dashboard. No module: everyone signed in has one, so it never locks.
+  { name: "Home",                icon: Home,         href: "/",                    module: null },
   { name: "Sales",               icon: ShoppingCart, href: "/sales",               module: "sales" },
   { name: "Purchases",           icon: Package,      href: "/purchases",            module: "purchases" },
   { name: "Inventory",           icon: Archive,      href: "/inventory",            module: "inventory" },
