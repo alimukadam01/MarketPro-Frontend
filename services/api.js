@@ -1582,9 +1582,13 @@ export const DeleteTask = async (token, projectId, taskId) => {
 
 // General Endpoints
 
-export const globalSearch = async (token, searchQuery) => {
+// The header's search: { query, groups: [{ type, label, total, hits, breakdown? }] },
+// only the groups that matched and only the types this user may see.
+// Null on failure, so the box can say so rather than claim "no results".
+export const globalSearch = async (token, query) => {
   try {
-    const res = await apiClient.get(`search/${searchQuery}`, {
+    const res = await apiClient.get("global-search/", {
+      params: { q: query },
       headers: {
         Authorization: token,
       },
@@ -1592,12 +1596,10 @@ export const globalSearch = async (token, searchQuery) => {
     if (res.status == 200) {
       return res.data;
     }
-
-    console.log("error performing search: ", res.data.detail);
-    return [];
+    return null;
   } catch (error) {
     console.log("error performing search", error);
-    return [];
+    return null;
   }
 };
 
