@@ -2,7 +2,7 @@ import { ToastContainer } from "react-toastify";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from '../services/AuthProvider'
 import ProtectedRoute from './components/ProtectedRoute'
 import Index from "./pages/Index";
@@ -59,7 +59,7 @@ import UpdateBacklogEntry from "./pages/UpdateBacklogEntry";
 import Accounting from "./pages/Accounting";
 import CreateTransaction from "./pages/CreateTransaction";
 import UpdateTransaction from "./pages/UpdateTransaction";
-import DailyBook from "./pages/DailyBook";
+import BookOfBusiness from "./pages/BookOfBusiness";
 import Ledgers from "./pages/Ledgers";
 import MoneyAccounts from "./pages/MoneyAccounts";
 import Cheques from "./pages/Cheques";
@@ -147,7 +147,9 @@ const App = () => {
           <Route path="/accounting" element={<ProtectedRoute module="accounting"><Accounting /></ProtectedRoute>} />
           <Route path="/accounting/create-transaction" element={<ProtectedRoute module="accounting" action="create"><CreateTransaction /></ProtectedRoute>} />
           <Route path="/accounting/update-transaction" element={<ProtectedRoute module="accounting" action="edit"><UpdateTransaction /></ProtectedRoute>} />
-          <Route path="/accounting/daily-book" element={<ProtectedRoute module="accounting"><DailyBook /></ProtectedRoute>} />
+          <Route path="/accounting/book-of-business" element={<ProtectedRoute module="accounting"><BookOfBusiness /></ProtectedRoute>} />
+          {/* The Daily Book became the Book of Business; old links still land. */}
+          <Route path="/accounting/daily-book" element={<Navigate to="/accounting/book-of-business" replace />} />
           <Route path="/accounting/ledgers" element={<ProtectedRoute module="accounting"><Ledgers /></ProtectedRoute>} />
           {/* The same screen as /customers/view-customer, addressed from the
               accounting side. Two routes rather than one plus remembered state:

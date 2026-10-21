@@ -3,6 +3,7 @@ import { Header } from "@/components/layout/Header";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { PeriodMetricCard } from "@/components/dashboard/PeriodMetricCard";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -80,8 +81,6 @@ const Ledgers = () => {
     // two fetches that feed them rather than the arrays themselves.
     const [loading, setLoading] = useState(true);
     const [payables, setPayables] = useState(null);
-    const [profit, setProfit] = useState(null);
-    const [profitLoading, setProfitLoading] = useState(true);
     const { token, getPermissions } = useAuth();
     const permissions = getPermissions("accounting");
     const navigate = useNavigate();
@@ -169,25 +168,8 @@ const Ledgers = () => {
             }
         };
 
-        const fetchProfit = async () => {
-            try {
-                const res = await getProfitEstimate(token);
-                if (res) {
-                    setProfit(res);
-                } else {
-                    toast.error("Failed to fetch profit estimate.");
-                }
-            } catch (error) {
-                console.log("Error fetching profit estimate:", error);
-                toast.error("Failed to fetch profit estimate.");
-            } finally {
-              setProfitLoading(false);
-            }
-        };
-
         fetchReceivables();
         fetchPayables();
-        fetchProfit();
     }, [token]);
 
     return (
@@ -230,17 +212,27 @@ const Ledgers = () => {
                                 <MetricCard
                                     title="Receivable"
                                     value={formatCurrency(receivables?.total)}
+                                    hint="As of today"
                                     loading={loading}
+                                    error={!loading && receivables == null}
                                 />
                                 <MetricCard
                                     title="Payable"
                                     value={formatCurrency(payables?.total)}
+                                    hint="As of today"
                                     loading={loading}
+                                    error={!loading && payables == null}
                                 />
-                                <MetricCard
-                                    title="Profit this month (estimated)"
-                                    value={formatCurrency(profit?.this_month?.profit)}
-                                    loading={profitLoading}
+                                {/* Its own switch: the tables on this page are
+                                    balances, so there is no page period. */}
+                                <PeriodMetricCard
+                                    title="Profit (estimated)"
+                                    storageKey="ledgers-profit"
+                                    defaultPeriod={{ key: "month" }}
+                                    fetcher={(period) => getProfitEstimate(token, period)}
+                                    pick={(data: { selected?: { profit: number } }) =>
+                                        formatCurrency(data.selected?.profit)}
+                                    errorMessage="Failed to fetch profit estimate."
                                 />
                             </div>
 
@@ -255,16 +247,19 @@ const Ledgers = () => {
                                   title="Receivable 0&ndash;30 days"
                                   value={formatCurrency(receivables?.aging?.current)}
                                   loading={loading}
+                                  error={!loading && receivables == null}
                                 />
                                 <MetricCard
                                   title="Receivable 31&ndash;60 days"
                                   value={formatCurrency(receivables?.aging?.days_31_60)}
                                   loading={loading}
+                                  error={!loading && receivables == null}
                                 />
                                 <MetricCard
                                   title="Receivable over 60 days"
                                   value={formatCurrency(receivables?.aging?.days_over_60)}
                                   loading={loading}
+                                  error={!loading && receivables == null}
                                 />
                             </div>
 
