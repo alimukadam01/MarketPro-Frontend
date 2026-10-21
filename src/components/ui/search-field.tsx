@@ -16,6 +16,14 @@ interface SearchFieldProps {
   wrapperClassName?: string;
   id?: string;
   onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  /** For a caller that moves focus itself (the header's Ctrl+K). */
+  inputRef?: React.Ref<HTMLInputElement>;
+  /**
+   * Anything else the input needs - keyboard handling and the combobox ARIA
+   * attributes of the global search. Spread before the props above, so it
+   * cannot override value, onChange or the classes.
+   */
+  inputProps?: React.InputHTMLAttributes<HTMLInputElement>;
 }
 
 /**
@@ -38,6 +46,8 @@ export function SearchField({
   wrapperClassName,
   id,
   onFocus,
+  inputRef,
+  inputProps,
 }: SearchFieldProps) {
   return (
     <div className={cn("relative", wrapperClassName)}>
@@ -45,6 +55,8 @@ export function SearchField({
         {pending ? <Spinner size={16} label="Searching" /> : <Search className="w-4 h-4" />}
       </span>
       <Input
+        {...inputProps}
+        ref={inputRef}
         id={id}
         placeholder={placeholder}
         className={cn("pl-10 w-80", className)}

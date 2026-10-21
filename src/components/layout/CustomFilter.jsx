@@ -32,18 +32,35 @@ const ANY = "__any__";
  *  - dataFetcher: async function (query?) => data
  *  - open: boolean (dialog open state)
  *  - setOpen: function (setOpen boolean)
+ *  - onActiveChange: (count) => void, optional - how many filters are on
+ *    after Apply or Reset, for the page's "Filter · 2" button
  *
  * templateMapper entries:
  *  { label, type, placeholder }                        text / date / number
  *  { label, type: "checkbox" }                         checkbox
  *  { label, type: "select", options: [{value,label}] } dropdown
  *  { label, type: "combobox", options, loading? }      searchable dropdown
+ *  { label, type: "range", input: "number"|"date",     two inputs side by
+ *    keys: [fromKey, toKey] }                          side, both ends kept
+ *                                                      in the template
+ *
+ * A range's mapper key is just a name; its values live under `keys`.
  *
  * Use "combobox" over "select" once the list is long enough to need typing -
  * a business with 75 customers is past that - and because it is the same
  * picker the create and update forms use, so a filter looks like the field it
  * filters on. It takes the same emptyText / notFoundText as those forms.
  */
+const filled = (value) => value !== undefined && value !== null && value !== "" && value !== false;
+
+/** How many fields are on: a range counts once, whichever end is set. */
+const activeCount = (filters, templateMapper) =>
+  Object.entries(templateMapper || {}).filter(([key, config]) =>
+    config.type === "range"
+      ? (config.keys || []).some((part) => filled(filters[part]))
+      : filled(filters[key])
+  ).length;
+
 export default function CustomFilter({
   title = "Filter Records",
   template,
@@ -51,6 +68,7 @@ export default function CustomFilter({
   dataFetcher,
   open,
   setOpen,
+  onActiveChange,
 }) {
   // make a fresh copy of template for local state
   const [filters, setFilters] = useState(() => ({ ...(template || {}) }));
@@ -66,13 +84,18 @@ export default function CustomFilter({
 
   const applyFilters = async () => {
     const query = formatFilterQuery(filters);
-    await dataFetcher(query);    
+    await dataFetcher(query);
+    if (onActiveChange) onActiveChange(activeCount(filters, templateMapper));
     if (setOpen) setOpen(false);
   }
 
+  // "" means "no filters" to the list pages (useListQuery). Called with no
+  // argument it meant "refetch as you were", so Reset left the old filters
+  // applied while the dialog looked cleared.
   const resetFilters = async () => {
-    await dataFetcher();
+    await dataFetcher("");
     setFilters(() => ({ ...(template || {}) })); // reset local state
+    if (onActiveChange) onActiveChange(0);
     if (setOpen) setOpen(false);
   }
 
@@ -97,7 +120,29 @@ export default function CustomFilter({
             >
               <label className="text-sm text-gray-700">{config.label}</label>
 
-              {config.type === "checkbox" ? (
+              {config.type === "range" ? (
+                // Min and max (or from and to) on one row, so a range reads
+                // as one field rather than two that happen to sit together.
+                <div className="flex items-center gap-2">
+                  <Input
+                    type={config.input || "number"}
+                    aria-label={`${config.label} from`}
+                    placeholder={config.input === "date" ? undefined : "Min"}
+                    value={filters[config.keys[0]] ?? ""}
+                    onChange={(e) => handleChange(config.keys[0], e.target.value)}
+                    className="w-full"
+                  />
+                  <span className="shrink-0 text-sm text-muted-foreground">to</span>
+                  <Input
+                    type={config.input || "number"}
+                    aria-label={`${config.label} to`}
+                    placeholder={config.input === "date" ? undefined : "Max"}
+                    value={filters[config.keys[1]] ?? ""}
+                    onChange={(e) => handleChange(config.keys[1], e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+              ) : config.type === "checkbox" ? (
                 <Checkbox
                   checked={!!filters[key]}
                   onCheckedChange={(checked) => handleChange(key, checked)}

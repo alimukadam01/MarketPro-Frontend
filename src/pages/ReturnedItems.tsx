@@ -5,16 +5,19 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { PeriodSwitch } from "@/components/ui/period-switch";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   transformReturnedItem,
   createIdMap,
   listCountLabel,
+  ReturnTypeMap,
 } from "../../services/utils";
+import { PAGE_PERIODS, periodHint } from "../../services/periods";
 import { useAuth } from "../../services/AuthProvider"
 import {
   returnedItemsAPIPackage,
-  getTotalReturnedItems,
+  getReturnedItemsSummary,
   returnReturnedItemToSalesInvoice,
   returnReturnedItemToInventory
 } from "../../services/api";
@@ -32,6 +35,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { useBusyAction } from "@/hooks/use-busy-action";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useListPeriod, useOnChange } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -45,29 +50,23 @@ const cols = [
   { key: "return_type", label: "Added Back To" },
 ];
 
+// The return date is the page's period switch.
 const filter_fields_template = {
-  invoice_item__sales_invoice__id: "",
-  invoice_item__product__base__name: "",
-  invoice_item__product__name: "",
+  invoice_number: "",
+  product: "",
+  customer: "",
+  return_type: "",
+  is_damaged: "",
 };
 
-const filter_fields_mapper = {
-  invoice_item__sales_invoice__id: {
-    label: "Sales Invoice ID",
-    type: "number",
-    placeholder: "Enter invoice id",
-  },
-  invoice_item__product__base__name: {
-    label: "Product",
-    type: "text",
-    placeholder: "Enter product name",
-  },
-  invoice_item__product__name: {
-    label: "Product Variant",
-    type: "text",
-    placeholder: "Enter product variant name",
-  },
-};
+const return_type_options = Object.entries(ReturnTypeMap).map(
+  ([value, label]) => ({ value, label })
+);
+
+const damaged_options = [
+  { value: "true", label: "Damaged" },
+  { value: "false", label: "Not damaged" },
+];
 
 const ReturnedItems = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
@@ -78,13 +77,61 @@ const ReturnedItems = () => {
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
   const [returnedItemsIdMap, setReturnedItemsIdMap] = useState([])
-  const [totalReturnedItems, setTotalReturnedItems] = useState(null);
-  // Its own flag: this counter and the table are separate
-  // requests, and one must not speak for the other.
-  const [totalReturnedItemsLoading, setTotalReturnedItemsLoading] = useState(true);
   const { token } = useAuth() || null
-  const { getPermissions } = useAuth()
+  // The page switch, and the cards worked out from the rows the table shows.
+  const list = useListPeriod(
+    (query) => getReturnedItemsSummary(token, query),
+    "Failed to fetch the returned item figures.",
+  )
+  const summary = list.summary
+  const { getPermissions, user } = useAuth()
   const permissions = getPermissions("returned_items")
+  // How many filters are on, for the Filter button.
+  const [filterCount, setFilterCount] = useState(0)
+  const options = useFilterOptions(token, user, ["products", "customers"])
+
+  const filter_fields_mapper = {
+    // The number printed on the invoice, matched in part: "7731" finds
+    // INV-7731. The internal id it replaced is never shown anywhere.
+    invoice_number: {
+      label: "Invoice number",
+      type: "text",
+      placeholder: "e.g. 7731",
+    },
+    // A product covers all its variants.
+    product: {
+      label: "Product",
+      type: "combobox",
+      fullWidth: true,
+      options: options.products,
+      loading: options.loading.products,
+      placeholder: "Any product",
+      emptyText: "No products yet.",
+      notFoundText: "No product matches that.",
+    },
+    customer: {
+      label: "Customer",
+      type: "combobox",
+      fullWidth: true,
+      options: options.customers,
+      loading: options.loading.customers,
+      placeholder: "Any customer",
+      emptyText: "No customers yet.",
+      notFoundText: "No customer matches that.",
+    },
+    return_type: {
+      label: "Return type",
+      type: "select",
+      options: return_type_options,
+      anyLabel: "Any type",
+    },
+    is_damaged: {
+      label: "Condition",
+      type: "select",
+      options: damaged_options,
+      anyLabel: "Any condition",
+    },
+  }
   const [isDeleted, setIsDeleted] = useState(false)
   const [filterWindowOpen, setFilterWindowOpen] = useState(false)
   const navigate = useNavigate()
@@ -172,14 +219,13 @@ const ReturnedItems = () => {
     });
   };
 
-  const fetchReturnedItems = async (searchQuery = null) => {
+  // `query` is the search or the filter that produced it; left out, the
+  // current one is kept (a refetch after a delete or a period change).
+  const fetchReturnedItems = async (query?: string | null) => {
     if (!token) return;
 
     try {
-      const res = await returnedItemsAPIPackage.list(token, searchQuery);
-      if (searchQuery){
-        console.log(res)
-      }
+      const res = await returnedItemsAPIPackage.list(token, list.track(query));
       if (res) {
         setReturnedItemsData(res.map(transformReturnedItem))
         setReturnedItemsIdMap(createIdMap(res))
@@ -203,27 +249,11 @@ const ReturnedItems = () => {
 
   useEffect(() => {
 
-    const fetchTotalReturnedItems = async () => {
-      if (!token) return;
-
-      try {
-        const res = await getTotalReturnedItems(token);
-        if (res!==null) {
-          setTotalReturnedItems(res);
-        } else {
-          toast.error("Failed to fetch total returned items.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total returned items.");
-        console.error("Error fetching total returned items:", error);
-      } finally {
-        setTotalReturnedItemsLoading(false);
-      }
-    }
-
-    fetchTotalReturnedItems()
     fetchReturnedItems();
   }, [token, isDeleted])
+
+  // A new period refetches the rows, and with them the cards.
+  useOnChange(list.period, () => fetchReturnedItems());
 
 
   return (
@@ -242,7 +272,7 @@ const ReturnedItems = () => {
           <div className="space-y-1">
             <DynamicBreadCrumb />
 
-            <div className="flex-1  justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center space-x-3">
                 <ArrowLeft
                   className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary"
@@ -255,15 +285,36 @@ const ReturnedItems = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Narrows the cards and the table together. A return has no
+                  date of its own, so this goes by when it was recorded. */}
+              <PeriodSwitch
+                label="Period for the cards and the table"
+                options={PAGE_PERIODS}
+                value={list.period}
+                onChange={list.setPeriod}
+                allowCustom
+              />
             </div>
           </div>
 
-          {/* Key Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* Key Metrics Cards - from the same rows the table shows. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             <MetricCard
-              title="Total Returned Items"
-              value={totalReturnedItems}
-              loading={totalReturnedItemsLoading}
+              title="Returned Items"
+              value={summary?.returned_items}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              error={list.summaryError}
+              valueLoading={list.summaryRefreshing}
+            />
+            <MetricCard
+              title="Units Returned"
+              value={summary?.returned_quantity}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              error={list.summaryError}
+              valueLoading={list.summaryRefreshing}
             />
           </div>
 
@@ -296,7 +347,7 @@ const ReturnedItems = () => {
                   type="button"
                 >
                   <Filter className="w-4 h-4" />
-                  <span>Filter</span>
+                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                 </Button>
               </div>
 
@@ -373,6 +424,7 @@ const ReturnedItems = () => {
             dataFetcher={fetchReturnedItems}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
+            onActiveChange={setFilterCount}
           />
         </main>
       </div>

@@ -5,6 +5,7 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { ChartCard } from "@/components/dashboard/ChartCard";
+import { PeriodSwitch } from "@/components/ui/period-switch";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -24,7 +25,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../services/AuthProvider";
 import {
     getCashInHand,
-    getDailySummary,
+    getTransactionsSummary,
     getMonthlyCashTrend,
     transactionsAPIPackage,
 } from "../../services/api";
@@ -40,9 +41,12 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useListPeriod, useOnChange } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
+import { PAGE_PERIODS, periodHint } from "../../services/periods";
 
 const subModules = [
-    { label: "Daily Book", icon: BookOpen, actionLink: "/accounting/daily-book" },
+    { label: "Book of Business", icon: BookOpen, actionLink: "/accounting/book-of-business" },
     { label: "Ledgers", icon: Users, actionLink: "/accounting/ledgers" },
     { label: "Money Accounts", icon: Wallet2, actionLink: "/accounting/accounts" },
     { label: "Cheques", icon: Landmark, actionLink: "/accounting/cheques" },
@@ -78,11 +82,16 @@ const cols = [
     },
 ];
 
+// No date: the page's period switch is that filter.
 const filter_fields_template = {
     type: "",
     status: "",
     payment_method: "",
-    date: "",
+    account: "",
+    customer: "",
+    supplier: "",
+    amount_min: "",
+    amount_max: "",
 };
 
 // Values mirror Transaction.TYPE_CHOICES / STATUS_CHOICES /
@@ -124,22 +133,15 @@ const payment_method_options = [
     { value: "cheque", label: "Cheque" },
 ];
 
-const filter_fields_mapper = {
-    type: { label: "Type", type: "select", options: transaction_type_options, anyLabel: "Any type" },
-    status: { label: "Status", type: "select", options: transaction_status_options, anyLabel: "Any status" },
-    payment_method: { label: "Method", type: "select", options: payment_method_options, anyLabel: "Any method" },
-    date: { label: "Date", type: "date", placeholder: "" },
-};
-
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
 
 const Accounting = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [cashInHand, setCashInHand] = useState(null);
     const [cashLoading, setCashLoading] = useState(true);
-    const [summary, setSummary] = useState(null);
-    const [summaryLoading, setSummaryLoading] = useState(true);
-    const [cashTrend, setCashTrend] = useState(Array(30).fill(0));
+    // Null until it lands - never zero-filled, see ChartCard's `loading`.
+    const [cashTrend, setCashTrend] = useState(null);
+    const [cashTrendFailed, setCashTrendFailed] = useState(false);
     const [transactionsData, setTransactionsData] = useState(null);
     // true until the first response lands, so the table never flashes
     // "no records" before it has asked. Cleared in a finally, never on
@@ -148,8 +150,47 @@ const Accounting = () => {
     const [selectedRows, setSelectedRows] = useState([]);
     const [isDeleted, setIsDeleted] = useState(false);
     const [filterWindowOpen, setFilterWindowOpen] = useState(false);
-    const { token, getPermissions } = useAuth();
+    const { token, getPermissions, user } = useAuth();
     const permissions = getPermissions("accounting");
+    // How many filters are on, for the Filter button.
+    const [filterCount, setFilterCount] = useState(0);
+    const options = useFilterOptions(token, user, ["accounts", "customers", "suppliers"]);
+
+    const filter_fields_mapper = {
+        type: { label: "Type", type: "select", options: transaction_type_options, anyLabel: "Any type" },
+        status: { label: "Status", type: "select", options: transaction_status_options, anyLabel: "Any status" },
+        payment_method: { label: "Method", type: "select", options: payment_method_options, anyLabel: "Any method" },
+        account: { label: "Account", type: "select", options: options.accounts, anyLabel: "Any account" },
+        // A receipt or payment against the party, on account or against one
+        // of their invoices.
+        customer: {
+            label: "Customer",
+            type: "combobox",
+            fullWidth: true,
+            options: options.customers,
+            loading: options.loading.customers,
+            placeholder: "Any customer",
+            emptyText: "No customers yet.",
+            notFoundText: "No customer matches that.",
+        },
+        supplier: {
+            label: "Supplier",
+            type: "combobox",
+            fullWidth: true,
+            options: options.suppliers,
+            loading: options.loading.suppliers,
+            placeholder: "Any supplier",
+            emptyText: "No suppliers yet.",
+            notFoundText: "No supplier matches that.",
+        },
+        amount: { label: "Amount (PKR)", type: "range", input: "number", keys: ["amount_min", "amount_max"], fullWidth: true },
+    };
+    // The page switch, and money in / out across the rows the table shows.
+    const list = useListPeriod(
+        (query) => getTransactionsSummary(token, query),
+        "Failed to fetch money in and out.",
+    );
+    const money = list.summary;
     const navigate = useNavigate();
 
     const toggleRowSelection = (id: string) => {
@@ -158,10 +199,12 @@ const Accounting = () => {
         );
     };
 
-    const fetchTransactions = async (searchQuery = null) => {
+    // `query` is the search or the filter that produced it; left out, the
+    // current one is kept (a refetch after a delete or a period change).
+    const fetchTransactions = async (query?: string | null) => {
         if (!token) return;
         try {
-            const res = await transactionsAPIPackage.list(token, searchQuery);
+            const res = await transactionsAPIPackage.list(token, list.track(query));
             if (res) {
                 setTransactionsData(res.map(transformTransaction));
             } else {
@@ -232,7 +275,11 @@ const Accounting = () => {
         const fetchCashInHand = async () => {
             try {
                 const res = await getCashInHand(token);
-                if (res) setCashInHand(res);
+                if (res) {
+                    setCashInHand(res);
+                } else {
+                    toast.error("Failed to fetch cash in hand.");
+                }
             } catch (error) {
                 console.log(error);
                 toast.error("Failed to fetch cash in hand.");
@@ -241,33 +288,29 @@ const Accounting = () => {
             }
         };
 
-        const fetchSummary = async () => {
-            try {
-                const res = await getDailySummary(token);
-                if (res) setSummary(res);
-            } catch (error) {
-                console.log(error);
-                toast.error("Failed to fetch today's summary.");
-            } finally {
-              setSummaryLoading(false);
-            }
-        };
-
         const fetchCashTrend = async () => {
             try {
                 const res = await getMonthlyCashTrend(token);
-                if (res) setCashTrend(res);
+                if (res) {
+                    setCashTrend(res);
+                } else {
+                    toast.error("Failed to fetch cash trend.");
+                    setCashTrendFailed(true);
+                }
             } catch (error) {
                 console.log(error);
                 toast.error("Failed to fetch cash trend.");
+                setCashTrendFailed(true);
             }
         };
 
         fetchCashInHand();
-        fetchSummary();
         fetchCashTrend();
         fetchTransactions();
     }, [token, isDeleted]);
+
+    // A new period refetches the rows, and with them money in and out.
+    useOnChange(list.period, () => fetchTransactions());
 
 
     return (
@@ -283,17 +326,31 @@ const Accounting = () => {
                     <div className="space-y-1">
                         <DynamicBreadCrumb />
 
-                        <div className="flex items-center space-x-3">
-                            <ArrowLeft
-                                className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary"
-                                onClick={() => navigate("/")}
-                            />
-                            <div>
-                                <h1 className="text-2xl font-semibold">Accounting Overview</h1>
-                                <p className="text-sm text-muted-foreground">
-                                    Today's cash position and every transaction recorded.
-                                </p>
+                        <div className="flex flex-wrap items-center justify-between gap-4">
+                            <div className="flex items-center space-x-3">
+                                <ArrowLeft
+                                    className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary"
+                                    onClick={() => navigate("/")}
+                                />
+                                <div>
+                                    <h1 className="text-2xl font-semibold">Accounting Overview</h1>
+                                    <p className="text-sm text-muted-foreground">
+                                        The cash position and every transaction recorded.
+                                    </p>
+                                </div>
                             </div>
+
+                            {/* Narrows money in / out and the table together.
+                                Cash in Hand is a balance and never follows it. */}
+                            {permissions?.["view"] && (
+                                <PeriodSwitch
+                                    label="Period for the cards and the table"
+                                    options={PAGE_PERIODS}
+                                    value={list.period}
+                                    onChange={list.setPeriod}
+                                    allowCustom
+                                />
+                            )}
                         </div>
                     </div>
 
@@ -310,17 +367,25 @@ const Accounting = () => {
                                 <MetricCard
                                     title="Cash in Hand"
                                     value={formatCurrency(cashInHand?.total)}
+                                    hint="As of today"
                                     loading={cashLoading}
+                                    error={!cashLoading && cashInHand == null}
                                   />
                                 <MetricCard
-                                    title="Money In Today"
-                                    value={formatCurrency(summary?.money_in?.total)}
-                                    loading={summaryLoading}
+                                    title="Money In"
+                                    value={formatCurrency(money?.money_in)}
+                                    hint={periodHint(money?.period, money?.filtered)}
+                                    loading={list.summaryLoading}
+                                    error={list.summaryError}
+                                    valueLoading={list.summaryRefreshing}
                                   />
                                 <MetricCard
-                                    title="Money Out Today"
-                                    value={formatCurrency(summary?.money_out?.total)}
-                                    loading={summaryLoading}
+                                    title="Money Out"
+                                    value={formatCurrency(money?.money_out)}
+                                    hint={periodHint(money?.period, money?.filtered)}
+                                    loading={list.summaryLoading}
+                                    error={list.summaryError}
+                                    valueLoading={list.summaryRefreshing}
                                   />
                             </div>
 
@@ -328,7 +393,9 @@ const Accounting = () => {
                                 <div className="flex flex-col gap-6">
                                     <ChartCard
                                         title="Net Cash Movement"
+                                        hint="This month"
                                         data={cashTrend}
+                                        error={cashTrendFailed}
                                         color="#8b5cf6"
                                     />
 
@@ -414,7 +481,7 @@ const Accounting = () => {
                                         onClick={() => setFilterWindowOpen(!filterWindowOpen)}
                                     >
                                         <Filter className="w-4 h-4 mr-2" />
-                                        <span>Filter</span>
+                                        <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                                     </Button>
                                 </div>
 
@@ -490,6 +557,7 @@ const Accounting = () => {
                                 dataFetcher={fetchTransactions}
                                 open={filterWindowOpen}
                                 setOpen={setFilterWindowOpen}
+                                onActiveChange={setFilterCount}
                             />
                         </>
                     )}

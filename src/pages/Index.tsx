@@ -1,7 +1,8 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import { MetricCard } from "@/components/dashboard/MetricCard";
-import { ChartCard } from "@/components/dashboard/ChartCard";
+import { PeriodMetricCard } from "@/components/dashboard/PeriodMetricCard";
+import { PeriodChartCard } from "@/components/dashboard/PeriodChartCard";
 import { QuickActions } from "@/components/dashboard/QuickActions";
 import { RecentSales } from "@/components/dashboard/RecentSales";
 import { useEffect, useState } from "react";
@@ -9,17 +10,15 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from '../../services/AuthProvider'
 import {
   getRecentSales,
-  getTotalInventoryValue, 
-  getTotalSalesDaily, 
-  getAvgOrderValue, 
-  getTotalPurchases, 
-  getMonthlySalesTrend,
-  getMonthlyExpensesTrend
+  getTotalInventoryValue,
+  getSalesSummary,
+  getPurchasesSummary,
+  getSalesTrend,
+  getExpensesTrend,
 } from '../../services/api'
 import { toast } from "react-toastify";
 import { formatCurrency } from "../../services/utils";
-
-// Sample data for charts
+import { withPeriod } from "../../services/periods";
 
 const Index = () => {
   const { token } = useAuth()
@@ -28,18 +27,11 @@ const Index = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [recentSales, SetRecentSales] = useState(null)
   const [totalInventoryValue, SetTotalInventoryValue] = useState(null)
-  const [totalSalesDaily, setTotalSalesDaily] = useState(null)
-  const [avgOrderValue, setAvgOrderValue] = useState(null)
-  const [totalPurchases, setTotalPurchases] = useState(null)
-  const [monthlySalesTrend, setMonthlySalesTrend] = useState(null)
-  const [monthlyExpensesTrend, setMonthlyExpensesTrend] = useState(null)
 
-  // One flag per figure, not one for the page: these are seven independent
+  // One flag per figure, not one for the page: these are independent
   // requests, and a single flag would hold every card back for the slowest.
-  const [loading, setLoading] = useState({
-    recentSales: true, inventory: true, salesDaily: true,
-    avgOrder: true, purchases: true, salesTrend: true, expensesTrend: true,
-  })
+  // The period cards below load themselves.
+  const [loading, setLoading] = useState({ recentSales: true, inventory: true })
   const done = (key) => setLoading((prev) => ({ ...prev, [key]: false }))
 
   useEffect(() => {
@@ -56,7 +48,7 @@ const Index = () => {
           toast.error("Error fetching recent sales")
           return
         }
-        
+
         SetRecentSales(res)
       } catch (error) {
         console.log(error)
@@ -65,7 +57,7 @@ const Index = () => {
         done("recentSales")
       }
     }
-    
+
     const fetchTotalInventoryValue = async () => {
       try {
         const res = await getTotalInventoryValue(token)
@@ -78,109 +70,20 @@ const Index = () => {
         SetTotalInventoryValue(res)
       } catch (error) {
         console.log(error)
-        toast.error("Error fetching recent sales")
+        toast.error("Error fetching total inventory value")
       } finally {
         done("inventory")
       }
     }
 
-    const fetchTotalSalesDaily = async () => {
-      try {
-        const res = await getTotalSalesDaily(token)
-        if (res == null) {
-          console.log("total sales daily:", res)
-          toast.error("Error fetching daily total sales")
-          return
-        }
-
-        setTotalSalesDaily(res)
-      } catch (error) {
-        console.log(error)
-        toast.error("Error fetching daily total sales")
-      } finally {
-        done("salesDaily")
-      }
-    }
-    
-    const fetchAvgOrderValue = async () => {
-      try {
-        const res = await getAvgOrderValue(token)
-        if (res == null) {
-          console.log("Avg. order value: ", res)
-          toast.error("Error fetching average order value")
-          return
-        }
-
-        setAvgOrderValue(res)
-      } catch (error) {
-        console.log(error)
-        toast.error("Error fetching average order value")
-      } finally {
-        done("avgOrder")
-      }
-    }
-    
-    const fetchTotalPurchases = async () => {
-      try {
-        const res = await getTotalPurchases(token)
-        if (res == null) {
-          console.log("total purchases: ", res)
-          toast.error("Error fetching total purchases")
-          return
-        }
-        
-        setTotalPurchases(res)
-      } catch (error) {
-        console.log(error)
-        toast.error("Error fetching total purchases")
-      } finally {
-        done("purchases")
-      }
-    }
-
-    const fetchMonthlySales = async () => {
-      try {
-        const res = await getMonthlySalesTrend(token)
-        if (res == null) {
-          toast.error("Error fetching monthly sales trend")
-          return
-        }
-
-        setMonthlySalesTrend(res)
-      } catch (error) {
-        console.log(error)
-        toast.error("Error fetching monthly sales trend")
-      } finally {
-        done("salesTrend")
-      }
-    }
-
-    const fetchMonthlyExpenses = async () => {
-      try {
-        const res = await getMonthlyExpensesTrend(token)
-        if (res == null) {
-          toast.error("Error fetching monthly sales trend")
-          return
-        }
-
-        setMonthlyExpensesTrend(res)
-      } catch (error) {
-        console.log(error)
-        toast.error("Error fetching monthly sales trend")
-      } finally {
-        done("expensesTrend")
-      }
-    }
-
-    fetchMonthlyExpenses()
-    fetchMonthlySales()
-    fetchTotalPurchases()
-    fetchAvgOrderValue()
-    fetchTotalSalesDaily()
     fetchTotalInventoryValue()
     fetchRecentSales()
 
   }, [token])
+
+  // Each period card asks for its own period, so these take one.
+  const salesFor = (period) => getSalesSummary(token, withPeriod("", period))
+  const purchasesFor = (period) => getPurchasesSummary(token, withPeriod("", period))
 
   return (
     <div className="min-h-screen bg-background">
@@ -201,25 +104,27 @@ const Index = () => {
             </div>
           </div>
 
-          {/* Charts and Metrics Section */}
-          <div className="grid grid-cols-2 gap-6">
-            {/* grid-cols-1 (not the non-existent "grid-2") so this column is a real
-                minmax(0,1fr) track. Without it the column is an implicit auto track that
-                sizes to its content, so a chart that measures wider than the available
-                space drags the column with it and paints over Quick Actions.
-                min-w-0 lets the grid item shrink below its content's min-content width. */}
+          {/* Charts and Metrics Section. The charts take three quarters of the
+              row and Quick Actions the last one. minmax(0, …) tracks, so a
+              chart that measures wider than its share cannot drag the column
+              with it and paint over Quick Actions. */}
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)] gap-6">
             <div className="grid grid-cols-1 gap-6 min-w-0">
-              <ChartCard
-                title="Total Sales this month"
-                data={monthlySalesTrend}
+              <PeriodChartCard
+                title="Total Sales"
+                storageKey="dashboard-sales-trend"
+                defaultPeriod={{ key: "month" }}
+                fetcher={(period) => getSalesTrend(token, period)}
                 color="#00a000"
-                loading={loading.salesTrend}
+                errorMessage="Error fetching the sales trend"
               />
-              <ChartCard
-                title="Total Expenses this month"
-                data={monthlyExpensesTrend}
+              <PeriodChartCard
+                title="Total Expenses"
+                storageKey="dashboard-expenses-trend"
+                defaultPeriod={{ key: "month" }}
+                fetcher={(period) => getExpensesTrend(token, period)}
                 color="red"
-                loading={loading.expensesTrend}
+                errorMessage="Error fetching the expenses trend"
               />
             </div>
 
@@ -229,12 +134,48 @@ const Index = () => {
 
           {/* Bottom Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Metrics Cards Column */}
-            <div className="grid grid-cols-1 gap-4">
-              <MetricCard title="Net Inventory Value" value={formatCurrency(totalInventoryValue)} loading={loading.inventory} />
-              <MetricCard title="Total Sales Today" value={formatCurrency(totalSalesDaily)} loading={loading.salesDaily} />
-              <MetricCard title="Average Order Value" value={formatCurrency(avgOrderValue)} loading={loading.avgOrder} />
-              <MetricCard title="Total Purchases" value={formatCurrency(totalPurchases)} loading={loading.purchases} />
+            {/* Metrics Cards Column. Each card keeps its own period; Net
+                Inventory Value is a balance, so it has none. */}
+            <div className="grid grid-cols-1 gap-4 content-start">
+              <MetricCard
+                title="Net Inventory Value"
+                value={formatCurrency(totalInventoryValue)}
+                hint="As of today"
+                loading={loading.inventory}
+                error={!loading.inventory && totalInventoryValue == null}
+              />
+              <PeriodMetricCard
+                title="Sales Invoiced"
+                storageKey="dashboard-sales-invoiced"
+                defaultPeriod={{ key: "today" }}
+                fetcher={salesFor}
+                pick={(data: { sales_invoiced: number }) => formatCurrency(data.sales_invoiced)}
+                errorMessage="Error fetching sales invoiced"
+              />
+              <PeriodMetricCard
+                title="Payments Received"
+                storageKey="dashboard-payments-received"
+                defaultPeriod={{ key: "today" }}
+                fetcher={salesFor}
+                pick={(data: { payments_received: number }) => formatCurrency(data.payments_received)}
+                errorMessage="Error fetching payments received"
+              />
+              <PeriodMetricCard
+                title="Average Order Value"
+                storageKey="dashboard-average-order-value"
+                defaultPeriod={{ key: "month" }}
+                fetcher={salesFor}
+                pick={(data: { average_order_value: number }) => formatCurrency(data.average_order_value)}
+                errorMessage="Error fetching the average order value"
+              />
+              <PeriodMetricCard
+                title="Purchases Invoiced"
+                storageKey="dashboard-purchases-invoiced"
+                defaultPeriod={{ key: "month" }}
+                fetcher={purchasesFor}
+                pick={(data: { purchases_invoiced: number }) => formatCurrency(data.purchases_invoiced)}
+                errorMessage="Error fetching purchases invoiced"
+              />
             </div>
 
             <RecentSales recentSales={recentSales} loading={loading.recentSales} />

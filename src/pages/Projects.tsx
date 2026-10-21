@@ -9,6 +9,7 @@ import {
   transformProject,
   createIdMap,
   listCountLabel,
+  ProjectStatusMap,
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -28,6 +29,8 @@ import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useListQuery } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -42,16 +45,13 @@ const cols = [
 ];
 
 const filter_fields_template = {
-  customer: ""
+  customer: "",
+  status: "",
 };
 
-const filter_fields_mapper = {
-  customer: {
-    label: "Customer",
-    type: "text",
-    placeholder: "Enter customer name",
-  },
-};
+const status_options = Object.entries(ProjectStatusMap).map(
+  ([value, label]) => ({ value, label })
+);
 
 const Projects = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
@@ -63,8 +63,32 @@ const Projects = () => {
   const [loading, setLoading] = useState(true);
   const [projectsIdMap, setProjectsIdMap] = useState([])
   const { token } = useAuth() || null
-  const { getPermissions } = useAuth()
+  const { getPermissions, user } = useAuth()
   const permissions = getPermissions("projects")
+  // The search and the filters, kept together so one never drops the other.
+  const listQuery = useListQuery()
+  // How many filters are on, for the Filter button.
+  const [filterCount, setFilterCount] = useState(0)
+  const options = useFilterOptions(token, user, ["customers"])
+
+  const filter_fields_mapper = {
+    customer: {
+      label: "Customer",
+      type: "combobox",
+      fullWidth: true,
+      options: options.customers,
+      loading: options.loading.customers,
+      placeholder: "Any customer",
+      emptyText: "No customers yet.",
+      notFoundText: "No customer matches that.",
+    },
+    status: {
+      label: "Status",
+      type: "select",
+      options: status_options,
+      anyLabel: "Any status",
+    },
+  }
   const [isDeleted, setIsDeleted] = useState(false)
   const [filterWindowOpen, setFilterWindowOpen] = useState(false)
   const navigate = useNavigate()
@@ -121,14 +145,13 @@ const Projects = () => {
     });
   };
 
-  const fetchProjects = async (searchQuery = null) => {
+  // `query` is the search or the filter that produced it; left out, the
+  // current one is kept (a refetch after a delete).
+  const fetchProjects = async (query?: string | null) => {
     if (!token) return;
 
     try {
-      const res = await projectsAPIPackage.list(token, searchQuery);
-      if (searchQuery){
-        console.log(res)
-      }
+      const res = await projectsAPIPackage.list(token, listQuery.track(query));
       if (res) {
         setProjectsData(res.map(transformProject))
         setProjectsIdMap(createIdMap(res))
@@ -217,7 +240,7 @@ const Projects = () => {
                   type="button"
                 >
                   <Filter className="w-4 h-4" />
-                  <span>Filter</span>
+                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                 </Button>
               </div>
 
@@ -282,6 +305,7 @@ const Projects = () => {
             dataFetcher={fetchProjects}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
+            onActiveChange={setFilterCount}
           />
         </main>
       </div>

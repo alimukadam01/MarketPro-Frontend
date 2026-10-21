@@ -4,25 +4,27 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PeriodSwitch } from "@/components/ui/period-switch";
 import { toast } from "sonner";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../services/AuthProvider";
-import { getDayBook, getDailySummary } from "../../services/api";
+import { getBook, getBookSummary } from "../../services/api";
 import {
     AccountTypeMap,
     TransactionTypeMap,
     TransactionStatusMap,
     getTransactionStatusColor,
-    todayForInput,
+    formatDate,
   ACCESS_DENIED_MESSAGE,
 } from "../../services/utils";
+import { CARD_PERIODS, TODAY, periodHint } from "../../services/periods";
 
 const cols = [
     { key: "id", label: "ID" },
+    // A period spans days, so each row says which one.
+    { key: "date", label: "Date", render: (value) => (value ? formatDate(value) : "-") },
     {
         key: "type",
         label: "Type",
@@ -56,18 +58,30 @@ const cols = [
 
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
 
-const DailyBook = () => {
+/**
+ * The Book of Business: the day book over any period - today by default, a
+ * week from Saturday, this month, quarter or year, or a custom range. Every
+ * figure and every account table on the page follows the period. Receivable
+ * and payable are balances, so they always show where things stand today.
+ */
+const BookOfBusiness = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-    const [selectedDate, setSelectedDate] = useState(
-        todayForInput()
-    );
+    const [period, setPeriod] = useState<{ key: string; from?: string; to?: string }>(TODAY);
     const [dayBook, setDayBook] = useState(null);
     // Every surface fed by fetchDayBook shares this: the two figures above the
     // fold and the per-account tables, which are nested inside dayBook rather
-    // than fetched separately.
+    // than fetched separately. True only until the first answer; after that a
+    // period change keeps the page on screen and only the figures wait.
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
     const [summaryLoading, setSummaryLoading] = useState(true);
+    // The latest fetch failed: the cards show a hazard rather than the last
+    // period's figures as though they were this one's.
+    const [bookFailed, setBookFailed] = useState(false);
+    const [summaryFailed, setSummaryFailed] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+    // A slow answer for an older period must not overwrite a newer one.
+    const latest = useRef(0);
     const [accountIndex, setAccountIndex] = useState(0);
     const { token, getPermissions } = useAuth();
     const permissions = getPermissions("accounting");
@@ -82,48 +96,57 @@ const DailyBook = () => {
     const showNextAccount = () =>
         setAccountIndex((prev) => (prev + 1) % accounts.length);
 
-    const fetchDayBook = async () => {
+    const fetchBook = async () => {
         if (!token) return;
-        setLoading(true);
+        const ticket = ++latest.current;
+        setRefreshing(true);
         try {
-            const res = await getDayBook(token, selectedDate);
-            if (res) {
-                setDayBook(res);
+            const [book, totals] = await Promise.all([
+                getBook(token, period),
+                getBookSummary(token, period),
+            ]);
+            if (ticket !== latest.current) return;
+            setBookFailed(!book);
+            setSummaryFailed(!totals);
+            if (book) {
+                setDayBook(book);
             } else {
-                toast.error("Failed to fetch the day book.");
+                toast.error("Failed to fetch the book of business.");
+            }
+            if (totals) {
+                setSummary(totals);
+            } else {
+                toast.error("Failed to fetch the summary.");
             }
         } catch (error) {
-            console.log("Error fetching day book:", error);
-            toast.error("Failed to fetch the day book.");
+            console.log("Error fetching the book of business:", error);
+            if (ticket === latest.current) {
+                toast.error("Failed to fetch the book of business.");
+                setBookFailed(true);
+                setSummaryFailed(true);
+            }
         } finally {
-            setLoading(false);
+            if (ticket === latest.current) {
+                setLoading(false);
+                setSummaryLoading(false);
+                setRefreshing(false);
+            }
         }
     };
 
-    const fetchSummary = async () => {
-        if (!token) return;
-        setSummaryLoading(true);
-        try {
-            const res = await getDailySummary(token, selectedDate);
-            if (res) {
-                setSummary(res);
-            } else {
-                toast.error("Failed to fetch the daily summary.");
-            }
-        } catch (error) {
-            console.log("Error fetching daily summary:", error);
-            toast.error("Failed to fetch the daily summary.");
-        } finally {
-          setSummaryLoading(false);
-        }
-    };
-
+    // Compared by value: a custom range is a new object on every edit.
+    const periodKey = JSON.stringify(period);
     useEffect(() => {
-        // A different day can have a different set of accounts.
+        // A different period can have a different set of accounts.
         setAccountIndex(0);
-        fetchDayBook();
-        fetchSummary();
-    }, [token, selectedDate]);
+        fetchBook();
+    }, [token, periodKey]);
+
+    // The period the figures cover, as the server worked it out.
+    const covered = dayBook
+        ? { key: period.key, date_from: dayBook.date_from, date_to: dayBook.date_to }
+        : null;
+    const hint = periodHint(covered);
 
     return (
         <div className="min-h-screen bg-background">
@@ -138,30 +161,30 @@ const DailyBook = () => {
                     <div className="space-y-1">
                         <DynamicBreadCrumb />
 
-                        <div className="flex items-center space-x-3">
-                            <ArrowLeft
-                                className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary"
-                                onClick={() => navigate("/accounting")}
-                            />
-                            <div>
-                                <h1 className="text-2xl font-semibold">Daily Book</h1>
-                                <p className="text-sm text-muted-foreground">
-                                    The daily cash book. Pick any past date to review it.
-                                </p>
+                        <div className="flex flex-wrap items-center justify-between gap-4">
+                            <div className="flex items-center space-x-3">
+                                <ArrowLeft
+                                    className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary"
+                                    onClick={() => navigate("/accounting")}
+                                />
+                                <div>
+                                    <h1 className="text-2xl font-semibold">Book of Business</h1>
+                                    <p className="text-sm text-muted-foreground">
+                                        The cash book over any period. Every figure below follows it.
+                                    </p>
+                                </div>
                             </div>
-                        </div>
-                    </div>
 
-                    <div className="flex items-center space-x-4">
-                        <div className="space-y-1">
-                            <Label htmlFor="date">Date</Label>
-                            <Input
-                                id="date"
-                                type="date"
-                                className="w-56"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                            />
+                            {permissions?.["view"] && (
+                                <PeriodSwitch
+                                    label="Period for the book of business"
+                                    options={CARD_PERIODS}
+                                    value={period}
+                                    onChange={setPeriod}
+                                    allowCustom
+                                    clearTo={TODAY}
+                                />
+                            )}
                         </div>
                     </div>
 
@@ -173,47 +196,70 @@ const DailyBook = () => {
                         </div>
                     ) : (
                         <>
-                            {/* Key figures for the day */}
+                            {/* Key figures for the period. Receivable and
+                                payable are balances, so they show today's. */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <MetricCard
                                     title="Money In"
                                     value={formatCurrency(dayBook?.total_money_in)}
+                                    hint={hint}
                                     loading={loading}
+                                    error={bookFailed}
+                                    valueLoading={refreshing}
                                   />
                                 <MetricCard
                                     title="Money Out"
                                     value={formatCurrency(dayBook?.total_money_out)}
+                                    hint={hint}
                                     loading={loading}
+                                    error={bookFailed}
+                                    valueLoading={refreshing}
                                   />
                                 <MetricCard
                                     title="Credit Extended"
                                     value={formatCurrency(summary?.credit_extended)}
+                                    hint={hint}
                                     loading={summaryLoading}
+                                    error={summaryFailed}
+                                    valueLoading={refreshing}
                                   />
                                 <MetricCard
                                     title="Credit Recovered"
                                     value={formatCurrency(summary?.money_in?.udhaar_recovered)}
+                                    hint={hint}
                                     loading={summaryLoading}
+                                    error={summaryFailed}
+                                    valueLoading={refreshing}
                                   />
                                 <MetricCard
                                     title="Total Receivable"
                                     value={formatCurrency(summary?.total_receivable)}
+                                    hint="As of today"
                                     loading={summaryLoading}
+                                    error={summaryFailed}
                                   />
                                 <MetricCard
                                     title="Total Payable"
                                     value={formatCurrency(summary?.total_payable)}
+                                    hint="As of today"
                                     loading={summaryLoading}
+                                    error={summaryFailed}
                                   />
                                 <MetricCard
                                     title="Cheques Due"
                                     value={String(summary?.pending_cheques?.length || 0)}
+                                    hint={summary?.date_to ? `Pending, due by ${formatDate(summary.date_to)}` : undefined}
                                     loading={summaryLoading}
+                                    error={summaryFailed}
+                                    valueLoading={refreshing}
                                   />
                                 <MetricCard
                                     title="Profit (estimated)"
                                     value={formatCurrency(summary?.profit?.profit)}
+                                    hint={hint}
                                     loading={summaryLoading}
+                                    error={summaryFailed}
+                                    valueLoading={refreshing}
                                   />
                             </div>
 
@@ -225,7 +271,7 @@ const DailyBook = () => {
 
                             {/* Daily Summary */}
                             <div className="space-y-4">
-                                <h2 className="text-xl font-semibold">Daily Summary</h2>
+                                <h2 className="text-xl font-semibold">Summary</h2>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                     <div className="bg-card rounded-lg p-6 border space-y-2">
@@ -370,7 +416,7 @@ const DailyBook = () => {
                                         ) : (
                                             <div className="bg-card rounded-lg p-6 border">
                                                 <p className="text-sm text-muted-foreground">
-                                                    No money moved through this account on this date.
+                                                    No money moved through this account in this period.
                                                 </p>
                                             </div>
                                         )}
@@ -391,4 +437,4 @@ const DailyBook = () => {
     );
 };
 
-export default DailyBook;
+export default BookOfBusiness;

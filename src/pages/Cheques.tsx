@@ -179,11 +179,13 @@ const Cheques = () => {
                           title="Pending Cheques"
                           value={chequesData?.length || 0}
                           loading={loading}
+                          error={!loading && chequesData == null}
                         />
                         <MetricCard
                           title="Pending Value"
                           value={formatCurrency(totalPending)}
                           loading={loading}
+                          error={!loading && chequesData == null}
                         />
                     </div>
 

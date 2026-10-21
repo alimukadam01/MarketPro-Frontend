@@ -262,7 +262,10 @@ export function transformExpense(data) {
     category: ExpenseCategoryLabels[data.category] || "-",
     desc: data.desc,
     amount: data.amount,
-    created_at: formatDate(data.created_at)
+    paid_from: data.paid_from_name || "-",
+    // The day the money went out - the date its transaction carries, as the
+    // transactions list shows it - not the day the row was typed in.
+    expense_date: formatDate(data.expense_date || data.created_at)
   }
 }
 
