@@ -157,7 +157,7 @@ export function GlobalSearch() {
       </kbd>
 
       {showPanel && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-[36rem] max-w-[calc(100vw-2rem)] max-h-[500px] overflow-y-auto rounded-lg border border-border bg-popover py-2 shadow-lg">
+        <div className="absolute inset-x-0 top-full z-50 mt-2 max-h-[500px] overflow-y-auto rounded-lg border border-border bg-popover py-2 shadow-lg">
           {state.kind === "loading" && (
             <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
               <Spinner size={16} color="hsl(var(--spinner))" />
