@@ -141,6 +141,7 @@ const Accounting = () => {
     const [cashLoading, setCashLoading] = useState(true);
     // Null until it lands - never zero-filled, see ChartCard's `loading`.
     const [cashTrend, setCashTrend] = useState(null);
+    const [cashTrendFailed, setCashTrendFailed] = useState(false);
     const [transactionsData, setTransactionsData] = useState(null);
     // true until the first response lands, so the table never flashes
     // "no records" before it has asked. Cleared in a finally, never on
@@ -274,7 +275,11 @@ const Accounting = () => {
         const fetchCashInHand = async () => {
             try {
                 const res = await getCashInHand(token);
-                if (res) setCashInHand(res);
+                if (res) {
+                    setCashInHand(res);
+                } else {
+                    toast.error("Failed to fetch cash in hand.");
+                }
             } catch (error) {
                 console.log(error);
                 toast.error("Failed to fetch cash in hand.");
@@ -286,10 +291,16 @@ const Accounting = () => {
         const fetchCashTrend = async () => {
             try {
                 const res = await getMonthlyCashTrend(token);
-                if (res) setCashTrend(res);
+                if (res) {
+                    setCashTrend(res);
+                } else {
+                    toast.error("Failed to fetch cash trend.");
+                    setCashTrendFailed(true);
+                }
             } catch (error) {
                 console.log(error);
                 toast.error("Failed to fetch cash trend.");
+                setCashTrendFailed(true);
             }
         };
 
@@ -358,12 +369,14 @@ const Accounting = () => {
                                     value={formatCurrency(cashInHand?.total)}
                                     hint="As of today"
                                     loading={cashLoading}
+                                    error={!cashLoading && cashInHand == null}
                                   />
                                 <MetricCard
                                     title="Money In"
                                     value={formatCurrency(money?.money_in)}
                                     hint={periodHint(money?.period, money?.filtered)}
                                     loading={list.summaryLoading}
+                                    error={list.summaryError}
                                     valueLoading={list.summaryRefreshing}
                                   />
                                 <MetricCard
@@ -371,6 +384,7 @@ const Accounting = () => {
                                     value={formatCurrency(money?.money_out)}
                                     hint={periodHint(money?.period, money?.filtered)}
                                     loading={list.summaryLoading}
+                                    error={list.summaryError}
                                     valueLoading={list.summaryRefreshing}
                                   />
                             </div>
@@ -381,6 +395,7 @@ const Accounting = () => {
                                         title="Net Cash Movement"
                                         hint="This month"
                                         data={cashTrend}
+                                        error={cashTrendFailed}
                                         color="#8b5cf6"
                                     />
 

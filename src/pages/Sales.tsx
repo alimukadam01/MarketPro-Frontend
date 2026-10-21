@@ -370,6 +370,7 @@ const Sales = () => {
               value={formatCurrency(summary?.sales_invoiced)}
               hint={periodHint(summary?.period, summary?.filtered)}
               loading={list.summaryLoading}
+              error={list.summaryError}
               valueLoading={list.summaryRefreshing}
             />
             <MetricCard
@@ -377,6 +378,7 @@ const Sales = () => {
               value={formatCurrency(summary?.payments_received)}
               hint={periodHint(summary?.period, summary?.filtered)}
               loading={list.summaryLoading}
+              error={list.summaryError}
               valueLoading={list.summaryRefreshing}
             />
             <MetricCard
@@ -384,6 +386,7 @@ const Sales = () => {
               value={summary?.invoices_raised}
               hint={periodHint(summary?.period, summary?.filtered)}
               loading={list.summaryLoading}
+              error={list.summaryError}
               valueLoading={list.summaryRefreshing}
             />
             <MetricCard
@@ -391,6 +394,7 @@ const Sales = () => {
               value={summary?.items_sold}
               hint={periodHint(summary?.period, summary?.filtered)}
               loading={list.summaryLoading}
+              error={list.summaryError}
               valueLoading={list.summaryRefreshing}
             />
           </div>

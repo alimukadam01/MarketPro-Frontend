@@ -3,7 +3,6 @@
 
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
-import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
@@ -23,7 +22,6 @@ import { useAuth } from "../../services/AuthProvider"
 import {
   ArrowLeft,
   Plus,
-  Filter,
   Edit,
   Trash2,
   Lock,
@@ -33,8 +31,6 @@ import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
-import { useListQuery } from "@/hooks/use-period";
-import { useFilterOptions } from "@/hooks/use-filter-options";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -45,10 +41,6 @@ const cols = [
   { key: "email", label: "Email" },
   { key: "city", label: "City" },
 ];
-
-const filter_fields_template = {
-  city: "",
-};
 
 const Customers = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -63,28 +55,9 @@ const Customers = () => {
   // requests, and one must not speak for the other.
   const [totalCustomersLoading, setTotalCustomersLoading] = useState(true);
   const { token } = useAuth() || null;
-  const { getPermissions, user } = useAuth()
+  const { getPermissions } = useAuth()
   const permissions = getPermissions("customers")
-  // The search and the filters, kept together so one never drops the other.
-  const listQuery = useListQuery()
-  // How many filters are on, for the Filter button.
-  const [filterCount, setFilterCount] = useState(0)
-  const options = useFilterOptions(token, user, ["cities"])
-
-  const filter_fields_mapper = {
-    city: {
-      label: "City",
-      type: "combobox",
-      fullWidth: true,
-      options: options.cities,
-      loading: options.loading.cities,
-      placeholder: "Any city",
-      emptyText: "No cities yet.",
-      notFoundText: "No city matches that.",
-    },
-  }
   const [isDeleted, setIsDeleted] = useState(false);
-  const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();
 
   const toggleRowSelection = (id: string) => {
@@ -139,13 +112,11 @@ const Customers = () => {
     });
   };
 
-  // `query` is the search or the filter that produced it; left out, the
-  // current one is kept (a refetch after a delete).
-  const fetchCustomers = async (query?: string | null) => {
+  const fetchCustomers = async (searchQuery = null) => {
     if (!token) return;
 
     try {
-      const res = await getCustomersList(token, listQuery.track(query), true);
+      const res = await getCustomersList(token, searchQuery, true);
       if (res) {
         setCustomersData(res.map(transformCustomer));
       } else {
@@ -158,11 +129,6 @@ const Customers = () => {
         setLoading(false);
     }
   }
-
-  const handleFilterClick = (e) => {
-    e.preventDefault();
-    setFilterWindowOpen(!filterWindowOpen);
-  };
 
   const { searchTerm, setSearchTerm, searching } = useDebouncedSearch(fetchCustomers);
 
@@ -228,6 +194,7 @@ const Customers = () => {
               title="Total Customers"
               value={totalCustomers}
               loading={totalCustomersLoading}
+              error={!totalCustomersLoading && totalCustomers == null}
             />
           </div>
 
@@ -244,7 +211,7 @@ const Customers = () => {
               Customer Listing ({listCountLabel(customersData, selectedRows)})
             </h2>
 
-            {/* Search and Filter */}
+            {/* Search */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <SearchField
@@ -253,15 +220,6 @@ const Customers = () => {
                   onChange={setSearchTerm}
                   pending={searching}
                 />
-                <Button
-                  variant="outline"
-                  className="flex items-center space-x-2"
-                  onClick={handleFilterClick}
-                  type="button"
-                >
-                  <Filter className="w-4 h-4" />
-                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
-                </Button>
               </div>
 
               {/* Action Icons */}
@@ -317,16 +275,6 @@ const Customers = () => {
             />
           ) : null}
           </div>
-
-          <CustomFilter
-            title="Filter Customers"
-            template={filter_fields_template}
-            templateMapper={filter_fields_mapper}
-            dataFetcher={fetchCustomers}
-            open={filterWindowOpen}
-            setOpen={setFilterWindowOpen}
-            onActiveChange={setFilterCount}
-          />
         </main>
       </div>
     </div>

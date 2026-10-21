@@ -28,7 +28,7 @@ export function PeriodChartCard({
   title, storageKey, defaultPeriod, fetcher, color, errorMessage,
 }: PeriodChartCardProps) {
   const [period, setPeriod] = usePersistentPeriod(storageKey, defaultPeriod);
-  const { data, loading } = usePeriodFetch(fetcher, period, errorMessage);
+  const { data, loading, error } = usePeriodFetch(fetcher, period, errorMessage);
 
   return (
     <ChartCard
@@ -36,6 +36,7 @@ export function PeriodChartCard({
       data={data ? data.trend : null}
       color={color}
       loading={loading}
+      error={error}
       hint={periodHint(data?.period)}
       period={period}
       periodOptions={CARD_PERIODS}

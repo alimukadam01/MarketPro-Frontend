@@ -305,6 +305,7 @@ const ReturnedItems = () => {
               value={summary?.returned_items}
               hint={periodHint(summary?.period, summary?.filtered)}
               loading={list.summaryLoading}
+              error={list.summaryError}
               valueLoading={list.summaryRefreshing}
             />
             <MetricCard
@@ -312,6 +313,7 @@ const ReturnedItems = () => {
               value={summary?.returned_quantity}
               hint={periodHint(summary?.period, summary?.filtered)}
               loading={list.summaryLoading}
+              error={list.summaryError}
               valueLoading={list.summaryRefreshing}
             />
           </div>

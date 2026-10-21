@@ -75,6 +75,10 @@ const BookOfBusiness = () => {
     const [loading, setLoading] = useState(true);
     const [summary, setSummary] = useState(null);
     const [summaryLoading, setSummaryLoading] = useState(true);
+    // The latest fetch failed: the cards show a hazard rather than the last
+    // period's figures as though they were this one's.
+    const [bookFailed, setBookFailed] = useState(false);
+    const [summaryFailed, setSummaryFailed] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     // A slow answer for an older period must not overwrite a newer one.
     const latest = useRef(0);
@@ -102,6 +106,8 @@ const BookOfBusiness = () => {
                 getBookSummary(token, period),
             ]);
             if (ticket !== latest.current) return;
+            setBookFailed(!book);
+            setSummaryFailed(!totals);
             if (book) {
                 setDayBook(book);
             } else {
@@ -114,7 +120,11 @@ const BookOfBusiness = () => {
             }
         } catch (error) {
             console.log("Error fetching the book of business:", error);
-            if (ticket === latest.current) toast.error("Failed to fetch the book of business.");
+            if (ticket === latest.current) {
+                toast.error("Failed to fetch the book of business.");
+                setBookFailed(true);
+                setSummaryFailed(true);
+            }
         } finally {
             if (ticket === latest.current) {
                 setLoading(false);
@@ -194,6 +204,7 @@ const BookOfBusiness = () => {
                                     value={formatCurrency(dayBook?.total_money_in)}
                                     hint={hint}
                                     loading={loading}
+                                    error={bookFailed}
                                     valueLoading={refreshing}
                                   />
                                 <MetricCard
@@ -201,6 +212,7 @@ const BookOfBusiness = () => {
                                     value={formatCurrency(dayBook?.total_money_out)}
                                     hint={hint}
                                     loading={loading}
+                                    error={bookFailed}
                                     valueLoading={refreshing}
                                   />
                                 <MetricCard
@@ -208,6 +220,7 @@ const BookOfBusiness = () => {
                                     value={formatCurrency(summary?.credit_extended)}
                                     hint={hint}
                                     loading={summaryLoading}
+                                    error={summaryFailed}
                                     valueLoading={refreshing}
                                   />
                                 <MetricCard
@@ -215,6 +228,7 @@ const BookOfBusiness = () => {
                                     value={formatCurrency(summary?.money_in?.udhaar_recovered)}
                                     hint={hint}
                                     loading={summaryLoading}
+                                    error={summaryFailed}
                                     valueLoading={refreshing}
                                   />
                                 <MetricCard
@@ -222,18 +236,21 @@ const BookOfBusiness = () => {
                                     value={formatCurrency(summary?.total_receivable)}
                                     hint="As of today"
                                     loading={summaryLoading}
+                                    error={summaryFailed}
                                   />
                                 <MetricCard
                                     title="Total Payable"
                                     value={formatCurrency(summary?.total_payable)}
                                     hint="As of today"
                                     loading={summaryLoading}
+                                    error={summaryFailed}
                                   />
                                 <MetricCard
                                     title="Cheques Due"
                                     value={String(summary?.pending_cheques?.length || 0)}
                                     hint={summary?.date_to ? `Pending, due by ${formatDate(summary.date_to)}` : undefined}
                                     loading={summaryLoading}
+                                    error={summaryFailed}
                                     valueLoading={refreshing}
                                   />
                                 <MetricCard
@@ -241,6 +258,7 @@ const BookOfBusiness = () => {
                                     value={formatCurrency(summary?.profit?.profit)}
                                     hint={hint}
                                     loading={summaryLoading}
+                                    error={summaryFailed}
                                     valueLoading={refreshing}
                                   />
                             </div>

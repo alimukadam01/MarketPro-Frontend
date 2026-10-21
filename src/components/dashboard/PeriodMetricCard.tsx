@@ -28,7 +28,7 @@ export function PeriodMetricCard({
   title, storageKey, defaultPeriod, fetcher, pick, errorMessage,
 }: PeriodMetricCardProps) {
   const [period, setPeriod] = usePersistentPeriod(storageKey, defaultPeriod);
-  const { data, loading, refreshing } = usePeriodFetch(fetcher, period, errorMessage);
+  const { data, loading, refreshing, error } = usePeriodFetch(fetcher, period, errorMessage);
 
   return (
     <MetricCard
@@ -37,6 +37,7 @@ export function PeriodMetricCard({
       hint={periodHint(data?.period)}
       loading={loading}
       valueLoading={refreshing}
+      error={error}
       period={period}
       periodOptions={CARD_PERIODS}
       onPeriodChange={setPeriod}

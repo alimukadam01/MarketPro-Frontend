@@ -180,7 +180,6 @@ export function GlobalSearch() {
           {state.kind === "results" && (
             <div id={listboxId} role="listbox" aria-label="Search results">
               {state.groups.map((group) => {
-                const Icon = iconFor(group.type);
                 return (
                   <div key={group.type} role="group" aria-label={group.label} className="pb-2">
                     <div className="flex items-baseline justify-between gap-3 px-4 pb-1 pt-2">
@@ -201,6 +200,7 @@ export function GlobalSearch() {
                       index += 1;
                       const position = index;
                       const selected = position === active;
+                      const Icon = iconFor(group.type, hit.link);
                       const body = (
                         <>
                           <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />

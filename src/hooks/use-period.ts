@@ -71,6 +71,7 @@ export function combineQueries(...queries: string[]) {
  *
  *   loading     - true until the first answer: the whole card is a placeholder
  *   refreshing  - true while a later answer is on its way: only the figure is
+ *   error       - true when the latest answer failed: the card shows a hazard
  *
  * A slower, older request that lands after a newer one is dropped, so a card
  * never shows the figure for the period before last.
@@ -84,6 +85,7 @@ export function usePeriodFetch<T>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(false);
   const latest = useRef(0);
 
   // The fetcher closes over the token and is a new function every render, so
@@ -103,12 +105,17 @@ export function usePeriodFetch<T>(
         if (ticket !== latest.current) return;
         if (res == null) {
           toast.error(errorMessage);
+          setError(true);
         } else {
           setData(res);
+          setError(false);
         }
       } catch (error) {
         console.log(error);
-        if (ticket === latest.current) toast.error(errorMessage);
+        if (ticket === latest.current) {
+          toast.error(errorMessage);
+          setError(true);
+        }
       } finally {
         if (ticket === latest.current) {
           setLoading(false);
@@ -119,7 +126,7 @@ export function usePeriodFetch<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodKey, refreshKey]);
 
-  return { data, loading, refreshing };
+  return { data, loading, refreshing, error };
 }
 
 /**
@@ -154,6 +161,9 @@ export function useListPeriod(
   const [summary, setSummary] = useState<any>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryRefreshing, setSummaryRefreshing] = useState(false);
+  // The latest summary failed: its cards show a hazard, not the last figures
+  // as though they described the rows on screen.
+  const [summaryError, setSummaryError] = useState(false);
 
   const query = useListQuery();
   const latest = useRef(0);
@@ -175,12 +185,17 @@ export function useListPeriod(
       if (ticket !== latest.current) return;
       if (res == null) {
         toast.error(errorMessage);
+        setSummaryError(true);
       } else {
         setSummary(res);
+        setSummaryError(false);
       }
     } catch (error) {
       console.log(error);
-      if (ticket === latest.current) toast.error(errorMessage);
+      if (ticket === latest.current) {
+        toast.error(errorMessage);
+        setSummaryError(true);
+      }
     } finally {
       if (ticket === latest.current) {
         setSummaryLoading(false);
@@ -196,7 +211,7 @@ export function useListPeriod(
     return withThePeriod;
   };
 
-  return { period, setPeriod, track, summary, summaryLoading, summaryRefreshing };
+  return { period, setPeriod, track, summary, summaryLoading, summaryRefreshing, summaryError };
 }
 
 /**

@@ -110,6 +110,9 @@ export function PartyDetail({ party }: { party: "customer" | "supplier" }) {
     const [ledgerLoading, setLedgerLoading] = useState(true);
     const [opening, setOpening] = useState(null);
     const [openingLoading, setOpeningLoading] = useState(true);
+    // A party with no opening balance has opening == null too, so a failed
+    // fetch is told apart by this flag.
+    const [openingFailed, setOpeningFailed] = useState(false);
     const [openingAmount, setOpeningAmount] = useState("");
     const [openingDate, setOpeningDate] = useState(todayForInput());
     const [savingOpening, setSavingOpening] = useState(false);
@@ -214,6 +217,7 @@ export function PartyDetail({ party }: { party: "customer" | "supplier" }) {
 
         try {
             const res = await getSettleableItems(token, config.idArg(party_id));
+            setOpeningFailed(!res);
             if (res) {
                 setOpening(res.opening_balance);
                 setOpeningAmount(
@@ -230,6 +234,7 @@ export function PartyDetail({ party }: { party: "customer" | "supplier" }) {
             }
         } catch (error) {
             console.log("Error fetching opening balance:", error);
+            setOpeningFailed(true);
         } finally {
             setOpeningLoading(false);
         }
@@ -388,6 +393,7 @@ export function PartyDetail({ party }: { party: "customer" | "supplier" }) {
                             value={formatCurrency(summary?.balance)}
                             hint="As of today"
                             loading={summaryLoading}
+                            error={!summaryLoading && summary == null}
                         />
                         {/* Its own period: what was billed to this party over
                             it. The balance beside it is always everything. */}
@@ -405,6 +411,7 @@ export function PartyDetail({ party }: { party: "customer" | "supplier" }) {
                                 value={formatCurrency(opening?.amount)}
                                 hint={openingHint}
                                 loading={openingLoading}
+                                error={openingFailed}
                             />
                         )}
                     </div>

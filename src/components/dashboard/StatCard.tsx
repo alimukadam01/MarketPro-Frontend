@@ -1,3 +1,4 @@
+import { TriangleAlert } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +10,12 @@ interface StatCardProps {
    * spinner turns beside the title; the figure rolls up once it lands.
    */
   loading?: boolean;
+  /**
+   * True when the body could not be fetched. The spinner gives way to a red
+   * hazard sign, so a failed card says so instead of spinning for ever.
+   * Loading wins: a retry in flight shows the spinner again.
+   */
+  error?: boolean;
   className?: string;
   /** Extra classes for the title - a chart's heading is black, not grey. */
   titleClassName?: string;
@@ -35,7 +42,7 @@ interface StatCardProps {
  * spinner beside the title says work is under way.
  */
 export function StatCard({
-  title, loading = false, className, titleClassName, titleAside, action, children,
+  title, loading = false, error = false, className, titleClassName, titleAside, action, children,
 }: StatCardProps) {
   return (
     <div className={cn("bg-card rounded-lg p-6 border animate-in fade-in duration-300", className)}>
@@ -47,9 +54,18 @@ export function StatCard({
           <div className={cn("text-xl leading-8 font-semibold text-muted-foreground", titleClassName)}>
             {title}
           </div>
-          {loading && (
+          {loading ? (
             <Spinner size={18} color="hsl(var(--spinner))" label={`Loading ${title}`} />
-          )}
+          ) : error ? (
+            <span
+              role="img"
+              aria-label={`Couldn't load ${title}`}
+              title={`Couldn't load ${title}. Refresh the page to try again.`}
+              className="inline-flex shrink-0"
+            >
+              <TriangleAlert className="h-[18px] w-[18px] text-red-600" strokeWidth={2.25} />
+            </span>
+          ) : null}
           {titleAside}
         </div>
         {action}

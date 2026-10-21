@@ -23,6 +23,12 @@ interface ChartCardProps {
    * state as null and pass loading instead.
    */
   loading?: boolean;
+  /**
+   * True when the trend could not be fetched. Without it a chart whose fetch
+   * failed kept `data` null and spun for ever; now a red hazard sign says it
+   * failed.
+   */
+  error?: boolean;
   /** The period line, set beside the heading in a smaller size. */
   hint?: string;
   /** Give all three to put a period switch in the card's corner. */
@@ -54,7 +60,7 @@ const withLabels = (data) => data && data.map((point) => {
  */
 export function ChartCard({
   title, data, color = "#8b5cf6", valueLabel = "Amount", loading = false,
-  hint, period, periodOptions, onPeriodChange,
+  error = false, hint, period, periodOptions, onPeriodChange,
 }: ChartCardProps) {
   // Unique per chart: two charts sharing a gradient id would both paint with
   // whichever was defined first.
@@ -80,7 +86,8 @@ export function ChartCard({
       title={title}
       // The chart frame stays on screen while it loads; the spinner beside
       // the title says so, and the line draws in when the data lands.
-      loading={loading || !data}
+      loading={loading || (!data && !error)}
+      error={error}
       className="overflow-hidden min-w-0"
       titleClassName="text-foreground whitespace-nowrap"
       titleAside={hint ? (

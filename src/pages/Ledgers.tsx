@@ -214,12 +214,14 @@ const Ledgers = () => {
                                     value={formatCurrency(receivables?.total)}
                                     hint="As of today"
                                     loading={loading}
+                                    error={!loading && receivables == null}
                                 />
                                 <MetricCard
                                     title="Payable"
                                     value={formatCurrency(payables?.total)}
                                     hint="As of today"
                                     loading={loading}
+                                    error={!loading && payables == null}
                                 />
                                 {/* Its own switch: the tables on this page are
                                     balances, so there is no page period. */}
@@ -245,16 +247,19 @@ const Ledgers = () => {
                                   title="Receivable 0&ndash;30 days"
                                   value={formatCurrency(receivables?.aging?.current)}
                                   loading={loading}
+                                  error={!loading && receivables == null}
                                 />
                                 <MetricCard
                                   title="Receivable 31&ndash;60 days"
                                   value={formatCurrency(receivables?.aging?.days_31_60)}
                                   loading={loading}
+                                  error={!loading && receivables == null}
                                 />
                                 <MetricCard
                                   title="Receivable over 60 days"
                                   value={formatCurrency(receivables?.aging?.days_over_60)}
                                   loading={loading}
+                                  error={!loading && receivables == null}
                                 />
                             </div>
 

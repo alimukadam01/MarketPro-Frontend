@@ -190,6 +190,7 @@ const Suppliers = () => {
               title="Total Suppliers"
               value={totalSuppliers}
               loading={totalLoading}
+              error={!totalLoading && totalSuppliers == null}
             />
           </div>
 

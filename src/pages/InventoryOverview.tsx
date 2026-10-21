@@ -323,18 +323,21 @@ const InventoryOverview = () => {
               value={formatPKR(totalInventoryValue)}
               hint="At what the stock cost"
               loading={totalInventoryValueLoading}
+              error={!totalInventoryValueLoading && totalInventoryValue == null}
             />
             <MetricCard
               title="Total Inventory Value (With Profit)"
               value={formatPKR(valueWithProfit)}
               hint="At what the stock sells for"
               loading={valueWithProfitLoading}
+              error={!valueWithProfitLoading && valueWithProfit == null}
             />
             <MetricCard
               title="Items Not In Inventory"
               value={formatItems(itemsNotInInventory)}
               hint="No stock record yet"
               loading={itemsNotInInventoryLoading}
+              error={!itemsNotInInventoryLoading && itemsNotInInventory == null}
             />
             <MetricCard
               title="Total Restocks Required"
@@ -342,6 +345,7 @@ const InventoryOverview = () => {
               valueClassName="text-red-600"
               hint="Running out of stock"
               loading={totalRestocksReqLoading}
+              error={!totalRestocksReqLoading && totalRestocksReq == null}
             />
           </div>
 

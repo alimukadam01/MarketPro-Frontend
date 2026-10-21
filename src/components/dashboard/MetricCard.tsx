@@ -25,6 +25,12 @@ interface MetricCardProps {
    * until the new one rolls in.
    */
   valueLoading?: boolean;
+  /**
+   * True when the figure could not be fetched: a red hazard sign takes the
+   * spinner's place. The figure shows an em dash, never a 0 the server did
+   * not send.
+   */
+  error?: boolean;
   className?: string;
   /**
    * Extra classes for the figure itself. Some counters colour the number to
@@ -47,7 +53,7 @@ interface MetricCardProps {
  * styling, which was the more common of the two.
  */
 export function MetricCard({
-  title, value, hint, loading = false, valueLoading = false, className,
+  title, value, hint, loading = false, valueLoading = false, error = false, className,
   valueClassName, period, periodOptions, onPeriodChange,
 }: MetricCardProps) {
   const action = period && periodOptions && onPeriodChange ? (
@@ -61,11 +67,11 @@ export function MetricCard({
   ) : null;
 
   return (
-    <StatCard title={title} loading={loading || valueLoading} className={className} action={action}>
+    <StatCard title={title} loading={loading || valueLoading} error={error} className={className} action={action}>
       {/* tabular-nums keeps every digit the same width, so the figure does
           not shiver sideways as it rolls. */}
       <div className={cn("text-3xl font-bold tabular-nums", valueClassName)}>
-        <RollingValue value={value} />
+        {error && !loading && !valueLoading ? "—" : <RollingValue value={value} />}
       </div>
       {hint && <p className="mt-1 text-base text-muted-foreground">{hint}</p>}
     </StatCard>

@@ -291,6 +291,8 @@ const Purchases = () => {
       }
     }
 
+    fetchTotalPendingPayment()
+    fetchTotalPendingPurchaseInvoices()
     fetchPurchaseInvoices()
   }, [token, isDeleted])
 
@@ -393,6 +395,7 @@ const Purchases = () => {
               value={formatCurrency(summary?.purchases_invoiced)}
               hint={periodHint(summary?.period, summary?.filtered)}
               loading={list.summaryLoading}
+              error={list.summaryError}
               valueLoading={list.summaryRefreshing}
             />
             <MetricCard
@@ -400,6 +403,7 @@ const Purchases = () => {
               value={formatCurrency(summary?.payments_made)}
               hint={periodHint(summary?.period, summary?.filtered)}
               loading={list.summaryLoading}
+              error={list.summaryError}
               valueLoading={list.summaryRefreshing}
             />
             <MetricCard
@@ -407,6 +411,7 @@ const Purchases = () => {
               value={summary?.invoices_raised}
               hint={periodHint(summary?.period, summary?.filtered)}
               loading={list.summaryLoading}
+              error={list.summaryError}
               valueLoading={list.summaryRefreshing}
             />
             <MetricCard
@@ -414,6 +419,7 @@ const Purchases = () => {
               value={totalPendingPurchaseInvoices}
               hint="As of today"
               loading={totalPendingPurchaseInvoicesLoading}
+              error={!totalPendingPurchaseInvoicesLoading && totalPendingPurchaseInvoices == null}
             />
             <MetricCard
               title="Pending Payment"
@@ -421,6 +427,7 @@ const Purchases = () => {
               hint="As of today"
               valueClassName="text-red-600"
               loading={totalPendingPaymentLoading}
+              error={!totalPendingPaymentLoading && totalPendingPayment == null}
             />
           </div>
 

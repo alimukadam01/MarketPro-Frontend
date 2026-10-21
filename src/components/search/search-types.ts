@@ -1,44 +1,53 @@
-import {
-  Archive, Boxes, ClipboardList, FileText, FolderOpen, Image, Landmark, ListChecks,
-  MapPin, Package, PackageOpen, Receipt, Search, ShoppingCart, Target, Truck, Undo2,
-  UserCog, Users, Wallet2, Gauge,
-} from "lucide-react";
+import { Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { MODULE_ICONS } from "@/components/layout/module-icons";
 
 /**
- * The only per-type knowledge the frontend has about global search: an icon.
+ * The only per-type knowledge the frontend has about global search: which
+ * module a result belongs to, for its icon - the module's own, as the sidebar
+ * shows it, never one of the search's own.
  *
  * Everything else - the group's label, each result's link and its status
  * colour - comes from the backend (root/search), so a type a new module
  * registers works here at once, with the generic icon until one is added.
  */
-export const SEARCH_TYPE_ICONS: Record<string, LucideIcon> = {
-  sales_invoice: ShoppingCart,
-  sales_invoice_item: ShoppingCart,
-  purchase_invoice: Package,
-  purchase_invoice_item: Package,
-  purchase_quotation: FileText,
-  purchase_quotation_item: FileText,
-  returned_item: Undo2,
-  invoice_image: Image,
-  inventory_item: Archive,
-  product: PackageOpen,
-  product_variant: Boxes,
-  location: MapPin,
-  customer: Users,
-  supplier: Truck,
-  employee: UserCog,
-  transaction: Receipt,
-  money_account: Landmark,
-  expense: Wallet2,
-  project: FolderOpen,
-  project_task: ListChecks,
-  target: Target,
-  manual_data_point: Gauge,
-  backlog_entry: ClipboardList,
+export const SEARCH_TYPE_MODULES: Record<string, string> = {
+  sales_invoice: "sales",
+  sales_invoice_item: "sales",
+  purchase_invoice: "purchases",
+  purchase_invoice_item: "purchases",
+  purchase_quotation: "quotations",
+  purchase_quotation_item: "quotations",
+  returned_item: "returned_items",
+  inventory_item: "inventory",
+  product: "products",
+  product_variant: "products",
+  location: "locations",
+  customer: "customers",
+  supplier: "suppliers",
+  employee: "employees",
+  transaction: "accounting",
+  money_account: "accounting",
+  expense: "expenses",
+  project: "projects",
+  project_task: "projects",
+  target: "targets",
+  manual_data_point: "targets",
+  backlog_entry: "backlog",
 };
 
-export const iconFor = (type: string): LucideIcon => SEARCH_TYPE_ICONS[type] || Search;
+type HitLink = { path: string } | null | undefined;
+
+/**
+ * A result's icon. An invoice image belongs to whichever invoice it hangs
+ * off, so it takes that invoice's module from where it opens.
+ */
+export const iconFor = (type: string, link?: HitLink): LucideIcon => {
+  const module = type === "invoice_image"
+    ? (link?.path?.startsWith("/purchases") ? "purchases" : "sales")
+    : SEARCH_TYPE_MODULES[type];
+  return MODULE_ICONS[module] || Search;
+};
 
 // The status pill colours used across the app (getStatusColor and friends),
 // keyed by the tone the backend sends.

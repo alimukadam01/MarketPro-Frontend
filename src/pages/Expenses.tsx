@@ -43,7 +43,8 @@ const cols = [
   { key: "category", label: "Category" },
   { key: "desc", label: "Description" },
   { key: "amount", label: "Amount" },
-  { key: "created_at", label: "Expense Date" },
+  { key: "paid_from", label: "Paid From" },
+  { key: "expense_date", label: "Expense Date" },
 ];
 
 // Name and description are left to the search box; the expense date to the
@@ -239,6 +240,7 @@ const Expenses = () => {
               value={summary?.expense_count}
               hint={periodHint(summary?.period, summary?.filtered)}
               loading={list.summaryLoading}
+              error={list.summaryError}
               valueLoading={list.summaryRefreshing}
             />
             <MetricCard
@@ -246,6 +248,7 @@ const Expenses = () => {
               value={formatCurrency(summary?.expense_amount)}
               hint={periodHint(summary?.period, summary?.filtered)}
               loading={list.summaryLoading}
+              error={list.summaryError}
               valueLoading={list.summaryRefreshing}
             />
           </div>

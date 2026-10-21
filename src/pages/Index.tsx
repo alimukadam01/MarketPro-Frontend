@@ -142,6 +142,7 @@ const Index = () => {
                 value={formatCurrency(totalInventoryValue)}
                 hint="As of today"
                 loading={loading.inventory}
+                error={!loading.inventory && totalInventoryValue == null}
               />
               <PeriodMetricCard
                 title="Sales Invoiced"

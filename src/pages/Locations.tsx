@@ -190,6 +190,7 @@ const Locations = () => {
               title="Total Locations"
               value={totalLocations}
               loading={totalLocationsLoading}
+              error={!totalLocationsLoading && totalLocations == null}
             />
           </div>
 
