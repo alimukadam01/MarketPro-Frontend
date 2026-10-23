@@ -144,6 +144,8 @@ const App = () => {
           <Route path="/backlog" element={<ProtectedRoute><Backlog /></ProtectedRoute>} />
           <Route path="/backlog/upload" element={<ProtectedRoute><BacklogUpload /></ProtectedRoute>} />
           <Route path="/backlog/glossary" element={<ProtectedRoute><BacklogGlossary /></ProtectedRoute>} />
+          {/* The breadcrumb links "review" on its own; there is no list there. */}
+          <Route path="/backlog/review" element={<Navigate to="/backlog" replace />} />
           <Route path="/backlog/review/:id" element={<ProtectedRoute><BacklogReviewRoute /></ProtectedRoute>} />
           {/* The entry screens: the only routes a data entry account can reach. */}
           <Route path="/backlog/work" element={<ProtectedRoute entry><BacklogWorkQueue /></ProtectedRoute>} />

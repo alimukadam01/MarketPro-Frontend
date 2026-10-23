@@ -1,6 +1,9 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, LogOut, Package } from "lucide-react";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { Header } from "@/components/layout/Header";
+import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -24,10 +27,13 @@ interface EntryShellProps {
 }
 
 /**
- * The frame of the backlog entry screens: no sidebar - a data entry account
- * has nowhere else to go - and a bar with the user and Log out, or for the
- * owner a way back to the Backlog page. The screen itself never scrolls;
+ * The frame of the backlog entry screens. The screen itself never scrolls;
  * its columns do, each on its own.
+ *
+ * A data entry account gets a bare bar - the user and Log out, no sidebar and
+ * no search - because it has nowhere else to go. Everyone else (the owner
+ * reviewing a page, or entering one themselves) keeps MarketPro's own
+ * sidebar, header and search, as on every other page.
  */
 export function EntryShell({
   mode,
@@ -41,7 +47,46 @@ export function EntryShell({
 }: EntryShellProps) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const initials = user ? `${user.first_name?.[0] ?? ""}${user.last_name?.[0] ?? ""}` : "";
+
+  const titleRow = (
+    <div className="shrink-0 flex items-center justify-between gap-4 flex-wrap">
+      <div className="flex items-center gap-3 min-w-0 flex-wrap">
+        {backTo && (
+          <ArrowLeft
+            className="w-5 h-5 shrink-0 text-muted-foreground cursor-pointer hover:text-primary"
+            onClick={() => navigate(backTo)}
+          />
+        )}
+        <h1 className="text-2xl font-semibold leading-8 truncate">{title}</h1>
+        {aside}
+        {loading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}
+      </div>
+      {actions && <div className="flex items-center gap-3 flex-wrap">{actions}</div>}
+    </div>
+  );
+
+  if (user?.role !== "backlog") {
+    // The InvoiceScreen frame: h-screen beside the sidebar, so only the
+    // columns inside scroll.
+    return (
+      <div className="min-h-screen bg-background">
+        <Sidebar onCollapseChange={setSidebarCollapsed} />
+        <div className={`${sidebarCollapsed ? "ml-16" : "ml-64"} transition-all duration-300 flex flex-col h-screen`}>
+          <Header />
+          <div className="flex-1 min-h-0 flex flex-col px-6 pt-6 pb-6 gap-6">
+            <div className="shrink-0">
+              <DynamicBreadCrumb />
+            </div>
+            {titleRow}
+            <div className="flex-1 min-h-0">{children}</div>
+          </div>
+        </div>
+        {dialogs}
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-background">
@@ -61,35 +106,15 @@ export function EntryShell({
             </Avatar>
             <span className="font-medium">{user && `${user.first_name} ${user.last_name}`}</span>
           </div>
-          {mode === "review" ? (
-            <Button variant="outline" size="sm" onClick={() => navigate("/backlog")}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Backlog
-            </Button>
-          ) : (
-            <Button variant="ghost" size="sm" onClick={logout}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Log out
-            </Button>
-          )}
+          <Button variant="ghost" size="sm" onClick={logout}>
+            <LogOut className="w-4 h-4 mr-2" />
+            Log out
+          </Button>
         </div>
       </header>
 
       <div className="flex-1 min-h-0 flex flex-col px-6 pt-6 pb-6 gap-6">
-        <div className="shrink-0 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3 min-w-0 flex-wrap">
-            {backTo && (
-              <ArrowLeft
-                className="w-5 h-5 shrink-0 text-muted-foreground cursor-pointer hover:text-primary"
-                onClick={() => navigate(backTo)}
-              />
-            )}
-            <h1 className="text-2xl font-semibold leading-8 truncate">{title}</h1>
-            {aside}
-            {loading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}
-          </div>
-          {actions && <div className="flex items-center gap-3 flex-wrap">{actions}</div>}
-        </div>
+        {titleRow}
 
         <div className="flex-1 min-h-0">{children}</div>
       </div>

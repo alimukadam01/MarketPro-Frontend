@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowLeft, FileArchive, FolderOpen, Images, Upload } from "lucide-react";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { Header } from "@/components/layout/Header";
+import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,8 +55,9 @@ function Segmented({ options, value, onChange }) {
 
 /**
  * /backlog/upload - photos of the shop's books, a folder of them or a zip.
- * Laid out for a phone first: this is usually done standing at the counter
- * with the book open. Each image becomes one page in the entry queue.
+ * Each image becomes one page in the entry queue. MarketPro's usual sidebar
+ * and header, with the form in one narrow column, so it still works on a
+ * phone at the counter with the book open.
  */
 export default function BacklogUpload() {
   const { token } = useAuth();
@@ -66,6 +70,7 @@ export default function BacklogUpload() {
   const [files, setFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const addFiles = (list: FileList | null) => {
@@ -120,93 +125,105 @@ export default function BacklogUpload() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-card border-b border-border px-4 h-14 flex items-center gap-3">
-        <ArrowLeft className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary" onClick={() => navigate("/backlog")} />
-        <h1 className="text-lg font-semibold">Upload pages</h1>
-      </header>
-
-      <main className="mx-auto w-full max-w-md px-4 py-6 space-y-6">
-        <div className="space-y-2">
-          <Label>What are these?</Label>
-          <Segmented options={TYPES} value={type} onChange={setType} />
-        </div>
-
-        <div className="space-y-1">
-          <Label htmlFor="book_label">Book label</Label>
-          <Input id="book_label" value={bookLabel} onChange={(e) => setBookLabel(e.target.value)} placeholder="Sales 2019 · Vol 3" />
-        </div>
-
-        <div className="space-y-1">
-          <Label htmlFor="upload_notes">Notes</Label>
-          <Textarea id="upload_notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)}
-            placeholder="Pages 40-52 are returns, not sales." />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Priority</Label>
-          <Segmented options={PRIORITIES} value={priority} onChange={setPriority} />
-        </div>
-
-        <div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3">
-          <div>
-            <Label htmlFor="is_daily">Today's pages</Label>
-            <p className="text-xs text-muted-foreground">Entered first, by the end of tomorrow</p>
+      <Sidebar onCollapseChange={setSidebarCollapsed} />
+      <div className={`${sidebarCollapsed ? "ml-16" : "ml-64"} transition-all duration-300 flex flex-col`}>
+        <Header />
+        <main className="flex-1 p-6 space-y-6">
+          <div className="space-y-1">
+            <DynamicBreadCrumb />
+            <div className="flex items-center space-x-3">
+              <ArrowLeft className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary" onClick={() => navigate("/backlog")} />
+              <div>
+                <h1 className="text-2xl font-semibold">Upload pages</h1>
+                <p className="text-sm text-muted-foreground">Each photo becomes one page in the entry queue.</p>
+              </div>
+            </div>
           </div>
-          <Switch id="is_daily" checked={isDaily} onCheckedChange={setIsDaily} />
-        </div>
 
-        <div className="grid grid-cols-3 gap-3">
-          {PICKERS.map(({ key, label, icon: Icon, accept, multiple, folder }) => (
-            <div key={key}>
-              <input
-                ref={(el) => { inputs.current[key] = el; }}
-                type="file"
-                className="hidden"
-                accept={accept}
-                multiple={multiple}
-                {...(folder ? { webkitdirectory: "", directory: "" } : {})}
-                onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
-              />
-              <button
-                type="button"
-                onClick={() => inputs.current[key]?.click()}
-                className="w-full h-20 rounded-lg border border-dashed bg-card flex flex-col items-center justify-center gap-1 text-sm font-medium hover:border-primary"
-              >
-                <Icon className="h-5 w-5 text-muted-foreground" />
-                {label}
-              </button>
+          <div className="w-full max-w-md space-y-6">
+            <div className="space-y-2">
+              <Label>What are these?</Label>
+              <Segmented options={TYPES} value={type} onChange={setType} />
             </div>
-          ))}
-        </div>
 
-        {files.length > 0 && (
-          <div className="rounded-lg border bg-card px-4 py-3 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">{selectionLabel} selected</span>
-              <Button variant="ghost" size="sm" onClick={() => setFiles([])} disabled={uploading}>Clear</Button>
+            <div className="space-y-1">
+              <Label htmlFor="book_label">Book label</Label>
+              <Input id="book_label" value={bookLabel} onChange={(e) => setBookLabel(e.target.value)} placeholder="Sales 2019 · Vol 3" />
             </div>
-            {previews.length > 0 && (
-              <div className="flex gap-2">
-                {previews.map((preview, index) => (
-                  <img key={`${preview.name}-${index}`} src={preview.url} alt=""
-                    className="h-14 w-14 rounded object-cover border" />
-                ))}
-                {photoCount > previews.length && (
-                  <span className="h-14 w-14 rounded border bg-muted flex items-center justify-center text-sm text-muted-foreground">
-                    +{photoCount - previews.length}
-                  </span>
+
+            <div className="space-y-1">
+              <Label htmlFor="upload_notes">Notes</Label>
+              <Textarea id="upload_notes" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)}
+                placeholder="Pages 40-52 are returns, not sales." />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Priority</Label>
+              <Segmented options={PRIORITIES} value={priority} onChange={setPriority} />
+            </div>
+
+            <div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3">
+              <div>
+                <Label htmlFor="is_daily">Today's pages</Label>
+                <p className="text-xs text-muted-foreground">Entered first, by the end of tomorrow</p>
+              </div>
+              <Switch id="is_daily" checked={isDaily} onCheckedChange={setIsDaily} />
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              {PICKERS.map(({ key, label, icon: Icon, accept, multiple, folder }) => (
+                <div key={key}>
+                  <input
+                    ref={(el) => { inputs.current[key] = el; }}
+                    type="file"
+                    className="hidden"
+                    accept={accept}
+                    multiple={multiple}
+                    {...(folder ? { webkitdirectory: "", directory: "" } : {})}
+                    onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => inputs.current[key]?.click()}
+                    className="w-full h-20 rounded-lg border border-dashed bg-card flex flex-col items-center justify-center gap-1 text-sm font-medium hover:border-primary"
+                  >
+                    <Icon className="h-5 w-5 text-muted-foreground" />
+                    {label}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {files.length > 0 && (
+              <div className="rounded-lg border bg-card px-4 py-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{selectionLabel} selected</span>
+                  <Button variant="ghost" size="sm" onClick={() => setFiles([])} disabled={uploading}>Clear</Button>
+                </div>
+                {previews.length > 0 && (
+                  <div className="flex gap-2">
+                    {previews.map((preview, index) => (
+                      <img key={`${preview.name}-${index}`} src={preview.url} alt=""
+                        className="h-14 w-14 rounded object-cover border" />
+                    ))}
+                    {photoCount > previews.length && (
+                      <span className="h-14 w-14 rounded border bg-muted flex items-center justify-center text-sm text-muted-foreground">
+                        +{photoCount - previews.length}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
             )}
-          </div>
-        )}
 
-        <SubmitButton type="button" className="w-full h-11" pending={uploading}
-          pendingLabel={progress !== null ? `Uploading… ${progress}%` : "Uploading…"} onClick={upload}>
-          <Upload className="h-4 w-4 mr-2" />
-          {files.length === 0 ? "Upload pages" : zipCount ? "Upload" : `Upload ${photoCount} page${photoCount === 1 ? "" : "s"}`}
-        </SubmitButton>
-      </main>
+            <SubmitButton type="button" className="w-full h-11" pending={uploading}
+              pendingLabel={progress !== null ? `Uploading… ${progress}%` : "Uploading…"} onClick={upload}>
+              <Upload className="h-4 w-4 mr-2" />
+              {files.length === 0 ? "Upload pages" : zipCount ? "Upload" : `Upload ${photoCount} page${photoCount === 1 ? "" : "s"}`}
+            </SubmitButton>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
