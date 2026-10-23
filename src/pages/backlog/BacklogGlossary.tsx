@@ -175,8 +175,9 @@ export default function BacklogGlossary() {
 
           <section>
             <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-xl font-semibold">Terms ({glossary?.entries.length ?? 0})</h2>
+              <h2 className="text-xl font-semibold">Terms ({glossary?.entries.length ?? 0})</h2>
+
+              <div className="flex items-center space-x-4">
                 <SearchField placeholder="Search terms" value={query} onChange={setQuery} />
               </div>
               <div className="flex items-center gap-2">
