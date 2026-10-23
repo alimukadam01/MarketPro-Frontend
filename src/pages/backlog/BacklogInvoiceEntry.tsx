@@ -335,16 +335,20 @@ export default function BacklogInvoiceEntry({
       // The payments held on screen, one at a time: each is checked against
       // what is still owed, which depends on the ones before it.
       let failures = 0;
+      let reason = "";
       for (const payment of stagedPayments) {
         const body = paymentRequestBody(payment.fields, payment.imageFile);
         const paidRes = await postWorkPayment(token, entry.id, output.id, body);
-        if (!paidRes.ok) failures += 1;
+        if (!paidRes.ok) {
+          failures += 1;
+          reason = reason || paidRes.error || "";
+        }
       }
       setStagedPayments([]);
       if (failures) {
         const values = await loadValues(output.id);
         if (values) setSavedPayments(values.payments || []);
-        toast.warning(`Invoice saved, but ${failures} payment${failures > 1 ? "s" : ""} could not be. Add ${failures > 1 ? "them" : "it"} again, then submit.`);
+        toast.warning(`Invoice saved, but ${failures} payment${failures > 1 ? "s" : ""} could not be${reason ? `: ${reason}` : "."} Add ${failures > 1 ? "them" : "it"} again, then submit.`);
         return false;
       }
       // The saved lines now have ids: a second submit must update them, not
@@ -381,8 +385,8 @@ export default function BacklogInvoiceEntry({
       setSavedPayments(rows);
       return rows;
     },
-    create: async (body) => (await postWorkPayment(token, entry.id, outputId, body)).ok,
-    remove: async (paymentId) => (await deleteWorkPayment(token, entry.id, outputId, paymentId)).ok,
+    create: (body) => postWorkPayment(token, entry.id, outputId, body),
+    remove: (paymentId) => deleteWorkPayment(token, entry.id, outputId, paymentId),
   } : null, [outputId, token, entry.id, loadValues]);
 
   // -- the screen ------------------------------------------------------------

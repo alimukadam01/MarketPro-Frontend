@@ -73,11 +73,26 @@ export function LookupCombobox({
     return () => clearTimeout(delay);
   }, [token, kind, query]);
 
+  // One object per option for the life of the picker. Base UI resets the
+  // input to the picked item's label whenever the picked value changes
+  // identity, and every search reply used to rebuild the options - so each
+  // keystroke's reply put the full name back, and backspace never stuck.
+  const optionCache = useRef(new Map<string, ComboboxOption>());
+  const optionFor = (id: string, label: string) => {
+    const cacheKey = `${id}|${label}`;
+    let option = optionCache.current.get(cacheKey);
+    if (!option) {
+      option = { value: id, label };
+      optionCache.current.set(cacheKey, option);
+    }
+    return option;
+  };
+
   const options: ComboboxOption[] = useMemo(() => {
-    const list = items.map((item) => ({ value: String(item.id), label: item.label }));
+    const list = items.map((item) => optionFor(String(item.id), item.label));
     const key = value === null || value === undefined ? "" : String(value);
     if (key && selectedLabel && !list.some((option) => option.value === key)) {
-      list.unshift({ value: key, label: selectedLabel });
+      list.unshift(optionFor(key, selectedLabel));
     }
     return list;
   }, [items, value, selectedLabel]);
