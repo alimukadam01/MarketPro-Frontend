@@ -102,8 +102,20 @@ export interface WorkEntry extends QueueItem {
   cant_read_note: string;
 }
 
+/** A customer, supplier or product created from a page (BUGS.md #006). */
+export interface NewRecord {
+  id: number;
+  kind: "customer" | "supplier" | "product";
+  record_id: number;
+  label: string;
+  detail: string;
+  /** Positive: the customer owes the shop, or the shop owes the supplier. */
+  opening_balance: number | null;
+}
+
 /** The owner's view of a page (/backlog-entries/{id}/). */
 export interface OwnerEntry extends WorkEntry {
+  new_records: NewRecord[];
   status_label: string;
   claimed_by: Person;
   entered_by: Person;

@@ -15,6 +15,7 @@ import { EntryShell } from "@/components/backlog/EntryShell";
 import { PagePhoto } from "@/components/backlog/PagePhoto";
 import { LookupCombobox, type LookupItem } from "@/components/backlog/LookupCombobox";
 import { SentBackNote } from "@/components/backlog/SentBackNote";
+import { NewRecordsNote } from "@/components/backlog/NewRecordsNote";
 import { NewPartyDialog, NewProductDialog } from "@/components/backlog/NewRecordDialogs";
 import { useEntryFlow } from "@/components/backlog/useEntryFlow";
 import type { OwnerEntry, WorkEntry } from "@/components/backlog/meta";
@@ -512,7 +513,7 @@ export default function BacklogInvoiceEntry({
 
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           <div className="shrink-0 space-y-4 pb-6 border-b border-border">
-            {mode === "entry" && <SentBackNote entry={entry} />}
+            {mode === "entry" ? <SentBackNote entry={entry} /> : <NewRecordsNote review={review} />}
             {fields}
           </div>
 
