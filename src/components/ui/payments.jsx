@@ -78,9 +78,10 @@ function Payments({
   // read the accounts (its name-only lookup) and, once the invoice exists,
   // how to list, add and remove its payments (the backlog work endpoints).
   // With these the dialog shows the money fields whatever the user's own
-  // permissions say, and settles nothing from the khaata. liveApi.create and
-  // .remove answer { ok, error }, so the server's reason - "this invoice can
-  // take at most PKR ... more", say - reaches the screen.
+  // permissions say. liveApi.settlement, when given, stands in for the
+  // invoice's settlement endpoint, so what the khaata settles is shown and
+  // counted exactly as in the standard dialog. liveApi.create and .remove
+  // answer { ok, error }, so the server's reason reaches the screen.
   accountsLoader = null,
   liveApi = null,
 }) {
@@ -138,7 +139,7 @@ function Payments({
   const fetchPayments = async () => {
     try {
       const [data, settled] = liveApi
-        ? [await liveApi.list(), null]
+        ? await Promise.all([liveApi.list(), liveApi.settlement ? liveApi.settlement() : null])
         : await Promise.all([
           getPaymentsList(token, invoiceId, isSalesPayment),
           getInvoiceSettlement(token, invoiceId, isSalesPayment),

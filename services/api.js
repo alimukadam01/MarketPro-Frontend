@@ -2591,6 +2591,13 @@ export const postWorkPayment = (token, id, outputId, body) =>
   backlogCall("post", `/backlog-work/${id}/outputs/${outputId}/payments/`, token, body,
     body instanceof FormData ? MULTIPART : {});
 
+// What the khaata settles onto this invoice and how much one more payment may
+// be - the standard dialog's figures, without the party's balance.
+export const getWorkSettlement = async (token, id, outputId) => {
+  const res = await backlogCall("get", `/backlog-work/${id}/outputs/${outputId}/settlement/`, token);
+  return res.ok ? res.data : null;
+};
+
 export const deleteWorkPayment = (token, id, outputId, paymentId) =>
   backlogCall("delete", `/backlog-work/${id}/outputs/${outputId}/payments/${paymentId}/`, token);
 

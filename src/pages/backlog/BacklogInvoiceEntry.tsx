@@ -21,6 +21,7 @@ import { useAuth } from "../../../services/AuthProvider";
 import {
   deleteWorkPayment,
   getWorkOutput,
+  getWorkSettlement,
   paymentRequestBody,
   postWorkInvoice,
   postWorkPayment,
@@ -104,6 +105,9 @@ export default function BacklogInvoiceEntry({
   const [stagedPayments, setStagedPayments] = useState<StagedPayment[]>([]);
   const [savedPayments, setSavedPayments] = useState<{ id: number; amount: number; status?: string }[]>([]);
   const [paymentsOpen, setPaymentsOpen] = useState(false);
+  // How much of the saved invoice the party's khaata already settles - never
+  // the party's balance. Counted as paid, as on the standard screens.
+  const [fromKhaata, setFromKhaata] = useState(0);
 
   // -- loading a page that already has its invoice ---------------------------
 
@@ -174,7 +178,7 @@ export default function BacklogInvoiceEntry({
   const cleared = (rows) => rows
     .filter((p) => !p.status || p.status === "C")
     .reduce((sum, p) => sum + Number(p.amount), 0);
-  const paid = outputId ? cleared(savedPayments) : cleared(stagedPayments);
+  const paid = outputId ? cleared(savedPayments) + fromKhaata : cleared(stagedPayments);
 
   const summaryLines = [
     { label: "Subtotal", value: subtotal },
@@ -378,6 +382,16 @@ export default function BacklogInvoiceEntry({
     return rows.map((row) => ({ id: row.id, name: row.label, type: row.type, is_default: row.is_default }));
   }, [token]);
 
+  const loadSettlement = useCallback(async (id: number) => {
+    const settled = await getWorkSettlement(token, entry.id, id);
+    setFromKhaata(Number(settled?.settled_from_khaata || 0));
+    return settled;
+  }, [token, entry.id]);
+
+  useEffect(() => {
+    if (outputId && token) loadSettlement(outputId);
+  }, [outputId, token, loadSettlement]);
+
   const liveApi = useMemo(() => outputId ? {
     list: async () => {
       const values = await loadValues(outputId);
@@ -385,9 +399,10 @@ export default function BacklogInvoiceEntry({
       setSavedPayments(rows);
       return rows;
     },
+    settlement: () => loadSettlement(outputId),
     create: (body) => postWorkPayment(token, entry.id, outputId, body),
     remove: (paymentId) => deleteWorkPayment(token, entry.id, outputId, paymentId),
-  } : null, [outputId, token, entry.id, loadValues]);
+  } : null, [outputId, token, entry.id, loadValues, loadSettlement]);
 
   // -- the screen ------------------------------------------------------------
 
