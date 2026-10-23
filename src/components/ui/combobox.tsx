@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
-import { Check, ChevronDown, ChevronsUpDown, ChevronUp, X } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, ChevronUp, Plus, X } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,8 @@ export interface ComboboxOption {
    */
   keywords?: string[];
   disabled?: boolean;
+  /** A "Create ..." row rather than a record: shown with a plus, in the accent colour. */
+  create?: boolean;
 }
 
 /**
@@ -94,6 +96,12 @@ interface ComboboxProps {
    * finds "Weather Emulsion (Sweet White)"), which the local filter would undo.
    */
   serverFiltered?: boolean;
+  /**
+   * Highlight the first row as the user types, so Enter picks it. Used where
+   * the list ends in a "Create ..." row: typing a name that is not there
+   * leaves that row alone and highlighted, and Enter creates it.
+   */
+  autoHighlight?: boolean;
 }
 
 /**
@@ -136,6 +144,7 @@ export function Combobox({
   className,
   onInputChange,
   serverFiltered = false,
+  autoHighlight = false,
 }: ComboboxProps) {
   // Compared as strings on both sides. Object.entries always yields string keys,
   // while the form's value comes back from the API as a number, so a strict ===
@@ -240,6 +249,7 @@ export function Combobox({
         );
       }}
       disabled={disabled}
+      autoHighlight={autoHighlight}
       openOnInputClick
     >
       <div className={cn("relative", className)}>
@@ -358,7 +368,14 @@ export function Combobox({
                       <ComboboxPrimitive.ItemIndicator className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
                         <Check className="h-4 w-4" />
                       </ComboboxPrimitive.ItemIndicator>
-                      <span>{option.label}</span>
+                      {option.create ? (
+                        <span className="inline-flex items-center gap-1.5 font-medium text-primary">
+                          <Plus className="h-3.5 w-3.5" />
+                          {option.label}
+                        </span>
+                      ) : (
+                        <span>{option.label}</span>
+                      )}
                     </ComboboxPrimitive.Item>
                   )}
                 </ComboboxPrimitive.List>

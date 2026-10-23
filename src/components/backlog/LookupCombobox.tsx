@@ -10,7 +10,7 @@ export interface LookupItem {
 }
 
 interface LookupComboboxProps {
-  /** variants, customers, suppliers, accounts, units, locations, attributes, projects */
+  /** variants, customers, suppliers, accounts, units, locations, attributes, projects, cities */
   kind: string;
   /** The picked record's id, "" for none. */
   value: string | number | null;
@@ -28,6 +28,14 @@ interface LookupComboboxProps {
   disabled?: boolean;
   id?: string;
   className?: string;
+  /**
+   * Offer to create what was typed when nothing is called exactly that. The
+   * list then ends in a "Create ..." row, highlighted when it is the only
+   * one, so Enter opens the page's create dialog with the name filled in.
+   */
+  onCreate?: (text: string) => void;
+  /** What a created record is called in that row: "customer", "product". */
+  createNoun?: string;
 }
 
 /**
@@ -48,11 +56,17 @@ export function LookupCombobox({
   disabled = false,
   id,
   className,
+  onCreate,
+  createNoun = "",
 }: LookupComboboxProps) {
   const { token } = useAuth();
   const [items, setItems] = useState<LookupItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  // The query the list in hand answers. Until the reply for what is typed now
+  // arrives, the list is the previous query's - and offering to create a name
+  // that may well be in the next reply would invite a duplicate.
+  const [answered, setAnswered] = useState<string | null>(null);
   // The answer to the latest query only: a slow reply to an earlier keystroke
   // must not replace the list for what is typed now.
   const latest = useRef(0);
@@ -63,7 +77,10 @@ export function LookupCombobox({
     const delay = setTimeout(async () => {
       try {
         const found = await workLookup(token, kind, query);
-        if (ticket === latest.current) setItems(found || []);
+        if (ticket === latest.current) {
+          setItems(found || []);
+          setAnswered(query);
+        }
       } catch (error) {
         console.log(`Error looking up ${kind}:`, error);
       } finally {
@@ -97,13 +114,33 @@ export function LookupCombobox({
     return list;
   }, [items, value, selectedLabel]);
 
+  const typed = query.trim();
+  const createOptions = useRef(new Map<string, ComboboxOption>());
+  const createRow = useMemo(() => {
+    if (!onCreate || !typed || answered !== query) return null;
+    const exact = items.some((item) => item.label.trim().toLowerCase() === typed.toLowerCase());
+    if (exact || typed === String(selectedLabel).trim()) return null;
+    let option = createOptions.current.get(typed);
+    if (!option) {
+      option = { value: CREATE, label: `Create ${createNoun ? `${createNoun} ` : ""}"${typed}"`, create: true };
+      createOptions.current.set(typed, option);
+    }
+    return option;
+  }, [onCreate, typed, answered, query, items, selectedLabel, createNoun]);
+
+  const shown = createRow ? [...options, createRow] : options;
+
   return (
     <Combobox
       id={id}
       className={className}
-      options={options}
+      options={shown}
       value={value ?? ""}
       onChange={(picked) => {
+        if (picked === CREATE) {
+          onCreate?.(typed);
+          return;
+        }
         if (!picked) {
           onChange(null);
           return;
@@ -122,8 +159,12 @@ export function LookupCombobox({
       notFoundText={notFoundText}
       clearable={clearable}
       disabled={disabled}
+      autoHighlight={!!onCreate}
     />
   );
 }
+
+// The value of the "Create ..." row: never a record's id.
+const CREATE = "__create__";
 
 export default LookupCombobox;

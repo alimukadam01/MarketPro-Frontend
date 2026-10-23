@@ -15,6 +15,7 @@ import { EntryShell } from "@/components/backlog/EntryShell";
 import { PagePhoto } from "@/components/backlog/PagePhoto";
 import { LookupCombobox, type LookupItem } from "@/components/backlog/LookupCombobox";
 import { SentBackNote } from "@/components/backlog/SentBackNote";
+import { NewPartyDialog, NewProductDialog } from "@/components/backlog/NewRecordDialogs";
 import { useEntryFlow } from "@/components/backlog/useEntryFlow";
 import type { OwnerEntry, WorkEntry } from "@/components/backlog/meta";
 import { useAuth } from "../../../services/AuthProvider";
@@ -105,6 +106,9 @@ export default function BacklogInvoiceEntry({
   const [stagedPayments, setStagedPayments] = useState<StagedPayment[]>([]);
   const [savedPayments, setSavedPayments] = useState<{ id: number; amount: number; status?: string }[]>([]);
   const [paymentsOpen, setPaymentsOpen] = useState(false);
+  // A name the page has that MarketPro does not: the create dialog open for
+  // it, with what was typed.
+  const [creating, setCreating] = useState<{ kind: "party" | "product"; text: string } | null>(null);
   // How much of the saved invoice the party's khaata already settles - never
   // the party's balance. Counted as paid, as on the standard screens.
   const [fromKhaata, setFromKhaata] = useState(0);
@@ -416,6 +420,8 @@ export default function BacklogInvoiceEntry({
           value={party?.id ?? ""}
           selectedLabel={party?.label}
           onChange={(item: LookupItem | null) => setParty(item ? { id: item.id, label: item.label } : null)}
+          onCreate={(text) => setCreating({ kind: "party", text })}
+          createNoun={partyLabel.toLowerCase()}
           placeholder={`Select ${partyLabel.toLowerCase()}`}
           emptyText={`No ${partyKind} yet.`}
           notFoundText={`No ${partyLabel.toLowerCase()} matches that. Check the glossary.`}
@@ -480,6 +486,24 @@ export default function BacklogInvoiceEntry({
             accountsLoader={accountsLoader}
             liveApi={liveApi}
           />
+          <NewPartyDialog
+            open={creating?.kind === "party"}
+            setOpen={(open) => { if (!open) setCreating(null); }}
+            kind={isSales ? "customer" : "supplier"}
+            initialName={creating?.text || ""}
+            entryId={entry.id}
+            asOf={dateIssued}
+            onCreated={(item) => setParty({ id: item.id, label: item.label })}
+          />
+          <NewProductDialog
+            open={creating?.kind === "product"}
+            setOpen={(open) => { if (!open) setCreating(null); }}
+            initialName={creating?.text || ""}
+            entryId={entry.id}
+            onCreated={(variants) => {
+              if (variants[0]) setNewProduct({ id: variants[0].id, label: variants[0].label });
+            }}
+          />
         </>
       }
     >
@@ -508,6 +532,8 @@ export default function BacklogInvoiceEntry({
                         value={newProduct?.id ?? ""}
                         selectedLabel={newProduct?.label}
                         onChange={(item) => setNewProduct(item ? { id: item.id, label: item.label } : null)}
+                        onCreate={(text) => setCreating({ kind: "product", text })}
+                        createNoun="product"
                         placeholder="Select product"
                         emptyText="No products yet."
                         notFoundText="No product matches that. Check the glossary."

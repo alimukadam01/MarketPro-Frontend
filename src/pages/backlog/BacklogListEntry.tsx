@@ -12,6 +12,7 @@ import { EntryShell } from "@/components/backlog/EntryShell";
 import { PagePhoto } from "@/components/backlog/PagePhoto";
 import { LookupCombobox, type LookupItem } from "@/components/backlog/LookupCombobox";
 import { SentBackNote } from "@/components/backlog/SentBackNote";
+import { NewProductDialog } from "@/components/backlog/NewRecordDialogs";
 import { useEntryFlow } from "@/components/backlog/useEntryFlow";
 import type { OwnerEntry, WorkEntry } from "@/components/backlog/meta";
 import { useAuth } from "../../../services/AuthProvider";
@@ -110,6 +111,8 @@ export default function BacklogListEntry({
   const flow = useEntryFlow({ entry, mode, review, hasOutputs: outputs.length > 0, list: true });
 
   const [editingId, setEditingId] = useState<number | null>(null);
+  // A product the page has that MarketPro does not: what was typed.
+  const [newProductName, setNewProductName] = useState<string | null>(null);
   const [saving, setSaving] = useState<"" | "save" | "another">("");
 
   // -- product form --
@@ -386,7 +389,20 @@ export default function BacklogListEntry({
       aside={flow.aside}
       actions={flow.actions}
       backTo={mode === "review" ? "/backlog" : "/backlog/work"}
-      dialogs={flow.dialogs}
+      dialogs={
+        <>
+          {flow.dialogs}
+          <NewProductDialog
+            open={newProductName !== null}
+            setOpen={(open) => { if (!open) setNewProductName(null); }}
+            initialName={newProductName || ""}
+            entryId={entry.id}
+            onCreated={(variants) => {
+              if (variants[0]) setProduct({ id: variants[0].id, label: variants[0].label });
+            }}
+          />
+        </>
+      }
     >
       <div className="h-full grid grid-cols-3 gap-6">
         <PagePhoto src={entry.image} className="min-h-0" />
@@ -526,6 +542,8 @@ export default function BacklogListEntry({
                     value={product?.id ?? ""}
                     selectedLabel={product?.label}
                     onChange={(item) => setProduct(item ? { id: item.id, label: item.label } : null)}
+                    onCreate={editingId ? undefined : setNewProductName}
+                    createNoun="product"
                     disabled={!!editingId}
                     placeholder="Select product"
                     notFoundText="No product matches that. Check the glossary."

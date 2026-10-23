@@ -2601,6 +2601,18 @@ export const getWorkSettlement = async (token, id, outputId) => {
 export const deleteWorkPayment = (token, id, outputId, paymentId) =>
   backlogCall("delete", `/backlog-work/${id}/outputs/${outputId}/payments/${paymentId}/`, token);
 
+// A customer, supplier or product the page names that MarketPro lacks,
+// created from the open page (BUGS.md #006). Each answers with the new
+// record's id and name; a product also with its variants.
+export const createWorkCustomer = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/new-customer/`, token, data);
+
+export const createWorkSupplier = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/new-supplier/`, token, data);
+
+export const createWorkProduct = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/new-product/`, token, data);
+
 // Names only - variants, customers, suppliers, accounts, units, locations,
 // attributes, projects - never a figure. Rate limited on the server.
 export const workLookup = async (token, kind, query = "") => {
