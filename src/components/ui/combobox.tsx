@@ -83,6 +83,17 @@ interface ComboboxProps {
   clearable?: boolean;
   id?: string;
   className?: string;
+  /**
+   * What the user is typing, for a picker whose options come from a search on
+   * the server (LookupCombobox). Called on every keystroke.
+   */
+  onInputChange?: (query: string) => void;
+  /**
+   * The options are already the server's matches for what was typed, so they
+   * are shown as they are. The server matches word by word ("white emul"
+   * finds "Weather Emulsion (Sweet White)"), which the local filter would undo.
+   */
+  serverFiltered?: boolean;
 }
 
 /**
@@ -123,6 +134,8 @@ export function Combobox({
   clearable = false,
   id,
   className,
+  onInputChange,
+  serverFiltered = false,
 }: ComboboxProps) {
   // Compared as strings on both sides. Object.entries always yields string keys,
   // while the form's value comes back from the API as a number, so a strict ===
@@ -217,7 +230,9 @@ export function Combobox({
       value={selected}
       onValueChange={(option: ComboboxOption | null) => onChange(option ? option.value : "")}
       itemToStringLabel={(option: ComboboxOption) => option.label}
+      onInputValueChange={onInputChange ? (query: string) => onInputChange(query) : undefined}
       filter={(option: ComboboxOption, query: string) => {
+        if (serverFiltered) return true;
         const q = query.trim().toLowerCase();
         if (!q) return true;
         return [option.label, option.value, ...(option.keywords ?? [])].some((text) =>

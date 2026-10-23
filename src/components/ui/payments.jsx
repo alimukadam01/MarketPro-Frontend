@@ -73,6 +73,14 @@ function Payments({
   // invoice bills nothing - for a sale that is one with no lines, for a
   // purchase the status picked - and the refund preview compares against it.
   billsTotal = true,
+  // The backlog entry screens. A data entry account cannot reach the money
+  // accounts or an invoice's payments directly, so the page hands in how to
+  // read the accounts (its name-only lookup) and, once the invoice exists,
+  // how to list, add and remove its payments (the backlog work endpoints).
+  // With these the dialog shows the money fields whatever the user's own
+  // permissions say, and settles nothing from the khaata.
+  accountsLoader = null,
+  liveApi = null,
 }) {
   const { token, getPermissions } = useAuth();
   const isStaged = !invoiceId && typeof onStagedChange === "function";
@@ -94,7 +102,7 @@ function Payments({
   const [paymentDate, setPaymentDate] = useState(
     todayForInput()
   );
-  const hasAccounting = !!getPermissions("accounting")?.["view"];
+  const hasAccounting = !!accountsLoader || !!getPermissions("accounting")?.["view"];
 
   // The method follows the account, so there is nothing for the user to pick.
   // A bank account is a transfer unless cheque details are filled in.
@@ -127,10 +135,12 @@ function Payments({
 
   const fetchPayments = async () => {
     try {
-      const [data, settled] = await Promise.all([
-        getPaymentsList(token, invoiceId, isSalesPayment),
-        getInvoiceSettlement(token, invoiceId, isSalesPayment),
-      ]);
+      const [data, settled] = liveApi
+        ? [await liveApi.list(), null]
+        : await Promise.all([
+          getPaymentsList(token, invoiceId, isSalesPayment),
+          getInvoiceSettlement(token, invoiceId, isSalesPayment),
+        ]);
       if (data) {
         setPayments(data)
       } else {
@@ -146,7 +156,9 @@ function Payments({
   const fetchAccounts = async () => {
     try {
       // Deactivated accounts take no new money.
-      const data = await moneyAccountsAPIPackage.list(token, "?is_active=true");
+      const data = accountsLoader
+        ? await accountsLoader()
+        : await moneyAccountsAPIPackage.list(token, "?is_active=true");
       if (data) {
         setAccounts(data);
         const defaultAccount = data.find((item) => item.is_default);
@@ -238,8 +250,10 @@ function Payments({
 
         // paymentRequestBody sends a plain object, or FormData when a photo
         // comes with it - the same builder the staged payments go through.
-        const success = await createPayment(
-          token, invoiceId, isSalesPayment, paymentRequestBody(payload, imageFile));
+        const body = paymentRequestBody(payload, imageFile);
+        const success = liveApi
+          ? await liveApi.create(body)
+          : await createPayment(token, invoiceId, isSalesPayment, body);
         if (success) {
           toast.success("Payment created successfully!");
           resetForm();
@@ -393,7 +407,9 @@ function Payments({
     setRemovingId(paymentId);
     try {
       try {
-        const success = await deletePayment(token, invoiceId, isSalesPayment, paymentId);
+        const success = liveApi
+          ? await liveApi.remove(paymentId)
+          : await deletePayment(token, invoiceId, isSalesPayment, paymentId);
         if (success) {
           toast.success("Payment deleted.");
           fetchPayments();
