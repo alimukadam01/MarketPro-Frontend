@@ -405,7 +405,7 @@ export default function BacklogListEntry({
         </>
       }
     >
-      <div className="h-full grid grid-cols-3 gap-6">
+      <div className="h-full min-h-[560px] grid grid-cols-3 gap-6">
         <PagePhoto src={entry.image} className="min-h-0" />
 
         {/* The form */}

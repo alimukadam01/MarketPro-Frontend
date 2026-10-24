@@ -80,7 +80,11 @@ export function EntryShell({
               <DynamicBreadCrumb />
             </div>
             {titleRow}
-            <div className="flex-1 min-h-0">{children}</div>
+            {/* Scrolls only when the screen is too short for the page's own
+                minimum: the entry screens keep their item lists that tall
+                rather than squeezing them out of sight. The px-1 inset keeps
+                focus rings at the edges from being clipped. */}
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">{children}</div>
           </div>
         </div>
         {dialogs}
@@ -116,7 +120,11 @@ export function EntryShell({
       <div className="flex-1 min-h-0 flex flex-col px-6 pt-6 pb-6 gap-6">
         {titleRow}
 
-        <div className="flex-1 min-h-0">{children}</div>
+        {/* Scrolls only when the screen is too short for the page's own
+                minimum: the entry screens keep their item lists that tall
+                rather than squeezing them out of sight. The px-1 inset keeps
+                focus rings at the edges from being clipped. */}
+            <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">{children}</div>
       </div>
 
       {dialogs}

@@ -508,7 +508,11 @@ export default function BacklogInvoiceEntry({
         </>
       }
     >
-      <div className="h-full flex gap-6">
+      {/* Never shorter than the fields, a few item lines and the charges
+          need: on a short screen the page scrolls (EntryShell) instead of
+          the item list being squeezed to nothing - which hid the bill's
+          lines from the owner, whose note above the fields takes room. */}
+      <div className={`h-full flex gap-6 ${isSales ? "min-h-[720px]" : "min-h-[560px]"}`}>
         <PagePhoto src={entry.image} className="w-[360px] shrink-0" />
 
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
@@ -517,7 +521,7 @@ export default function BacklogInvoiceEntry({
             {fields}
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar -ml-1 pl-1 pr-1 pb-4">
+          <div className="flex-1 min-h-[280px] overflow-y-auto no-scrollbar -ml-1 pl-1 pr-1 pb-4">
             <InvoiceSection
               title="Invoice Items"
               first

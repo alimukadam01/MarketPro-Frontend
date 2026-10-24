@@ -1,12 +1,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Plus, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Plus, RefreshCcw, RotateCcw, Trash2, X } from "lucide-react";
 import * as DialogUI from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { SearchField } from "@/components/ui/search-field";
 import { RowAction } from "@/components/invoice/InvoiceItemsTable";
 import { LookupCombobox, type LookupItem } from "./LookupCombobox";
 import { useAuth } from "../../../services/AuthProvider";
@@ -241,8 +242,10 @@ const emptyRow = (location: Picked): StockRow => ({ location, quantity: "", unit
 /**
  * A product the page names that MarketPro does not have, in two steps:
  *
- *  1. the product - name, unit, description and its variants, as on Create
- *     Product;
+ *  1. the product - name, unit, description and its variants, built as on
+ *     Create Product: pick attributes, type their values, Create Variant;
+ *     click a variant to load it back and Update it, reset to start over.
+ *     Only the variant list scrolls; the form above it stays put.
  *  2. its stock - a row for each variant, because a product goes on a bill
  *     from its stock row: where it is kept, and, if the page says, how many,
  *     the price and the cost.
@@ -271,6 +274,9 @@ export function NewProductDialog({
   const [desc, setDesc] = useState("");
   const [attributes, setAttributes] = useState<Record<string, string>>({});
   const [variants, setVariants] = useState<Variant[]>([]);
+  // The variant loaded back into the configuration for updating, by position.
+  const [selected, setSelected] = useState<number | null>(null);
+  const [variantSearch, setVariantSearch] = useState("");
   const [rows, setRows] = useState<StockRow[]>([]);
   const [defaultLocation, setDefaultLocation] = useState<Picked>(null);
   const [saving, setSaving] = useState(false);
@@ -283,6 +289,8 @@ export function NewProductDialog({
     setDesc("");
     setAttributes({});
     setVariants([]);
+    setSelected(null);
+    setVariantSearch("");
     setRows([]);
     const fetchDefault = async () => {
       try {
@@ -307,10 +315,48 @@ export function NewProductDialog({
     setAttributes((prev) => ({ ...prev, [item.label]: prev[item.label] ?? "" }));
   };
 
-  const addVariant = () => {
-    setVariants((prev) => [...prev, { attributes: { ...attributes } }]);
+  // Keeps the attribute names and wipes their values, so the next variant is
+  // typed without picking the attributes again - as on Create Product.
+  const clearAttributeValues = () =>
     setAttributes((prev) => Object.fromEntries(Object.keys(prev).map((key) => [key, ""])));
+
+  const deselect = () => {
+    setSelected(null);
+    clearAttributeValues();
   };
+
+  const createOrUpdateVariant = () => {
+    if (selected !== null) {
+      // Replaced in place, so an updated variant keeps its number.
+      setVariants((prev) => prev.map((variant, i) => (i === selected ? { attributes: { ...attributes } } : variant)));
+      deselect();
+      return;
+    }
+    setVariants((prev) => [...prev, { attributes: { ...attributes } }]);
+    clearAttributeValues();
+  };
+
+  const pickVariant = (index: number) => {
+    setSelected(index);
+    setAttributes({ ...variants[index].attributes });
+  };
+
+  const deleteVariant = (index: number) => {
+    if (selected === index) deselect();
+    else if (selected !== null && selected > index) setSelected(selected - 1);
+    setVariants((prev) => prev.filter((_, i) => i !== index));
+    // The stock rows follow the variants by position.
+    setRows((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // The original position travels with each variant, so the number shown and
+  // the one picked or deleted still match while the list is filtered.
+  const visibleVariants = variants
+    .map((variant, index) => ({ variant, index }))
+    .filter(({ variant }) => {
+      const query = variantSearch.trim().toLowerCase();
+      return !query || variantLabel(variant).toLowerCase().includes(query);
+    });
 
   // One stock row per variant, or one for a product without variants. Rows
   // already filled in keep their values when the user comes back to step 1.
@@ -321,6 +367,10 @@ export function NewProductDialog({
     }
     if (!unit) {
       toast.error("Pick the unit.");
+      return;
+    }
+    if (selected !== null) {
+      toast.error("Update the variant you are editing first, or press Esc.");
       return;
     }
     if (attributeCount > 0 && variantReady) {
@@ -385,7 +435,17 @@ export function NewProductDialog({
 
   return (
     <DialogUI.Dialog open={open} onOpenChange={setOpen}>
-      <DialogUI.DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+      <DialogUI.DialogContent
+        className="max-w-2xl max-h-[90vh] flex flex-col"
+        // Esc first lets go of a variant being edited, as on Create Product;
+        // only with nothing selected does it close the dialog.
+        onEscapeKeyDown={(event) => {
+          if (step === 1 && selected !== null) {
+            event.preventDefault();
+            deselect();
+          }
+        }}
+      >
         <DialogUI.DialogHeader className="shrink-0 space-y-3">
           <DialogUI.DialogTitle>New product</DialogUI.DialogTitle>
           {stepTabs}
@@ -396,9 +456,10 @@ export function NewProductDialog({
           </DialogUI.DialogDescription>
         </DialogUI.DialogHeader>
 
-        <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar -mx-1 px-1 py-1 space-y-4">
-          {step === 1 ? (
-            <>
+        {step === 1 ? (
+          // The form stays put; only the variant list below it scrolls.
+          <div className="flex-1 min-h-0 flex flex-col gap-4">
+            <div className="shrink-0 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label htmlFor="new_product_name">Name</Label>
@@ -421,11 +482,11 @@ export function NewProductDialog({
                 <Textarea id="new_product_desc" rows={2} value={desc} onChange={(e) => setDesc(e.target.value)} />
               </div>
 
-              <div className="space-y-2">
-                <h3 className="text-base font-semibold">Add Product Variants (Optional)</h3>
-                {attributeCount > 0 && (
-                  <div className="space-y-1">
-                    <Label className="font-semibold">Variant Configuration</Label>
+              <h3 className="text-base font-semibold">Add Product Variants (Optional)</h3>
+              {attributeCount > 0 && (
+                <div className="space-y-1">
+                  <Label className="font-semibold">Variant Configuration</Label>
+                  <div className="flex flex-col gap-2">
                     {Object.entries(attributes).map(([key, value]) => (
                       <div key={key} className="flex gap-2">
                         <Input value={key} disabled className="w-1/2 bg-muted disabled:opacity-100 disabled:text-foreground" />
@@ -439,6 +500,7 @@ export function NewProductDialog({
                           variant="outline"
                           size="icon"
                           className="shrink-0"
+                          aria-label={`Remove ${key}`}
                           onClick={() => setAttributes((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== key)))}
                         >
                           <X className="h-4 w-4" />
@@ -446,71 +508,107 @@ export function NewProductDialog({
                       </div>
                     ))}
                   </div>
-                )}
-                <div className="flex gap-2 items-end">
-                  <div className="w-1/2 space-y-1">
-                    <Label htmlFor="new_product_attr">Add Attribute</Label>
-                    <LookupCombobox
-                      id="new_product_attr"
-                      kind="attributes"
-                      value=""
-                      onChange={addAttribute}
-                      disabled={attributeCount >= 3}
-                      placeholder={attributeCount >= 3 ? "Max. 3 attributes allowed" : "Select Attribute"}
-                    />
-                  </div>
-                  <Button type="button" className="flex-1" disabled={!variantReady} onClick={addVariant}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Variant
-                  </Button>
                 </div>
-                <div className="flex flex-col gap-[2px]">
-                  {variants.map((variant, index) => (
-                    <div key={index} className="flex gap-2 items-center">
-                      <div className="flex-1 bg-card rounded-lg border border-border min-h-[35px] py-0.5 flex items-center px-4 gap-4 text-sm">
-                        <span>{index + 1}.</span>
-                        <span className="flex-1">{variantLabel(variant)}</span>
-                      </div>
-                      <RowAction label="Delete variant" onClick={() => setVariants((prev) => prev.filter((_, i) => i !== index))}>
-                        <Trash2 className="h-5 w-5" />
-                      </RowAction>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_88px_100px_100px] gap-3 text-sm font-medium text-muted-foreground px-1">
-                <div>Variant</div><div>Location</div><div>Quantity</div><div>Sale price</div><div>Cost</div>
-              </div>
-              {rows.map((row, index) => (
-                <div key={index} className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_88px_100px_100px] gap-3 items-center">
-                  <div className="text-sm font-medium truncate" title={variants[index] ? variantLabel(variants[index]) : name}>
-                    {variants[index] ? variantLabel(variants[index]) : name}
-                  </div>
+              )}
+              {/* Pick, build and reset on one row, as on Create Product. */}
+              <div className="flex gap-2 items-end">
+                <div className="w-1/2 space-y-1">
+                  <Label htmlFor="new_product_attr">Add Attribute</Label>
                   <LookupCombobox
-                    kind="locations"
-                    value={row.location?.id ?? ""}
-                    selectedLabel={row.location?.label}
-                    onChange={(item) => setRow(index, { location: item ? { id: item.id, label: item.label } : null })}
-                    placeholder="Location"
+                    id="new_product_attr"
+                    kind="attributes"
+                    value=""
+                    onChange={addAttribute}
+                    disabled={attributeCount >= 3}
+                    placeholder={attributeCount >= 3 ? "Max. 3 attributes allowed" : "Select Attribute"}
                   />
-                  <Input type="number" min="0" aria-label="Quantity" value={row.quantity}
-                    onChange={(e) => setRow(index, { quantity: e.target.value })} />
-                  <Input type="number" min="0" step="0.01" aria-label="Sale price" value={row.unitPrice}
-                    onChange={(e) => setRow(index, { unitPrice: e.target.value })} />
-                  <Input type="number" min="0" step="0.01" aria-label="Cost" value={row.unitCost}
-                    onChange={(e) => setRow(index, { unitCost: e.target.value })} />
                 </div>
-              ))}
-              <p className="text-xs text-muted-foreground">
-                Quantity is what is in stock now, counted today: sales and purchases dated on or before today will
-                not change it again. Leave it empty if nobody has counted it.
-              </p>
-            </>
-          )}
-        </div>
+                <Button type="button" className="flex-1" disabled={!variantReady} onClick={createOrUpdateVariant}>
+                  {selected !== null
+                    ? <><RefreshCcw className="h-4 w-4 mr-2" />Update Variant</>
+                    : <><Plus className="h-4 w-4 mr-2" />Create Variant</>}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0"
+                  aria-label="Reset the variant"
+                  onClick={() => { setSelected(null); setAttributes({}); }}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+              </div>
+              {variants.length > 0 && (
+                <SearchField
+                  id="new_product_variant_search"
+                  placeholder="Search variants"
+                  value={variantSearch}
+                  onChange={setVariantSearch}
+                  className="w-full"
+                  wrapperClassName="w-full"
+                />
+              )}
+              {selected !== null && (
+                <p className="text-xs text-muted-foreground -mt-2">
+                  Editing variant {selected + 1}. Esc lets go of it.
+                </p>
+              )}
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar -mx-1 px-1 py-1">
+              <div className="flex flex-col gap-[2px]">
+                {visibleVariants.map(({ variant, index }) => (
+                  <div key={index} className="flex gap-2 items-center">
+                    <div
+                      onClick={() => pickVariant(index)}
+                      className={`flex-1 bg-card rounded-lg min-h-[35px] py-0.5 flex cursor-pointer items-center px-4 gap-4 text-sm ${selected === index ? "border-2 border-[#4285F4]" : "border border-border"}`}
+                    >
+                      <span>{index + 1}.</span>
+                      <span className="flex-1">{variantLabel(variant)}</span>
+                    </div>
+                    <RowAction label="Delete variant" onClick={() => deleteVariant(index)}>
+                      <Trash2 className="h-5 w-5" />
+                    </RowAction>
+                  </div>
+                ))}
+                {variants.length > 0 && visibleVariants.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-3">No variant matches that.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar -mx-1 px-1 py-1 space-y-4">
+            <div className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_88px_100px_100px] gap-3 text-sm font-medium text-muted-foreground px-1">
+              <div>Variant</div><div>Location</div><div>Quantity</div><div>Sale price</div><div>Cost</div>
+            </div>
+            {rows.map((row, index) => (
+              <div key={index} className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_88px_100px_100px] gap-3 items-center">
+                <div className="text-sm font-medium truncate" title={variants[index] ? variantLabel(variants[index]) : name}>
+                  {variants[index] ? variantLabel(variants[index]) : name}
+                </div>
+                <LookupCombobox
+                  kind="locations"
+                  value={row.location?.id ?? ""}
+                  selectedLabel={row.location?.label}
+                  onChange={(item) => setRow(index, { location: item ? { id: item.id, label: item.label } : null })}
+                  placeholder="Location"
+                />
+                <Input type="number" min="0" aria-label="Quantity" value={row.quantity}
+                  onChange={(e) => setRow(index, { quantity: e.target.value })} />
+                <Input type="number" min="0" step="0.01" aria-label="Sale price" value={row.unitPrice}
+                  onChange={(e) => setRow(index, { unitPrice: e.target.value })} />
+                <Input type="number" min="0" step="0.01" aria-label="Cost" value={row.unitCost}
+                  onChange={(e) => setRow(index, { unitCost: e.target.value })} />
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              Quantity is what is in stock now, counted today: sales and purchases dated on or before today will
+              not change it again. Leave it empty if nobody has counted it.
+            </p>
+          </div>
+        )}
 
         <DialogUI.DialogFooter className="shrink-0">
           {step === 1 ? (
