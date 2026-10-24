@@ -15,8 +15,18 @@ export interface ComboboxOption {
    */
   keywords?: string[];
   disabled?: boolean;
-  /** A "Create ..." row rather than a record: shown with a plus, in the accent colour. */
-  create?: boolean;
+}
+
+/**
+ * Creating what was typed, when it is not there. The button takes the
+ * chevron's place at the right of the field.
+ */
+export interface ComboboxCreateAction {
+  /** The button's tooltip and accessible name: 'Create customer "Zubair"'. */
+  label: string;
+  onCreate: () => void;
+  /** Enter creates too - for when nothing in the list matches. */
+  onEnter?: boolean;
 }
 
 /**
@@ -97,11 +107,13 @@ interface ComboboxProps {
    */
   serverFiltered?: boolean;
   /**
-   * Highlight the first row as the user types, so Enter picks it. Used where
-   * the list ends in a "Create ..." row: typing a name that is not there
-   * leaves that row alone and highlighted, and Enter creates it.
+   * Highlight the first row as the user types, so Enter picks it. Used with
+   * createAction: Enter takes the match when there is one, and creates what
+   * was typed when there is none.
    */
   autoHighlight?: boolean;
+  /** Offer to create what was typed: a Create button where the chevron is. */
+  createAction?: ComboboxCreateAction | null;
 }
 
 /**
@@ -145,6 +157,7 @@ export function Combobox({
   onInputChange,
   serverFiltered = false,
   autoHighlight = false,
+  createAction = null,
 }: ComboboxProps) {
   // Compared as strings on both sides. Object.entries always yields string keys,
   // while the form's value comes back from the API as a number, so a strict ===
@@ -156,6 +169,35 @@ export function Combobox({
     const key = String(value);
     return options.find((o) => String(o.value) === key) ?? null;
   }, [options, value]);
+
+  // Mirrors Base UI's own open state, so it behaves exactly as uncontrolled;
+  // held here only so Enter (below) can close the list after picking.
+  const [open, setOpen] = React.useState(false);
+  // The row the keyboard or the pointer is on, if any.
+  const highlighted = React.useRef<ComboboxOption | undefined>(undefined);
+
+  // Enter on a list searched on the server. Its rows arrive after the
+  // keystroke, and Base UI only highlights a row as the text changes - so
+  // Enter often found nothing highlighted and did nothing. With a row
+  // highlighted Base UI picks it as usual; otherwise Enter takes the first
+  // match, or creates what was typed when nothing matches.
+  const handleEnter = (event: React.KeyboardEvent<HTMLInputElement> & { preventBaseUIHandler?: () => void }) => {
+    if (event.key !== "Enter" || !serverFiltered || !open || highlighted.current) return;
+    if (createAction?.onEnter) {
+      event.preventDefault();
+      event.preventBaseUIHandler?.();
+      createAction.onCreate();
+      return;
+    }
+    const current = value === undefined || value === null ? "" : String(value);
+    const first = options.find((option) => !option.disabled && String(option.value) !== current);
+    if (first) {
+      event.preventDefault();
+      event.preventBaseUIHandler?.();
+      onChange(first.value);
+      setOpen(false);
+    }
+  };
 
   // A set value with no matching option means the options have not arrived yet:
   // Update pages reset() the form from one request and load the list in another.
@@ -250,19 +292,42 @@ export function Combobox({
       }}
       disabled={disabled}
       autoHighlight={autoHighlight}
+      open={open}
+      onOpenChange={(next: boolean) => setOpen(next)}
+      onItemHighlighted={(option: ComboboxOption | undefined) => { highlighted.current = option; }}
       openOnInputClick
     >
       <div className={cn("relative", className)}>
         <ComboboxPrimitive.Input
           id={id}
           placeholder={placeholder}
-          // the project's Input, verbatim, plus room for the chevron
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-9 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+          // the project's Input, verbatim, plus room for the chevron - or
+          // for the wider Create button in its place
+          className={cn(
+            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+            createAction ? "pr-24" : "pr-9",
+          )}
+          onKeyDown={handleEnter}
         />
         {/* One control in the slot, never two: with a selection to clear, the X
             replaces the chevron rather than crowding beside it, so the input's
             pr-9 stays right. Clicking the field opens the list anyway. */}
-        {clearable && selected && !awaitingLabel ? (
+        {createAction ? (
+          // mousedown kept off the input, so pressing the button does not
+          // blur the field and close the list before the click lands
+          <button
+            type="button"
+            title={createAction.label}
+            aria-label={createAction.label}
+            disabled={disabled}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={createAction.onCreate}
+            className="absolute right-1 top-1 inline-flex h-8 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Create
+          </button>
+        ) : clearable && selected && !awaitingLabel ? (
           <ComboboxPrimitive.Clear
             aria-label="Clear selection"
             disabled={disabled}
@@ -368,14 +433,7 @@ export function Combobox({
                       <ComboboxPrimitive.ItemIndicator className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
                         <Check className="h-4 w-4" />
                       </ComboboxPrimitive.ItemIndicator>
-                      {option.create ? (
-                        <span className="inline-flex items-center gap-1.5 font-medium text-primary">
-                          <Plus className="h-3.5 w-3.5" />
-                          {option.label}
-                        </span>
-                      ) : (
-                        <span>{option.label}</span>
-                      )}
+                      <span>{option.label}</span>
                     </ComboboxPrimitive.Item>
                   )}
                 </ComboboxPrimitive.List>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import { Combobox, type ComboboxCreateAction, type ComboboxOption } from "@/components/ui/combobox";
 import { useAuth } from "../../../services/AuthProvider";
 import { workLookup } from "../../../services/api";
 
@@ -29,12 +29,13 @@ interface LookupComboboxProps {
   id?: string;
   className?: string;
   /**
-   * Offer to create what was typed when nothing is called exactly that. The
-   * list then ends in a "Create ..." row, highlighted when it is the only
-   * one, so Enter opens the page's create dialog with the name filled in.
+   * Offer to create what was typed when nothing is called exactly that: a
+   * Create button takes the chevron's place at the right of the field, and
+   * when nothing in the list matches at all, Enter does the same. Either
+   * opens the page's create dialog with the name filled in.
    */
   onCreate?: (text: string) => void;
-  /** What a created record is called in that row: "customer", "product". */
+  /** What a created record is called: "customer", "product". */
   createNoun?: string;
 }
 
@@ -115,32 +116,27 @@ export function LookupCombobox({
   }, [items, value, selectedLabel]);
 
   const typed = query.trim();
-  const createOptions = useRef(new Map<string, ComboboxOption>());
-  const createRow = useMemo(() => {
+  // Only once the server has answered for exactly what is typed: until then
+  // the list is the previous query's, and the name may well be in the next.
+  const createAction: ComboboxCreateAction | null = useMemo(() => {
     if (!onCreate || !typed || answered !== query) return null;
     const exact = items.some((item) => item.label.trim().toLowerCase() === typed.toLowerCase());
     if (exact || typed === String(selectedLabel).trim()) return null;
-    let option = createOptions.current.get(typed);
-    if (!option) {
-      option = { value: CREATE, label: `Create ${createNoun ? `${createNoun} ` : ""}"${typed}"`, create: true };
-      createOptions.current.set(typed, option);
-    }
-    return option;
+    return {
+      label: `Create ${createNoun ? `${createNoun} ` : ""}"${typed}"`,
+      onCreate: () => onCreate(typed),
+      // With matches listed, Enter picks the highlighted one instead.
+      onEnter: items.length === 0,
+    };
   }, [onCreate, typed, answered, query, items, selectedLabel, createNoun]);
-
-  const shown = createRow ? [...options, createRow] : options;
 
   return (
     <Combobox
       id={id}
       className={className}
-      options={shown}
+      options={options}
       value={value ?? ""}
       onChange={(picked) => {
-        if (picked === CREATE) {
-          onCreate?.(typed);
-          return;
-        }
         if (!picked) {
           onChange(null);
           return;
@@ -155,16 +151,14 @@ export function LookupCombobox({
       serverFiltered
       loading={loading}
       placeholder={placeholder}
-      emptyText={query ? notFoundText : emptyText}
+      emptyText={createAction ? `Not in MarketPro yet. Press Enter or Create to add it.` : query ? notFoundText : emptyText}
       notFoundText={notFoundText}
       clearable={clearable}
       disabled={disabled}
       autoHighlight={!!onCreate}
+      createAction={createAction}
     />
   );
 }
-
-// The value of the "Create ..." row: never a record's id.
-const CREATE = "__create__";
 
 export default LookupCombobox;
