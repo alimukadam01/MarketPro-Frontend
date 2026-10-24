@@ -50,20 +50,23 @@ export function EntryShell({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const initials = user ? `${user.first_name?.[0] ?? ""}${user.last_name?.[0] ?? ""}` : "";
 
+  // One line, never two: the pills and the "Entered by" line give way
+  // (truncate) before the buttons wrap under them, which cost the page
+  // below a whole row of height.
   const titleRow = (
-    <div className="shrink-0 flex items-center justify-between gap-4 flex-wrap">
-      <div className="flex items-center gap-3 min-w-0 flex-wrap">
+    <div className="shrink-0 flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3 min-w-0 overflow-hidden whitespace-nowrap">
         {backTo && (
           <ArrowLeft
             className="w-5 h-5 shrink-0 text-muted-foreground cursor-pointer hover:text-primary"
             onClick={() => navigate(backTo)}
           />
         )}
-        <h1 className="text-2xl font-semibold leading-8 truncate">{title}</h1>
+        <h1 className="text-2xl font-semibold leading-8 shrink-0">{title}</h1>
         {aside}
         {loading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}
       </div>
-      {actions && <div className="flex items-center gap-3 flex-wrap">{actions}</div>}
+      {actions && <div className="flex items-center gap-3 shrink-0">{actions}</div>}
     </div>
   );
 

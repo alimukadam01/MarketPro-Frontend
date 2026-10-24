@@ -33,7 +33,7 @@ export const priorityOf = (entry: { is_daily?: boolean; priority?: string }) =>
 
 export function Pill({ tone, children }: { tone: string; children: ReactNode }) {
   return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${tone}`}>
+    <span className={`inline-block shrink-0 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${tone}`}>
       {children}
     </span>
   );

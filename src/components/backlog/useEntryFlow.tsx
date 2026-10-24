@@ -238,7 +238,7 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
         <>
           <Pill tone="bg-yellow-100 text-yellow-700">Waiting for review</Pill>
           {review && (
-            <span className="text-sm text-muted-foreground">
+            <span className="min-w-0 truncate text-sm text-muted-foreground">
               Entered by {personName(review.entered_by)} · {formatWhen(review.entered_at)}
               {review.seconds_spent ? ` · ${formatSeconds(review.seconds_spent)}` : ""}
             </span>

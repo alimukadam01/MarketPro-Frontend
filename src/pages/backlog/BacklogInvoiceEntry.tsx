@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, RefreshCcw, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, RefreshCcw, Trash2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,6 +45,36 @@ type Line = {
 };
 
 type StagedPayment = { id: string; amount: number; status: string; fields: object; imageFile?: File | null };
+
+/**
+ * A closed section of the invoice column: a bar across the whole column,
+ * in the page's own background and ruled off like the fields above, with
+ * the section's name, what is in it, and which way it opens. Invoice Items
+ * closes to the top and opens downwards; Extra Charges closes to the bottom
+ * and opens upwards.
+ */
+function SectionBar({ title, aside, icon: Icon, onClick, className = "" }: {
+  title: string;
+  aside: string;
+  icon: LucideIcon;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={false}
+      className={`group shrink-0 w-full flex items-center justify-between gap-3 bg-background h-14 text-left ${className}`}
+    >
+      <span className="flex items-baseline gap-3 min-w-0">
+        <span className="text-lg font-semibold leading-6 group-hover:text-primary">{title}</span>
+        <span className="text-sm text-muted-foreground truncate">{aside}</span>
+      </span>
+      <Icon className="h-5 w-5 shrink-0 text-muted-foreground group-hover:text-foreground" />
+    </button>
+  );
+}
 
 const money = (value: number) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
 const newKey = () => `line-${Date.now()}-${Math.random()}`;
@@ -97,6 +127,9 @@ export default function BacklogInvoiceEntry({
   const [project, setProject] = useState<Picked>(null);
   const [charges, setCharges] = useState<ExtraCharge[]>([]);
   const [lines, setLines] = useState<Line[]>([]);
+  // One section of the invoice column open at a time, the other a bar: the
+  // items by default, the charges when their bar is clicked.
+  const [openSection, setOpenSection] = useState<"items" | "charges">("items");
 
   // The add row, which also takes a line clicked in the table for correcting.
   const [newProduct, setNewProduct] = useState<Picked>(null);
@@ -178,6 +211,7 @@ export default function BacklogInvoiceEntry({
   const taxAmount = taxType === "percentage" ? (subtotal * taxValue) / 100 : taxValue;
   const chargesTotal = isSales ? charges.reduce((sum, c) => sum + (parseFloat(String(c?.amount)) || 0), 0) : 0;
   const total = subtotal - discountAmount + taxAmount + chargesTotal;
+  const chargesOpen = isSales && openSection === "charges";
   const unitCount = lines.reduce((sum, line) => sum + line.quantity, 0);
 
   const cleared = (rows) => rows
@@ -508,11 +542,10 @@ export default function BacklogInvoiceEntry({
         </>
       }
     >
-      {/* Never shorter than the fields, a few item lines and the charges
-          need: on a short screen the page scrolls (EntryShell) instead of
-          the item list being squeezed to nothing - which hid the bill's
-          lines from the owner, whose note above the fields takes room. */}
-      <div className={`h-full flex gap-6 ${isSales ? "min-h-[720px]" : "min-h-[560px]"}`}>
+      {/* Never shorter than the fields, a few lines of the open section and
+          the other one's bar need: on a short screen the page scrolls
+          (EntryShell) instead of the open section being squeezed to nothing. */}
+      <div className="h-full flex gap-6 min-h-[480px]">
         <PagePhoto src={entry.image} className="w-[360px] shrink-0" />
 
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
@@ -521,7 +554,19 @@ export default function BacklogInvoiceEntry({
             {fields}
           </div>
 
-          <div className="flex-1 min-h-[280px] overflow-y-auto no-scrollbar -ml-1 pl-1 pr-1 pb-4">
+          {chargesOpen && (
+            <SectionBar
+              title="Invoice Items"
+              aside={lines.length > 0 ? `${lines.length} items · ${unitCount} units` : "No items yet"}
+              icon={ChevronDown}
+              onClick={() => setOpenSection("items")}
+              className="border-b border-border"
+            />
+          )}
+
+          {/* Hidden rather than unmounted when closed, so a line or a charge
+              half typed survives switching sections. */}
+          <div className={`${chargesOpen ? "hidden" : "flex-1"} min-h-[220px] overflow-y-auto no-scrollbar -ml-1 pl-1 pr-1 pb-4`}>
             <InvoiceSection
               title="Invoice Items"
               first
@@ -557,7 +602,9 @@ export default function BacklogInvoiceEntry({
                       {editingKey ? "Update" : "Add Item"}
                     </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  {/* The reminder gives way on a short screen; the editing
+                      note does not. */}
+                  <p className={`text-xs text-muted-foreground ${editingKey ? "" : "[@media(max-height:760px)]:hidden"}`}>
                     {editingKey
                       ? `Editing line ${editingIndex + 1}. Esc clears.`
                       : "Prices are not filled in - type them as written on the bill."}
@@ -585,12 +632,22 @@ export default function BacklogInvoiceEntry({
             </InvoiceSection>
           </div>
 
-          {/* Stacked under the items. Held to a fixed height, so the charge
-              row lines up with the discount and tax in the rail. */}
           {isSales && (
-            <div className="shrink-0 h-[262px] overflow-y-auto no-scrollbar border-t border-border -ml-1 pl-1 pr-1">
+            <div className={`${chargesOpen ? "flex-1" : "hidden"} min-h-[220px] overflow-y-auto no-scrollbar -ml-1 pl-1 pr-1 pb-4`}>
               <ExtraChargesEditor charges={charges} onChange={setCharges} />
             </div>
+          )}
+
+          {isSales && !chargesOpen && (
+            <SectionBar
+              title="Extra Charges"
+              aside={charges.length > 0
+                ? `${charges.length} charge${charges.length > 1 ? "s" : ""} · PKR ${money(chargesTotal)}`
+                : "None yet"}
+              icon={ChevronUp}
+              onClick={() => setOpenSection("charges")}
+              className="border-t border-border"
+            />
           )}
         </div>
 
