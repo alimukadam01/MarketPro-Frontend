@@ -114,6 +114,11 @@ interface ComboboxProps {
    */
   serverFiltered?: boolean;
   /**
+   * The options are still the answer to text typed before (a server search
+   * in flight): Enter then picks nothing rather than a row from the old list.
+   */
+  optionsStale?: boolean;
+  /**
    * Highlight the first row as the user types, so Enter picks it. Used with
    * createAction: Enter takes the match when there is one, and creates what
    * was typed when there is none.
@@ -122,6 +127,15 @@ interface ComboboxProps {
   /** Offer to create what was typed: a Create button where the chevron is. */
   createAction?: ComboboxCreateAction | null;
 }
+
+/** The list's own filter: every word of the text, in the label, id or keywords. */
+const optionMatches = (option: ComboboxOption, query: string) => {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [option.label, option.value, ...(option.keywords ?? [])].some((text) =>
+    String(text ?? "").toLowerCase().includes(q),
+  );
+};
 
 /**
  * The Create button for a picker whose options are all on the page (the
@@ -204,6 +218,7 @@ export function Combobox({
   className,
   onInputChange,
   serverFiltered = false,
+  optionsStale = false,
   autoHighlight = false,
   createAction = null,
 }: ComboboxProps) {
@@ -223,12 +238,17 @@ export function Combobox({
   const [open, setOpen] = React.useState(false);
   // The row the keyboard or the pointer is on, if any.
   const highlighted = React.useRef<ComboboxOption | undefined>(undefined);
+  // What is typed in the field, for Enter to match against.
+  const [typed, setTyped] = React.useState("");
 
-  // Enter on a list searched on the server. Its rows arrive after the
-  // keystroke, and Base UI only highlights a row as the text changes - so
-  // Enter often found nothing highlighted and did nothing. With a row
-  // highlighted Base UI picks it as usual; otherwise Enter takes the first
-  // match, or creates what was typed when nothing matches.
+  // Enter, the same on every picker:
+  //   a row arrowed onto      Base UI picks it, as always;
+  //   a Create / Add variants that Enter may take - nothing matches, or the
+  //                           text is exactly a product's - it runs;
+  //   otherwise               the first enabled match is picked.
+  // Nothing is highlighted on its own (no autoHighlight): a server list's
+  // rows arrive after the keystroke, so a highlight set while typing could
+  // sit on a row from the text before - Enter then picked the wrong one.
   const handleEnter = (event: React.KeyboardEvent<HTMLInputElement> & { preventBaseUIHandler?: () => void }) => {
     // A highlighted row: Base UI picks it, as always.
     if (event.key !== "Enter" || (open && highlighted.current)) return;
@@ -236,18 +256,21 @@ export function Combobox({
     // to the form around the picker: on an invoice screen that submitted the
     // whole invoice from the customer or product field.
     event.preventDefault();
+    // Nor does Base UI act on it: with nothing highlighted it would only
+    // reset the field, losing what was typed.
+    event.preventBaseUIHandler?.();
     if (createAction?.onEnter) {
-      event.preventBaseUIHandler?.();
       createAction.onCreate();
       return;
     }
-    // A list filtered here highlights as it filters; only the server's
-    // late-arriving rows need the first match taken by hand.
-    if (!serverFiltered || !open) return;
+    const text = typed.trim();
+    if (!open || !text || optionsStale || (selected && text === selected.label.trim())) return;
     const current = value === undefined || value === null ? "" : String(value);
-    const first = options.find((option) => !option.disabled && String(option.value) !== current);
+    // A server's list is already the matches; one held here is filtered as
+    // the list shows it.
+    const candidates = serverFiltered ? options : options.filter((option) => optionMatches(option, text));
+    const first = candidates.find((option) => !option.disabled && String(option.value) !== current);
     if (first) {
-      event.preventBaseUIHandler?.();
       onChange(first.value);
       setOpen(false);
     }
@@ -335,15 +358,11 @@ export function Combobox({
       value={selected}
       onValueChange={(option: ComboboxOption | null) => onChange(option ? option.value : "")}
       itemToStringLabel={(option: ComboboxOption) => option.label}
-      onInputValueChange={onInputChange ? (query: string) => onInputChange(query) : undefined}
-      filter={(option: ComboboxOption, query: string) => {
-        if (serverFiltered) return true;
-        const q = query.trim().toLowerCase();
-        if (!q) return true;
-        return [option.label, option.value, ...(option.keywords ?? [])].some((text) =>
-          String(text ?? "").toLowerCase().includes(q),
-        );
+      onInputValueChange={(query: string) => {
+        setTyped(query);
+        onInputChange?.(query);
       }}
+      filter={(option: ComboboxOption, query: string) => serverFiltered || optionMatches(option, query)}
       disabled={disabled}
       autoHighlight={autoHighlight}
       open={open}

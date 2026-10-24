@@ -163,13 +163,13 @@ export function LookupCombobox({
       // would search for exactly that - harmless, and it keeps the pick listed.
       onInputChange={setQuery}
       serverFiltered
+      optionsStale={answered !== query}
       loading={loading}
       placeholder={placeholder}
       emptyText={createAction ? `Not in MarketPro yet. Press Enter or Create to add it.` : query ? notFoundText : emptyText}
       notFoundText={notFoundText}
       clearable={clearable}
       disabled={disabled}
-      autoHighlight={!!onCreate}
       createAction={createAction}
     />
   );
