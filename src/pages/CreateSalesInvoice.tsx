@@ -18,6 +18,8 @@ import {
 import { useAuth } from "../../services/AuthProvider"
 import {
   attachStagedToInvoice,
+  createCustomerWithBalance,
+  createProductWithStock,
   getActiveBusiness,
   getAvailableProductsList,
   getCustomersList,
@@ -26,7 +28,8 @@ import {
 } from "../../services/api"
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
-import { Combobox } from "@/components/ui/combobox";
+import { Combobox, useCreateAction } from "@/components/ui/combobox";
+import { NewPartyDialog, NewProductDialog } from "@/components/backlog/NewRecordDialogs";
 import Payments from "@/components/ui/payments";
 import InvoiceImages from "@/components/ui/invoice-images";
 import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
@@ -251,43 +254,45 @@ const CreateSalesInvoice = () => {
     setInvoiceItems(invoiceItems.filter(item => item.id !== id));
   }
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      if (!token) return;
+  // Outside the effect so a product or customer created from the pickers
+  // can reload its list and be picked straight away.
+  const fetchProducts = async () => {
+    if (!token) return;
 
-      try {
-        const products = await getAvailableProductsList(token, businessId)
-        if (products) {
-          const productMap = createNestedIdMap(products, 'product.id')
-          setProducts(productMap)
-        } else {
-          toast.error("Failed to fetch products")
-        }
-      } catch (error) {
-        console.log("Error fetching products:", error)
+    try {
+      const products = await getAvailableProductsList(token, businessId)
+      if (products) {
+        const productMap = createNestedIdMap(products, 'product.id')
+        setProducts(productMap)
+      } else {
         toast.error("Failed to fetch products")
-      } finally {
-        setProductsLoading(false)
       }
+    } catch (error) {
+      console.log("Error fetching products:", error)
+      toast.error("Failed to fetch products")
+    } finally {
+      setProductsLoading(false)
     }
+  }
 
-    const fetchCustomers = async () => {
-      try {
-        const customers = await getCustomersList(token)
-        if (customers) {
-          const customerMap = createIdMap(customers)
-          setCustomers(customerMap)
-        } else {
-          toast.error("Failed to fetch customers")
-        }
-      } catch (error) {
-        console.log("Error fetching customers:", error)
+  const fetchCustomers = async () => {
+    try {
+      const customers = await getCustomersList(token)
+      if (customers) {
+        const customerMap = createIdMap(customers)
+        setCustomers(customerMap)
+      } else {
         toast.error("Failed to fetch customers")
-      } finally {
-        setCustomersLoading(false)
       }
+    } catch (error) {
+      console.log("Error fetching customers:", error)
+      toast.error("Failed to fetch customers")
+    } finally {
+      setCustomersLoading(false)
     }
+  }
 
+  useEffect(() => {
     const fetchProjects = async () => {
       try {
         const data = await projectsAPIPackage.list(token)
@@ -328,6 +333,14 @@ const CreateSalesInvoice = () => {
       keywords: [item.product.base.name, item.product.name],
     })),
     [products])
+
+  // A customer or product typed here that MarketPro does not have: the
+  // Create button in the picker opens its dialog with the name filled in.
+  const [creating, setCreating] = useState<{ kind: "customer" | "product"; text: string } | null>(null)
+  const customerCreate = useCreateAction(customerOptions, "customer",
+    (text) => setCreating({ kind: "customer", text }))
+  const productCreate = useCreateAction(productOptions, "product",
+    (text) => setCreating({ kind: "product", text }))
 
   const projectOptions = useMemo(
     () => Object.entries(projects).map(([value, project]) => ({
@@ -386,6 +399,8 @@ const CreateSalesInvoice = () => {
                   options={customerOptions}
                   value={field.value}
                   onChange={field.onChange}
+                  onInputChange={customerCreate.onInputChange}
+                  createAction={customerCreate.createAction}
                   loading={customersLoading}
                   placeholder="Select customer"
                   emptyText="No customers yet. Add one first."
@@ -490,6 +505,30 @@ const CreateSalesInvoice = () => {
             stagedPayments={stagedPayments}
             onStagedChange={setStagedPayments}
           />
+          <NewPartyDialog
+            open={creating?.kind === "customer"}
+            setOpen={(open) => { if (!open) setCreating(null) }}
+            kind="customer"
+            initialName={creating?.text || ""}
+            create={(data) => createCustomerWithBalance(token, data)}
+            asOf={watch("date_issued")}
+            onCreated={async (item) => {
+              await fetchCustomers()
+              setValue("customer", String(item.id) as never)
+            }}
+          />
+          <NewProductDialog
+            open={creating?.kind === "product"}
+            setOpen={(open) => { if (!open) setCreating(null) }}
+            initialName={creating?.text || ""}
+            create={(data) => createProductWithStock(token, data)}
+            // Only products in stock are listed for a sale.
+            requireQuantity
+            onCreated={async (variants) => {
+              await fetchProducts()
+              if (variants[0]) setValue("newItemProduct", String(variants[0].id) as never)
+            }}
+          />
           <InvoiceImages
             invoiceId={null}
             isSalesInvoice={true}
@@ -518,6 +557,8 @@ const CreateSalesInvoice = () => {
                       options={productOptions}
                       value={field.value}
                       onChange={field.onChange}
+                      onInputChange={productCreate.onInputChange}
+                      createAction={productCreate.createAction}
                       loading={productsLoading}
                       placeholder="Select product"
                       emptyText="No stocked products yet."

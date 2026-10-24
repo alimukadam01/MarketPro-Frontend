@@ -117,6 +117,35 @@ interface ComboboxProps {
 }
 
 /**
+ * The Create button for a picker whose options are all on the page (the
+ * invoice create screens): offered once the text typed is not exactly one
+ * of them, with Enter creating too when nothing matches it at all - the
+ * same test the list's own filter applies.
+ *
+ *   const party = useCreateAction(customerOptions, "customer", openDialog);
+ *   <Combobox ... onInputChange={party.onInputChange} createAction={party.createAction} />
+ */
+export function useCreateAction(
+  options: ComboboxOption[],
+  noun: string,
+  onCreate: (text: string) => void,
+) {
+  const [query, setQuery] = React.useState("");
+  const typed = query.trim();
+  const createAction = React.useMemo<ComboboxCreateAction | null>(() => {
+    if (!typed) return null;
+    const q = typed.toLowerCase();
+    const texts = (option: ComboboxOption) => [option.label, ...(option.keywords ?? [])]
+      .map((text) => String(text ?? "").trim().toLowerCase());
+    if (options.some((option) => texts(option).some((text) => text === q))) return null;
+    const anyMatch = options.some((option) =>
+      [...texts(option), String(option.value)].some((text) => text.includes(q)));
+    return { label: `Create ${noun} "${typed}"`, onCreate: () => onCreate(typed), onEnter: !anyMatch };
+  }, [options, typed, noun, onCreate]);
+  return { onInputChange: setQuery, createAction };
+}
+
+/**
  * A type-to-search picker for options that come from the API.
  *
  * Use it wherever the options are a fetched queryset - customers, suppliers,
@@ -182,13 +211,16 @@ export function Combobox({
   // highlighted Base UI picks it as usual; otherwise Enter takes the first
   // match, or creates what was typed when nothing matches.
   const handleEnter = (event: React.KeyboardEvent<HTMLInputElement> & { preventBaseUIHandler?: () => void }) => {
-    if (event.key !== "Enter" || !serverFiltered || !open || highlighted.current) return;
+    if (event.key !== "Enter" || !open || highlighted.current) return;
     if (createAction?.onEnter) {
       event.preventDefault();
       event.preventBaseUIHandler?.();
       createAction.onCreate();
       return;
     }
+    // A list filtered here highlights as it filters; only the server's
+    // late-arriving rows need the first match taken by hand.
+    if (!serverFiltered) return;
     const current = value === undefined || value === null ? "" : String(value);
     const first = options.find((option) => !option.disabled && String(option.value) !== current);
     if (first) {
@@ -322,7 +354,7 @@ export function Combobox({
             disabled={disabled}
             onMouseDown={(event) => event.preventDefault()}
             onClick={createAction.onCreate}
-            className="absolute right-1 top-1 inline-flex h-8 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+            className="absolute right-1 top-1 inline-flex h-8 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" />
             Create
@@ -403,7 +435,9 @@ export function Combobox({
                     the list is empty - so padding on the element itself became a
                     permanent blank strip above the first option. */}
                 <ComboboxPrimitive.Empty>
-                  <div className="px-3 py-4 text-sm text-muted-foreground">{notFoundText}</div>
+                  <div className="px-3 py-4 text-sm text-muted-foreground">
+                    {createAction ? "Not in MarketPro yet. Press Enter or Create to add it." : notFoundText}
+                  </div>
                 </ComboboxPrimitive.Empty>
                 {canScrollUp && (
                   <ScrollArrow direction="up" onHoverStart={startScroll} onHoverEnd={stopScroll} />

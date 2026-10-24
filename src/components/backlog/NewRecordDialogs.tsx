@@ -11,12 +11,14 @@ import { SearchField } from "@/components/ui/search-field";
 import { RowAction } from "@/components/invoice/InvoiceItemsTable";
 import { LookupCombobox, type LookupItem } from "./LookupCombobox";
 import { useAuth } from "../../../services/AuthProvider";
-import {
-  createWorkCustomer,
-  createWorkProduct,
-  createWorkSupplier,
-  workLookup,
-} from "../../../services/api";
+import { workLookup } from "../../../services/api";
+
+/**
+ * How a dialog saves: the page decides - a backlog page through its work
+ * endpoints (tied to the page), an invoice create screen through the
+ * standard ones. Answers as backlogCall does: { ok, data, error }.
+ */
+export type CreateRecord = (data: Record<string, unknown>) => Promise<{ ok: boolean; data: any; error: string | null }>; // eslint-disable-line @typescript-eslint/no-explicit-any
 import { todayForInput } from "../../../services/utils";
 
 type Picked = { id: number | string; label: string } | null;
@@ -69,7 +71,7 @@ export function NewPartyDialog({
   setOpen,
   kind,
   initialName,
-  entryId,
+  create,
   asOf,
   onCreated,
 }: {
@@ -77,12 +79,11 @@ export function NewPartyDialog({
   setOpen: (open: boolean) => void;
   kind: "customer" | "supplier";
   initialName: string;
-  entryId: number;
+  create: CreateRecord;
   /** The day the opening balance stands at: the bill's date, if it has one. */
   asOf?: string;
   onCreated: (item: { id: number; label: string }) => void;
 }) {
-  const { token } = useAuth();
   const isCustomer = kind === "customer";
   const directions = DIRECTIONS[kind];
   const [name, setName] = useState("");
@@ -135,10 +136,8 @@ export function NewPartyDialog({
     setSaving(true);
     try {
       const res = isCustomer
-        ? await createWorkCustomer(token, entryId, {
-          name: name.trim(), phone, address, city: Number(city.id), opening_balance })
-        : await createWorkSupplier(token, entryId, {
-          name: name.trim(), phone, business_name: businessName, opening_balance });
+        ? await create({ name: name.trim(), phone, address, city: Number(city.id), opening_balance })
+        : await create({ name: name.trim(), phone, business_name: businessName, opening_balance });
       if (!res.ok) {
         if (res.error) toast.error(res.error);
         return;
@@ -257,13 +256,19 @@ export function NewProductDialog({
   open,
   setOpen,
   initialName,
-  entryId,
+  create,
+  requireQuantity = false,
   onCreated,
 }: {
   open: boolean;
   setOpen: (open: boolean) => void;
   initialName: string;
-  entryId: number;
+  create: CreateRecord;
+  /**
+   * New Sales Invoice lists only products in stock, so a product created
+   * there needs a quantity to go on the bill.
+   */
+  requireQuantity?: boolean;
   /** The new product's variants, first to last. */
   onCreated: (variants: { id: number; label: string }[]) => void;
 }) {
@@ -388,10 +393,14 @@ export function NewProductDialog({
   const number = (value: string, parse: (v: string) => number) =>
     value.trim() === "" ? null : parse(value);
 
-  const create = async () => {
+  const addProduct = async () => {
     setSaving(true);
     try {
-      const res = await createWorkProduct(token, entryId, {
+      if (requireQuantity && rows.some((row) => !(parseInt(row.quantity, 10) > 0))) {
+        toast.error("Enter the quantity in stock for each variant: only products in stock can go on a sale.");
+        return;
+      }
+      const res = await create({
         name: name.trim(),
         unit: Number(unit.id),
         desc,
@@ -625,7 +634,7 @@ export function NewProductDialog({
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
-              <SubmitButton type="button" pending={saving} pendingLabel="Adding…" onClick={create}>
+              <SubmitButton type="button" pending={saving} pendingLabel="Adding…" onClick={addProduct}>
                 Add product
               </SubmitButton>
             </>

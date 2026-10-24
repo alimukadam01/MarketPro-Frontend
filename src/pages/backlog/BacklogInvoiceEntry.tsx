@@ -21,6 +21,9 @@ import { useEntryFlow } from "@/components/backlog/useEntryFlow";
 import type { OwnerEntry, WorkEntry } from "@/components/backlog/meta";
 import { useAuth } from "../../../services/AuthProvider";
 import {
+  createWorkCustomer,
+  createWorkProduct,
+  createWorkSupplier,
   deleteWorkPayment,
   getWorkOutput,
   getWorkSettlement,
@@ -526,7 +529,7 @@ export default function BacklogInvoiceEntry({
             setOpen={(open) => { if (!open) setCreating(null); }}
             kind={isSales ? "customer" : "supplier"}
             initialName={creating?.text || ""}
-            entryId={entry.id}
+            create={(data) => (isSales ? createWorkCustomer : createWorkSupplier)(token, entry.id, data)}
             asOf={dateIssued}
             onCreated={(item) => setParty({ id: item.id, label: item.label })}
           />
@@ -534,7 +537,7 @@ export default function BacklogInvoiceEntry({
             open={creating?.kind === "product"}
             setOpen={(open) => { if (!open) setCreating(null); }}
             initialName={creating?.text || ""}
-            entryId={entry.id}
+            create={(data) => createWorkProduct(token, entry.id, data)}
             onCreated={(variants) => {
               if (variants[0]) setNewProduct({ id: variants[0].id, label: variants[0].label });
             }}

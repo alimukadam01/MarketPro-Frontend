@@ -18,6 +18,7 @@ import { useEntryFlow } from "@/components/backlog/useEntryFlow";
 import type { OwnerEntry, WorkEntry } from "@/components/backlog/meta";
 import { useAuth } from "../../../services/AuthProvider";
 import {
+  createWorkProduct,
   deleteWorkOutput,
   getWorkOutput,
   postWorkProduct,
@@ -397,7 +398,7 @@ export default function BacklogListEntry({
             open={newProductName !== null}
             setOpen={(open) => { if (!open) setNewProductName(null); }}
             initialName={newProductName || ""}
-            entryId={entry.id}
+            create={(data) => createWorkProduct(token, entry.id, data)}
             onCreated={(variants) => {
               if (variants[0]) setProduct({ id: variants[0].id, label: variants[0].label });
             }}

@@ -2613,6 +2613,16 @@ export const createWorkSupplier = (token, id, data) =>
 export const createWorkProduct = (token, id, data) =>
   backlogCall("post", `/backlog-work/${id}/new-product/`, token, data);
 
+// The same, from the invoice create screens: no backlog page involved.
+export const createCustomerWithBalance = (token, data) =>
+  backlogCall("post", "/customers/create-with-balance/", token, data);
+
+export const createSupplierWithBalance = (token, data) =>
+  backlogCall("post", "/suppliers/create-with-balance/", token, data);
+
+export const createProductWithStock = (token, data) =>
+  backlogCall("post", "/products/create-with-stock/", token, data);
+
 // Names only - variants, customers, suppliers, accounts, units, locations,
 // attributes, projects - never a figure. Rate limited on the server.
 export const workLookup = async (token, kind, query = "") => {
