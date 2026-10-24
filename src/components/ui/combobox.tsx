@@ -151,7 +151,8 @@ export function useCreateAction(
       ? options.find((option) => option.group && option.group.name.trim().toLowerCase() === q)?.group
       : undefined;
     if (group) {
-      return { label: `Add variants to "${group.name}"`, buttonText: "Add variants", onCreate: () => onExtend(group) };
+      // Enter opens it too, unless a variant is highlighted to pick.
+      return { label: `Add variants to "${group.name}"`, buttonText: "Add variants", onCreate: () => onExtend(group), onEnter: true };
     }
     const texts = (option: ComboboxOption) => [option.label, ...(option.keywords ?? [])]
       .map((text) => String(text ?? "").trim().toLowerCase());
@@ -229,20 +230,23 @@ export function Combobox({
   // highlighted Base UI picks it as usual; otherwise Enter takes the first
   // match, or creates what was typed when nothing matches.
   const handleEnter = (event: React.KeyboardEvent<HTMLInputElement> & { preventBaseUIHandler?: () => void }) => {
-    if (event.key !== "Enter" || !open || highlighted.current) return;
+    // A highlighted row: Base UI picks it, as always.
+    if (event.key !== "Enter" || (open && highlighted.current)) return;
+    // Otherwise Enter picks nothing from the list - and must not fall through
+    // to the form around the picker: on an invoice screen that submitted the
+    // whole invoice from the customer or product field.
+    event.preventDefault();
     if (createAction?.onEnter) {
-      event.preventDefault();
       event.preventBaseUIHandler?.();
       createAction.onCreate();
       return;
     }
     // A list filtered here highlights as it filters; only the server's
     // late-arriving rows need the first match taken by hand.
-    if (!serverFiltered) return;
+    if (!serverFiltered || !open) return;
     const current = value === undefined || value === null ? "" : String(value);
     const first = options.find((option) => !option.disabled && String(option.value) !== current);
     if (first) {
-      event.preventDefault();
       event.preventBaseUIHandler?.();
       onChange(first.value);
       setOpen(false);
@@ -343,7 +347,11 @@ export function Combobox({
       disabled={disabled}
       autoHighlight={autoHighlight}
       open={open}
-      onOpenChange={(next: boolean) => setOpen(next)}
+      onOpenChange={(next: boolean) => {
+        setOpen(next);
+        // A closed list has nothing highlighted, whatever was last.
+        if (!next) highlighted.current = undefined;
+      }}
       onItemHighlighted={(option: ComboboxOption | undefined) => { highlighted.current = option; }}
       openOnInputClick
     >

@@ -131,7 +131,8 @@ export function LookupCombobox({
       : undefined;
     if (product) {
       const group = { id: product.product as number, name: String(product.product_name) };
-      return { label: `Add variants to "${group.name}"`, buttonText: "Add variants", onCreate: () => onExtend(group) };
+      // Enter opens it too, unless a variant is highlighted to pick.
+      return { label: `Add variants to "${group.name}"`, buttonText: "Add variants", onCreate: () => onExtend(group), onEnter: true };
     }
     const exact = items.some((item) => item.label.trim().toLowerCase() === typed.toLowerCase());
     if (exact || typed === String(selectedLabel).trim()) return null;
