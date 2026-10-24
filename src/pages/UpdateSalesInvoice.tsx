@@ -21,6 +21,8 @@ import {
   applyHeldPayments,
   createCustomerWithBalance,
   createProductWithStock,
+  getProductForEditing,
+  saveProductVariants,
   getAvailableProductsList,
   getCustomersList,
   updateSalesInvoiceAndItems,
@@ -428,6 +430,8 @@ const UpdateSalesInvoice = () => {
         ? `${item.product.base.name} (${item.product.name}) (available: ${item.available_quantity})`
         : `${item.product.base.name} (${item.product.name}) - out of stock`,
       keywords: [item.product.base.name, item.product.name],
+      // its product, for "Add variants" when the name typed is exactly it
+      group: { id: item.product.base.id, name: item.product.base.name },
       // Listed but not pickable: a product that has run out is still there,
       // so nobody creates it a second time from the Create button.
       disabled: !(item.available_quantity > 0),
@@ -436,11 +440,14 @@ const UpdateSalesInvoice = () => {
 
   // A customer or product typed here that MarketPro does not have: the
   // Create button in the picker opens its dialog with the name filled in.
-  const [creating, setCreating] = useState<{ kind: "customer" | "product"; text: string } | null>(null)
+  const [creating, setCreating] = useState<{ kind: "customer" | "product"; text: string; productId?: number } | null>(null)
   const partyCreate = useCreateAction(customerOptions, "customer",
     (text) => setCreating({ kind: "customer", text }))
+  // A name that is exactly an existing product's offers "Add variants"
+  // to it instead - the same dialog, with that product loaded.
   const productCreate = useCreateAction(productOptions, "product",
-    (text) => setCreating({ kind: "product", text }))
+    (text) => setCreating({ kind: "product", text }),
+    (group) => setCreating({ kind: "product", text: group.name, productId: Number(group.id) }))
 
   const projectOptions = useMemo(
     () => Object.entries(projects).map(([value, project]) => ({
@@ -770,7 +777,12 @@ const UpdateSalesInvoice = () => {
             open={creating?.kind === "product"}
             setOpen={(open) => { if (!open) setCreating(null) }}
             initialName={creating?.text || ""}
-            create={(data) => createProductWithStock(token, data)}
+            create={(data) => creating?.productId
+              ? saveProductVariants(token, creating.productId, data)
+              : createProductWithStock(token, data)}
+            loadExisting={creating?.productId
+              ? () => getProductForEditing(token, creating.productId)
+              : undefined}
             // Only products in stock are listed for a sale.
             requireQuantity
             onCreated={async (variants) => {

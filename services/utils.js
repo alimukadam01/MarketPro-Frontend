@@ -778,6 +778,10 @@ export function transformProduct(data) {
 export function transformProductVariant(data) {
   return {
     id: data.id,
+    // The product it belongs to, so a picker can tell a typed name is an
+    // existing product's and offer to add variants to it.
+    base_id: data.base.id,
+    base_name: data.base.name,
     name: `${data.base.name} (${data.name})`,
     unit: `${data.base.unit.name} (${data.base.unit.abv})`,
     desc: data.base.desc || "",

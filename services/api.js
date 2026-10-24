@@ -2625,6 +2625,21 @@ export const createSupplierWithBalance = (token, data) =>
 export const createProductWithStock = (token, data) =>
   backlogCall("post", "/products/create-with-stock/", token, data);
 
+// A product a picker matched by name: its details and variants for the
+// dialog, and the dialog's changes - details, variants updated, new
+// variants with a stock row each. Nothing is deleted.
+export const getProductForEditing = (token, productId) =>
+  backlogCall("get", `/products/${productId}/variants-and-stock/`, token);
+
+export const saveProductVariants = (token, productId, data) =>
+  backlogCall("post", `/products/${productId}/variants-and-stock/`, token, data);
+
+export const getWorkProduct = (token, id, productId) =>
+  backlogCall("get", `/backlog-work/${id}/products/${productId}/`, token);
+
+export const saveWorkProductVariants = (token, id, productId, data) =>
+  backlogCall("post", `/backlog-work/${id}/products/${productId}/`, token, data);
+
 // Names only - variants, customers, suppliers, accounts, units, locations,
 // attributes, projects - never a figure. Rate limited on the server.
 export const workLookup = async (token, kind, query = "") => {

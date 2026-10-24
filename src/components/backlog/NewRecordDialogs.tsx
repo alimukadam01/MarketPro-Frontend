@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { RowAction } from "@/components/invoice/InvoiceItemsTable";
 import { LookupCombobox, type LookupItem } from "./LookupCombobox";
@@ -232,7 +233,9 @@ export function NewPartyDialog({
 
 // -- A product, then its stock -----------------------------------------------
 
-type Variant = { attributes: Record<string, string> };
+// With an id it is one the product already has (adding variants to an
+// existing product); without, a new one.
+type Variant = { id?: number; attributes: Record<string, string> };
 type StockRow = { location: Picked; quantity: string; unitPrice: string; unitCost: string };
 
 const variantLabel = (variant: Variant) => Object.values(variant.attributes).join(" / ") || "default";
@@ -257,6 +260,7 @@ export function NewProductDialog({
   setOpen,
   initialName,
   create,
+  loadExisting,
   requireQuantity = false,
   onCreated,
 }: {
@@ -265,14 +269,24 @@ export function NewProductDialog({
   initialName: string;
   create: CreateRecord;
   /**
+   * Adding variants to a product the typed name matched: loads its details
+   * and variants into the dialog. Every change in the dialog applies to it -
+   * details, variants updated, new ones added with their stock; none of its
+   * variants can be deleted here (they may be on invoices).
+   */
+  loadExisting?: () => Promise<{ ok: boolean; data: any; error: string | null }>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  /**
    * New Sales Invoice lists only products in stock, so a product created
    * there needs a quantity to go on the bill.
    */
   requireQuantity?: boolean;
-  /** The new product's variants, first to last. */
+  /** The new product's variants (or the variants just added), first to last. */
   onCreated: (variants: { id: number; label: string }[]) => void;
 }) {
   const { token } = useAuth();
+  const extending = !!loadExisting;
+  const [existingName, setExistingName] = useState("");
+  const [loadingExisting, setLoadingExisting] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState("");
   const [unit, setUnit] = useState<Picked>(null);
@@ -297,6 +311,32 @@ export function NewProductDialog({
     setSelected(null);
     setVariantSearch("");
     setRows([]);
+    setExistingName("");
+    if (loadExisting) {
+      const fetchExisting = async () => {
+        setLoadingExisting(true);
+        try {
+          const res = await loadExisting();
+          if (!res.ok) {
+            if (res.error) toast.error(res.error);
+            setOpen(false);
+            return;
+          }
+          const product = res.data;
+          setExistingName(product.name);
+          setName(product.name);
+          setUnit(product.unit ? { id: product.unit.id, label: product.unit.label } : null);
+          setDesc(product.desc || "");
+          setVariants(product.variants.map((v) => ({ id: v.id, attributes: v.attributes || {} })));
+        } catch (error) {
+          console.log("Error loading the product:", error);
+          toast.error("Failed to load the product.");
+        } finally {
+          setLoadingExisting(false);
+        }
+      };
+      fetchExisting();
+    }
     const fetchDefault = async () => {
       try {
         const found = await workLookup(token, "locations", "");
@@ -333,7 +373,7 @@ export function NewProductDialog({
   const createOrUpdateVariant = () => {
     if (selected !== null) {
       // Replaced in place, so an updated variant keeps its number.
-      setVariants((prev) => prev.map((variant, i) => (i === selected ? { attributes: { ...attributes } } : variant)));
+      setVariants((prev) => prev.map((variant, i) => (i === selected ? { ...variant, attributes: { ...attributes } } : variant)));
       deselect();
       return;
     }
@@ -346,12 +386,19 @@ export function NewProductDialog({
     setAttributes({ ...variants[index].attributes });
   };
 
+  // The variants that get a stock row: all of them for a new product (one
+  // row for a product without variants), only the new ones when adding to
+  // an existing product - its own already have rows.
+  const stockTargets = extending ? variants.filter((variant) => !variant.id) : variants;
+
   const deleteVariant = (index: number) => {
+    if (variants[index]?.id) return;   // an existing variant stays (see loadExisting)
+    // The stock rows follow the stock targets by position.
+    const rowIndex = stockTargets.indexOf(variants[index]);
     if (selected === index) deselect();
     else if (selected !== null && selected > index) setSelected(selected - 1);
     setVariants((prev) => prev.filter((_, i) => i !== index));
-    // The stock rows follow the variants by position.
-    setRows((prev) => prev.filter((_, i) => i !== index));
+    if (rowIndex >= 0) setRows((prev) => prev.filter((_, i) => i !== rowIndex));
   };
 
   // The original position travels with each variant, so the number shown and
@@ -382,7 +429,12 @@ export function NewProductDialog({
       toast.error("Create the variant you are typing first, or reset it.");
       return;
     }
-    const wanted = Math.max(variants.length, 1);
+    if (extending && stockTargets.length === 0) {
+      // Nothing new to stock: the changes to the product are saved as they are.
+      addProduct([]);
+      return;
+    }
+    const wanted = extending ? stockTargets.length : Math.max(variants.length, 1);
     setRows((prev) => Array.from({ length: wanted }, (_, i) => prev[i] ?? emptyRow(defaultLocation)));
     setStep(2);
   };
@@ -393,10 +445,10 @@ export function NewProductDialog({
   const number = (value: string, parse: (v: string) => number) =>
     value.trim() === "" ? null : parse(value);
 
-  const addProduct = async () => {
+  const addProduct = async (stockRows: StockRow[] = rows) => {
     setSaving(true);
     try {
-      if (requireQuantity && rows.some((row) => !(parseInt(row.quantity, 10) > 0))) {
+      if (requireQuantity && stockRows.some((row) => !(parseInt(row.quantity, 10) > 0))) {
         toast.error("Enter the quantity in stock for each variant: only products in stock can go on a sale.");
         return;
       }
@@ -404,8 +456,10 @@ export function NewProductDialog({
         name: name.trim(),
         unit: Number(unit.id),
         desc,
-        variants,
-        stock: rows.map((row) => ({
+        variants: variants.map((variant) => (variant.id
+          ? { id: variant.id, attributes: variant.attributes }
+          : { attributes: variant.attributes })),
+        stock: stockRows.map((row) => ({
           location: row.location ? Number(row.location.id) : null,
           quantity: number(row.quantity, (v) => parseInt(v, 10)),
           unit_price: number(row.unitPrice, parseFloat),
@@ -417,9 +471,16 @@ export function NewProductDialog({
         return;
       }
       const made = res.data.variants;
-      toast.success(made.length > 1
-        ? `"${res.data.product.label}" added with ${made.length} variants. Pick the one on the bill.`
-        : `"${res.data.product.label}" added.`);
+      if (extending) {
+        toast.success(made.length === 0
+          ? `"${res.data.product.label}" saved.`
+          : `${made.length} variant${made.length > 1 ? "s" : ""} added to "${res.data.product.label}".`
+            + (made.length > 1 ? " Pick the one on the bill." : ""));
+      } else {
+        toast.success(made.length > 1
+          ? `"${res.data.product.label}" added with ${made.length} variants. Pick the one on the bill.`
+          : `"${res.data.product.label}" added.`);
+      }
       onCreated(made);
       setOpen(false);
     } catch (error) {
@@ -456,12 +517,19 @@ export function NewProductDialog({
         }}
       >
         <DialogUI.DialogHeader className="shrink-0 space-y-3">
-          <DialogUI.DialogTitle>New product</DialogUI.DialogTitle>
+          <DialogUI.DialogTitle>
+            {extending ? `Add variants to "${existingName || initialName}"` : "New product"}
+            {loadingExisting && <span className="inline-block ml-2 align-middle"><Spinner size={16} /></span>}
+          </DialogUI.DialogTitle>
           {stepTabs}
           <DialogUI.DialogDescription>
             {step === 1
-              ? "Name, unit and variants, as on Create Product."
-              : "A product goes on a bill from its stock row, so each variant gets one. Fill in what the page says; the rest can stay empty."}
+              ? extending
+                ? "Already in MarketPro. Add its new variants here - or correct its details and variants. Its variants are not deleted here."
+                : "Name, unit and variants, as on Create Product."
+              : extending
+                ? "Each new variant gets a stock row, as a product goes on a bill from it. Fill in what the page says; the rest can stay empty."
+                : "A product goes on a bill from its stock row, so each variant gets one. Fill in what the page says; the rest can stay empty."}
           </DialogUI.DialogDescription>
         </DialogUI.DialogHeader>
 
@@ -575,8 +643,13 @@ export function NewProductDialog({
                     >
                       <span>{index + 1}.</span>
                       <span className="flex-1">{variantLabel(variant)}</span>
+                      {variant.id && <span className="text-xs text-muted-foreground">In MarketPro</span>}
                     </div>
-                    <RowAction label="Delete variant" onClick={() => deleteVariant(index)}>
+                    <RowAction
+                      label={variant.id ? "Already in MarketPro - delete it from Products" : "Delete variant"}
+                      disabled={!!variant.id}
+                      onClick={() => deleteVariant(index)}
+                    >
                       <Trash2 className="h-5 w-5" />
                     </RowAction>
                   </div>
@@ -594,8 +667,8 @@ export function NewProductDialog({
             </div>
             {rows.map((row, index) => (
               <div key={index} className="grid grid-cols-[minmax(0,1.2fr)_minmax(0,1.3fr)_88px_100px_100px] gap-3 items-center">
-                <div className="text-sm font-medium truncate" title={variants[index] ? variantLabel(variants[index]) : name}>
-                  {variants[index] ? variantLabel(variants[index]) : name}
+                <div className="text-sm font-medium truncate" title={stockTargets[index] ? variantLabel(stockTargets[index]) : name}>
+                  {stockTargets[index] ? variantLabel(stockTargets[index]) : name}
                 </div>
                 <LookupCombobox
                   kind="locations"
@@ -623,10 +696,17 @@ export function NewProductDialog({
           {step === 1 ? (
             <>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-              <Button type="button" onClick={toStock}>
-                Next: stock
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
+              {extending && stockTargets.length === 0 ? (
+                <SubmitButton type="button" pending={saving} pendingLabel="Saving…" onClick={toStock}
+                  disabled={loadingExisting}>
+                  Save
+                </SubmitButton>
+              ) : (
+                <Button type="button" onClick={toStock} disabled={loadingExisting}>
+                  Next: stock
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              )}
             </>
           ) : (
             <>
@@ -634,8 +714,8 @@ export function NewProductDialog({
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
-              <SubmitButton type="button" pending={saving} pendingLabel="Adding…" onClick={addProduct}>
-                Add product
+              <SubmitButton type="button" pending={saving} pendingLabel="Adding…" onClick={() => addProduct()}>
+                {extending ? "Add variants" : "Add product"}
               </SubmitButton>
             </>
           )}

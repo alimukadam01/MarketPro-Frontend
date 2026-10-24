@@ -17,6 +17,8 @@ import { useAuth } from "../../services/AuthProvider"
 import {
   attachStagedToInvoice,
   createProductWithStock,
+  getProductForEditing,
+  saveProductVariants,
   createSupplierWithBalance,
   getProductVariantsList,
   suppliersAPIPackage,
@@ -191,16 +193,25 @@ const CreatePurchaseInvoice = () => {
     [suppliers])
 
   const productOptions = useMemo(
-    () => Object.entries(products).map(([value, item]) => ({ value, label: item.name })),
+    () => Object.entries(products).map(([value, item]) => ({
+      value,
+      label: item.name,
+      keywords: [item.base_name],
+      // its product, for "Add variants" when the name typed is exactly it
+      group: { id: item.base_id, name: item.base_name },
+    })),
     [products])
 
   // A supplier or product typed here that MarketPro does not have: the
   // Create button in the picker opens its dialog with the name filled in.
-  const [creating, setCreating] = useState<{ kind: "supplier" | "product"; text: string } | null>(null)
+  const [creating, setCreating] = useState<{ kind: "supplier" | "product"; text: string; productId?: number } | null>(null)
   const supplierCreate = useCreateAction(supplierOptions, "supplier",
     (text) => setCreating({ kind: "supplier", text }))
+  // A name that is exactly an existing product's offers "Add variants"
+  // to it instead - the same dialog, with that product loaded.
   const productCreate = useCreateAction(productOptions, "product",
-    (text) => setCreating({ kind: "product", text }))
+    (text) => setCreating({ kind: "product", text }),
+    (group) => setCreating({ kind: "product", text: group.name, productId: Number(group.id) }))
 
   const projectOptions = useMemo(
     () => Object.entries(projects).map(([value, project]) => ({ value, label: project.name })),
@@ -420,7 +431,12 @@ const CreatePurchaseInvoice = () => {
             open={creating?.kind === "product"}
             setOpen={(open) => { if (!open) setCreating(null) }}
             initialName={creating?.text || ""}
-            create={(data) => createProductWithStock(token, data)}
+            create={(data) => creating?.productId
+              ? saveProductVariants(token, creating.productId, data)
+              : createProductWithStock(token, data)}
+            loadExisting={creating?.productId
+              ? () => getProductForEditing(token, creating.productId)
+              : undefined}
             onCreated={async (variants) => {
               await fetchProducts()
               if (variants[0]) setValue("newItemProduct", String(variants[0].id) as never)

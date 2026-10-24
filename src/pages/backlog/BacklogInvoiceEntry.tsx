@@ -23,6 +23,8 @@ import { useAuth } from "../../../services/AuthProvider";
 import {
   createWorkCustomer,
   createWorkProduct,
+  getWorkProduct,
+  saveWorkProductVariants,
   createWorkSupplier,
   deleteWorkPayment,
   getWorkOutput,
@@ -149,7 +151,7 @@ export default function BacklogInvoiceEntry({
   const [paymentsOpen, setPaymentsOpen] = useState(false);
   // A name the page has that MarketPro does not: the create dialog open for
   // it, with what was typed.
-  const [creating, setCreating] = useState<{ kind: "party" | "product"; text: string } | null>(null);
+  const [creating, setCreating] = useState<{ kind: "party" | "product"; text: string; productId?: number } | null>(null);
   // How much of the saved invoice the party's khaata already settles - never
   // the party's balance. Counted as paid, as on the standard screens.
   const [fromKhaata, setFromKhaata] = useState(0);
@@ -580,7 +582,12 @@ export default function BacklogInvoiceEntry({
             open={creating?.kind === "product"}
             setOpen={(open) => { if (!open) setCreating(null); }}
             initialName={creating?.text || ""}
-            create={(data) => createWorkProduct(token, entry.id, data)}
+            create={(data) => creating?.productId
+              ? saveWorkProductVariants(token, entry.id, creating.productId, data)
+              : createWorkProduct(token, entry.id, data)}
+            loadExisting={creating?.productId
+              ? () => getWorkProduct(token, entry.id, creating.productId)
+              : undefined}
             onCreated={(variants) => {
               if (variants[0]) setNewProduct({ id: variants[0].id, label: variants[0].label });
             }}
@@ -629,6 +636,7 @@ export default function BacklogInvoiceEntry({
                         selectedLabel={newProduct?.label}
                         onChange={(item) => setNewProduct(item ? { id: item.id, label: item.label } : null)}
                         onCreate={(text) => setCreating({ kind: "product", text })}
+                        onExtend={(product) => setCreating({ kind: "product", text: product.name, productId: Number(product.id) })}
                         createNoun="product"
                         placeholder="Select product"
                         emptyText="No products yet."

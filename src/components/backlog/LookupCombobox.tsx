@@ -37,6 +37,11 @@ interface LookupComboboxProps {
   onCreate?: (text: string) => void;
   /** What a created record is called: "customer", "product". */
   createNoun?: string;
+  /**
+   * On a list of variants: when the text is exactly a product's name, the
+   * button adds variants to that product instead of creating a second one.
+   */
+  onExtend?: (product: { id: number | string; name: string }) => void;
 }
 
 /**
@@ -59,6 +64,7 @@ export function LookupCombobox({
   className,
   onCreate,
   createNoun = "",
+  onExtend,
 }: LookupComboboxProps) {
   const { token } = useAuth();
   const [items, setItems] = useState<LookupItem[]>([]);
@@ -120,6 +126,13 @@ export function LookupCombobox({
   // the list is the previous query's, and the name may well be in the next.
   const createAction: ComboboxCreateAction | null = useMemo(() => {
     if (!onCreate || !typed || answered !== query) return null;
+    const product = onExtend
+      ? items.find((item) => String(item.product_name ?? "").trim().toLowerCase() === typed.toLowerCase())
+      : undefined;
+    if (product) {
+      const group = { id: product.product as number, name: String(product.product_name) };
+      return { label: `Add variants to "${group.name}"`, buttonText: "Add variants", onCreate: () => onExtend(group) };
+    }
     const exact = items.some((item) => item.label.trim().toLowerCase() === typed.toLowerCase());
     if (exact || typed === String(selectedLabel).trim()) return null;
     return {
@@ -128,7 +141,7 @@ export function LookupCombobox({
       // With matches listed, Enter picks the highlighted one instead.
       onEnter: items.length === 0,
     };
-  }, [onCreate, typed, answered, query, items, selectedLabel, createNoun]);
+  }, [onCreate, onExtend, typed, answered, query, items, selectedLabel, createNoun]);
 
   return (
     <Combobox

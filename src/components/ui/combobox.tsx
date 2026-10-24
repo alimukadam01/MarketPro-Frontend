@@ -15,6 +15,11 @@ export interface ComboboxOption {
    */
   keywords?: string[];
   disabled?: boolean;
+  /**
+   * The record this option belongs to - a variant's product. A name typed
+   * that is exactly a group's offers to extend it (useCreateAction).
+   */
+  group?: { id: string | number; name: string };
 }
 
 /**
@@ -27,6 +32,8 @@ export interface ComboboxCreateAction {
   onCreate: () => void;
   /** Enter creates too - for when nothing in the list matches. */
   onEnter?: boolean;
+  /** The button's text; "Create" unless it adds to something that exists. */
+  buttonText?: string;
 }
 
 /**
@@ -129,19 +136,30 @@ export function useCreateAction(
   options: ComboboxOption[],
   noun: string,
   onCreate: (text: string) => void,
+  /**
+   * When the text is exactly a group's name - a product's, on a list of its
+   * variants - the button adds to that group instead of creating a second.
+   */
+  onExtend?: (group: { id: string | number; name: string }) => void,
 ) {
   const [query, setQuery] = React.useState("");
   const typed = query.trim();
   const createAction = React.useMemo<ComboboxCreateAction | null>(() => {
     if (!typed) return null;
     const q = typed.toLowerCase();
+    const group = onExtend
+      ? options.find((option) => option.group && option.group.name.trim().toLowerCase() === q)?.group
+      : undefined;
+    if (group) {
+      return { label: `Add variants to "${group.name}"`, buttonText: "Add variants", onCreate: () => onExtend(group) };
+    }
     const texts = (option: ComboboxOption) => [option.label, ...(option.keywords ?? [])]
       .map((text) => String(text ?? "").trim().toLowerCase());
     if (options.some((option) => texts(option).some((text) => text === q))) return null;
     const anyMatch = options.some((option) =>
       [...texts(option), String(option.value)].some((text) => text.includes(q)));
     return { label: `Create ${noun} "${typed}"`, onCreate: () => onCreate(typed), onEnter: !anyMatch };
-  }, [options, typed, noun, onCreate]);
+  }, [options, typed, noun, onCreate, onExtend]);
   return { onInputChange: setQuery, createAction };
 }
 
@@ -357,7 +375,7 @@ export function Combobox({
             className="absolute right-1 top-1 inline-flex h-8 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" />
-            Create
+            {createAction.buttonText || "Create"}
           </button>
         ) : clearable && selected && !awaitingLabel ? (
           <ComboboxPrimitive.Clear

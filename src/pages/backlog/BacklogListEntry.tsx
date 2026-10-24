@@ -19,6 +19,8 @@ import type { OwnerEntry, WorkEntry } from "@/components/backlog/meta";
 import { useAuth } from "../../../services/AuthProvider";
 import {
   createWorkProduct,
+  getWorkProduct,
+  saveWorkProductVariants,
   deleteWorkOutput,
   getWorkOutput,
   postWorkProduct,
@@ -114,7 +116,9 @@ export default function BacklogListEntry({
 
   const [editingId, setEditingId] = useState<number | null>(null);
   // A product the page has that MarketPro does not: what was typed.
+  // ...or, by its exact name, one it has: its id, to add variants to it.
   const [newProductName, setNewProductName] = useState<string | null>(null);
+  const [extendProductId, setExtendProductId] = useState<number | null>(null);
   const [saving, setSaving] = useState<"" | "save" | "another">("");
 
   // -- product form --
@@ -396,9 +400,14 @@ export default function BacklogListEntry({
           {flow.dialogs}
           <NewProductDialog
             open={newProductName !== null}
-            setOpen={(open) => { if (!open) setNewProductName(null); }}
+            setOpen={(open) => { if (!open) { setNewProductName(null); setExtendProductId(null); } }}
             initialName={newProductName || ""}
-            create={(data) => createWorkProduct(token, entry.id, data)}
+            create={(data) => extendProductId
+              ? saveWorkProductVariants(token, entry.id, extendProductId, data)
+              : createWorkProduct(token, entry.id, data)}
+            loadExisting={extendProductId
+              ? () => getWorkProduct(token, entry.id, extendProductId)
+              : undefined}
             onCreated={(variants) => {
               if (variants[0]) setProduct({ id: variants[0].id, label: variants[0].label });
             }}
@@ -544,7 +553,8 @@ export default function BacklogListEntry({
                     value={product?.id ?? ""}
                     selectedLabel={product?.label}
                     onChange={(item) => setProduct(item ? { id: item.id, label: item.label } : null)}
-                    onCreate={editingId ? undefined : setNewProductName}
+                    onCreate={editingId ? undefined : (text) => { setExtendProductId(null); setNewProductName(text); }}
+                    onExtend={editingId ? undefined : (product) => { setExtendProductId(Number(product.id)); setNewProductName(product.name); }}
                     createNoun="product"
                     disabled={!!editingId}
                     placeholder="Select product"
