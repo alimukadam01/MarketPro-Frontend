@@ -42,6 +42,11 @@ interface LookupComboboxProps {
    * button adds variants to that product instead of creating a second one.
    */
   onExtend?: (product: { id: number | string; name: string }) => void;
+  /**
+   * Variants on a sales page: label what has run out "- out of stock", as
+   * the sales screens do - but leave it pickable, since the bill is history.
+   */
+  markOutOfStock?: boolean;
 }
 
 /**
@@ -65,6 +70,7 @@ export function LookupCombobox({
   onCreate,
   createNoun = "",
   onExtend,
+  markOutOfStock = false,
 }: LookupComboboxProps) {
   const { token } = useAuth();
   const [items, setItems] = useState<LookupItem[]>([]);
@@ -83,7 +89,7 @@ export function LookupCombobox({
     const ticket = ++latest.current;
     const delay = setTimeout(async () => {
       try {
-        const found = await workLookup(token, kind, query);
+        const found = await workLookup(token, kind, query, markOutOfStock);
         if (ticket === latest.current) {
           setItems(found || []);
           setAnswered(query);
@@ -95,7 +101,7 @@ export function LookupCombobox({
       }
     }, 250);
     return () => clearTimeout(delay);
-  }, [token, kind, query]);
+  }, [token, kind, query, markOutOfStock]);
 
   // One object per option for the life of the picker. Base UI resets the
   // input to the picked item's label whenever the picked value changes
@@ -113,7 +119,8 @@ export function LookupCombobox({
   };
 
   const options: ComboboxOption[] = useMemo(() => {
-    const list = items.map((item) => optionFor(String(item.id), item.label));
+    const list = items.map((item) => optionFor(
+      String(item.id), item.in_stock === false ? `${item.label} - out of stock` : item.label));
     const key = value === null || value === undefined ? "" : String(value);
     if (key && selectedLabel && !list.some((option) => option.value === key)) {
       list.unshift(optionFor(key, selectedLabel));

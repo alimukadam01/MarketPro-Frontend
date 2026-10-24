@@ -594,6 +594,7 @@ export default function BacklogInvoiceEntry({
                         onChange={(item) => setNewProduct(item ? { id: item.id, label: item.label } : null)}
                         onCreate={(text) => setCreating({ kind: "product", text })}
                         onExtend={(product) => setCreating({ kind: "product", text: product.name, productId: Number(product.id) })}
+                        markOutOfStock={isSales}
                         createNoun="product"
                         placeholder="Select product"
                         emptyText="No products yet."

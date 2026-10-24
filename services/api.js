@@ -2642,9 +2642,11 @@ export const saveWorkProductVariants = (token, id, productId, data) =>
 
 // Names only - variants, customers, suppliers, accounts, units, locations,
 // attributes, projects - never a figure. Rate limited on the server.
-export const workLookup = async (token, kind, query = "") => {
+// withStock (variants): each row also says whether it is in stock - yes or
+// no, never how many - for a sales page to label what has run out.
+export const workLookup = async (token, kind, query = "", withStock = false) => {
   const res = await backlogCall(
-    "get", `/backlog-work/lookup/${kind}/?q=${encodeURIComponent(query)}`, token);
+    "get", `/backlog-work/lookup/${kind}/?q=${encodeURIComponent(query)}${withStock ? "&stock=1" : ""}`, token);
   return res.ok ? res.data : [];
 };
 
