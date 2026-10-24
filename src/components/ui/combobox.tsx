@@ -27,6 +27,8 @@ export interface ComboboxCreateAction {
   onCreate: () => void;
   /** Enter creates too - for when nothing in the list matches. */
   onEnter?: boolean;
+  /** The button's text; "Create" unless it adds to something that exists. */
+  buttonText?: string;
 }
 
 /**
@@ -383,7 +385,7 @@ export function Combobox({
             className="absolute right-1 top-1 inline-flex h-8 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-50"
           >
             <Plus className="h-3.5 w-3.5" />
-            Create
+            {createAction.buttonText || "Create"}
           </button>
         ) : clearable && selected && !awaitingLabel ? (
           <ComboboxPrimitive.Clear

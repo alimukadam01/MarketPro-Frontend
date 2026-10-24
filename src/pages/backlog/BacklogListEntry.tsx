@@ -13,10 +13,14 @@ import { PagePhoto } from "@/components/backlog/PagePhoto";
 import { LookupCombobox, type LookupItem } from "@/components/backlog/LookupCombobox";
 import { SentBackNote } from "@/components/backlog/SentBackNote";
 import { NewRecordsNote } from "@/components/backlog/NewRecordsNote";
+import { NewProductDialog } from "@/components/backlog/NewRecordDialogs";
 import { useEntryFlow } from "@/components/backlog/useEntryFlow";
 import type { OwnerEntry, WorkEntry } from "@/components/backlog/meta";
 import { useAuth } from "../../../services/AuthProvider";
 import {
+  addWorkProductVariants,
+  createWorkProduct,
+  getWorkProductVariants,
   deleteWorkOutput,
   getWorkOutput,
   postWorkProduct,
@@ -111,6 +115,10 @@ export default function BacklogListEntry({
   const flow = useEntryFlow({ entry, mode, review, hasOutputs: outputs.length > 0, list: true });
 
   const [editingId, setEditingId] = useState<number | null>(null);
+  // A stock page counting a product MarketPro lacks: the dialog open for
+  // what was typed - or, by its exact name, for one it has (productId), to
+  // add variants to it.
+  const [creatingProduct, setCreatingProduct] = useState<{ text: string; productId?: number } | null>(null);
   const [saving, setSaving] = useState<"" | "save" | "another">("");
 
   // -- product form --
@@ -387,7 +395,25 @@ export default function BacklogListEntry({
       aside={flow.aside}
       actions={flow.actions}
       backTo={mode === "review" ? "/backlog" : "/backlog/work"}
-      dialogs={flow.dialogs}
+      dialogs={
+        <>
+          {flow.dialogs}
+          <NewProductDialog
+            open={creatingProduct !== null}
+            setOpen={(open) => { if (!open) setCreatingProduct(null); }}
+            initialName={creatingProduct?.text || ""}
+            create={(data) => creatingProduct?.productId
+              ? addWorkProductVariants(token, entry.id, creatingProduct.productId, data)
+              : createWorkProduct(token, entry.id, data)}
+            loadExisting={creatingProduct?.productId
+              ? () => getWorkProductVariants(token, entry.id, creatingProduct.productId)
+              : undefined}
+            onCreated={(variants) => {
+              if (variants[0]) setProduct({ id: variants[0].id, label: variants[0].label });
+            }}
+          />
+        </>
+      }
     >
       <div className="h-full min-h-[560px] grid grid-cols-3 gap-6">
         <PagePhoto src={entry.image} className="min-h-0" />
@@ -527,6 +553,15 @@ export default function BacklogListEntry({
                     value={product?.id ?? ""}
                     selectedLabel={product?.label}
                     onChange={(item) => setProduct(item ? { id: item.id, label: item.label } : null)}
+                    // Only a stock page creates products: the page is the
+                    // count. A price list prices what MarketPro has.
+                    onCreate={kind === "stock_list" && !editingId
+                      ? (text) => setCreatingProduct({ text })
+                      : undefined}
+                    onExtend={kind === "stock_list" && !editingId
+                      ? (found) => setCreatingProduct({ text: found.name, productId: Number(found.id) })
+                      : undefined}
+                    createNoun="product"
                     disabled={!!editingId}
                     placeholder="Select product"
                     notFoundText="No product matches that. Check the glossary."

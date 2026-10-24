@@ -102,10 +102,14 @@ export interface WorkEntry extends QueueItem {
   cant_read_note: string;
 }
 
-/** A customer, supplier or product created from a page (BUGS.md #006). */
+/**
+ * A customer, supplier, product or variant created from a page (BUGS.md
+ * #006). A variant is one added to a product MarketPro had; its record_id
+ * is that product's.
+ */
 export interface NewRecord {
   id: number;
-  kind: "customer" | "supplier" | "product";
+  kind: "customer" | "supplier" | "product" | "variant";
   record_id: number;
   label: string;
   detail: string;

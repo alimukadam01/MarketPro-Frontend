@@ -6,6 +6,8 @@ const KINDS = {
   customer: { label: "Customer", icon: UserPlus, path: "/customers/view-customer", stateKey: "customer_id" },
   supplier: { label: "Supplier", icon: Truck, path: "/suppliers/view-supplier", stateKey: "supplier_id" },
   product: { label: "Product", icon: Package, path: "/products/update-product", stateKey: "product_id" },
+  // A variant opens its product.
+  variant: { label: "Variant", icon: Package, path: "/products/update-product", stateKey: "product_id" },
 };
 
 // PartyOpeningBalance's sign: positive means the customer owes the shop, or
@@ -18,7 +20,8 @@ const balanceText = (row: NewRecord) => {
 };
 
 /**
- * For the owner reviewing a page: the customers, suppliers and products the
+ * For the owner reviewing a page: the customers, suppliers, products and
+ * variants the
  * entry person added to MarketPro because the page named them and they were
  * not there - with the balance a party came with - so a new name can be
  * checked before the page is approved. Each opens its own page.

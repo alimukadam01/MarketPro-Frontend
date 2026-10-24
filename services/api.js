@@ -2612,6 +2612,19 @@ export const createWorkCustomer = (token, id, data) =>
 export const createWorkSupplier = (token, id, data) =>
   backlogCall("post", `/backlog-work/${id}/new-supplier/`, token, data);
 
+// A product a stock page counts that MarketPro lacks - or new variants of
+// one it has - created without stock: the stock line entered next is the
+// count. A stock page only; an invoice never creates a product. Each
+// answers with the product and the new variants' ids and names.
+export const createWorkProduct = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/new-product/`, token, data);
+
+export const getWorkProductVariants = (token, id, productId) =>
+  backlogCall("get", `/backlog-work/${id}/products/${productId}/variants/`, token);
+
+export const addWorkProductVariants = (token, id, productId, data) =>
+  backlogCall("post", `/backlog-work/${id}/products/${productId}/variants/`, token, data);
+
 // The same, from the invoice create screens: no backlog page involved.
 export const createCustomerWithBalance = (token, data) =>
   backlogCall("post", "/customers/create-with-balance/", token, data);
