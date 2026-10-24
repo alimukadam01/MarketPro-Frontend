@@ -35,13 +35,8 @@ interface LookupComboboxProps {
    * opens the page's create dialog with the name filled in.
    */
   onCreate?: (text: string) => void;
-  /** What a created record is called: "customer", "product". */
+  /** What a created record is called: "customer", "supplier". */
   createNoun?: string;
-  /**
-   * On a list of variants: when the text is exactly a product's name, the
-   * button adds variants to that product instead of creating a second one.
-   */
-  onExtend?: (product: { id: number | string; name: string }) => void;
   /**
    * Variants on a sales page: label what has run out "- out of stock", as
    * the sales screens do - but leave it pickable, since the bill is history.
@@ -69,7 +64,6 @@ export function LookupCombobox({
   className,
   onCreate,
   createNoun = "",
-  onExtend,
   markOutOfStock = false,
 }: LookupComboboxProps) {
   const { token } = useAuth();
@@ -133,14 +127,6 @@ export function LookupCombobox({
   // the list is the previous query's, and the name may well be in the next.
   const createAction: ComboboxCreateAction | null = useMemo(() => {
     if (!onCreate || !typed || answered !== query) return null;
-    const product = onExtend
-      ? items.find((item) => String(item.product_name ?? "").trim().toLowerCase() === typed.toLowerCase())
-      : undefined;
-    if (product) {
-      const group = { id: product.product as number, name: String(product.product_name) };
-      // Enter opens it too, unless a variant is highlighted to pick.
-      return { label: `Add variants to "${group.name}"`, buttonText: "Add variants", onCreate: () => onExtend(group), onEnter: true };
-    }
     const exact = items.some((item) => item.label.trim().toLowerCase() === typed.toLowerCase());
     if (exact || typed === String(selectedLabel).trim()) return null;
     return {
@@ -149,7 +135,7 @@ export function LookupCombobox({
       // With matches listed, Enter picks the highlighted one instead.
       onEnter: items.length === 0,
     };
-  }, [onCreate, onExtend, typed, answered, query, items, selectedLabel, createNoun]);
+  }, [onCreate, typed, answered, query, items, selectedLabel, createNoun]);
 
   return (
     <Combobox

@@ -13,14 +13,10 @@ import { PagePhoto } from "@/components/backlog/PagePhoto";
 import { LookupCombobox, type LookupItem } from "@/components/backlog/LookupCombobox";
 import { SentBackNote } from "@/components/backlog/SentBackNote";
 import { NewRecordsNote } from "@/components/backlog/NewRecordsNote";
-import { NewProductDialog } from "@/components/backlog/NewRecordDialogs";
 import { useEntryFlow } from "@/components/backlog/useEntryFlow";
 import type { OwnerEntry, WorkEntry } from "@/components/backlog/meta";
 import { useAuth } from "../../../services/AuthProvider";
 import {
-  createWorkProduct,
-  getWorkProduct,
-  saveWorkProductVariants,
   deleteWorkOutput,
   getWorkOutput,
   postWorkProduct,
@@ -115,10 +111,6 @@ export default function BacklogListEntry({
   const flow = useEntryFlow({ entry, mode, review, hasOutputs: outputs.length > 0, list: true });
 
   const [editingId, setEditingId] = useState<number | null>(null);
-  // A product the page has that MarketPro does not: what was typed.
-  // ...or, by its exact name, one it has: its id, to add variants to it.
-  const [newProductName, setNewProductName] = useState<string | null>(null);
-  const [extendProductId, setExtendProductId] = useState<number | null>(null);
   const [saving, setSaving] = useState<"" | "save" | "another">("");
 
   // -- product form --
@@ -395,25 +387,7 @@ export default function BacklogListEntry({
       aside={flow.aside}
       actions={flow.actions}
       backTo={mode === "review" ? "/backlog" : "/backlog/work"}
-      dialogs={
-        <>
-          {flow.dialogs}
-          <NewProductDialog
-            open={newProductName !== null}
-            setOpen={(open) => { if (!open) { setNewProductName(null); setExtendProductId(null); } }}
-            initialName={newProductName || ""}
-            create={(data) => extendProductId
-              ? saveWorkProductVariants(token, entry.id, extendProductId, data)
-              : createWorkProduct(token, entry.id, data)}
-            loadExisting={extendProductId
-              ? () => getWorkProduct(token, entry.id, extendProductId)
-              : undefined}
-            onCreated={(variants) => {
-              if (variants[0]) setProduct({ id: variants[0].id, label: variants[0].label });
-            }}
-          />
-        </>
-      }
+      dialogs={flow.dialogs}
     >
       <div className="h-full min-h-[560px] grid grid-cols-3 gap-6">
         <PagePhoto src={entry.image} className="min-h-0" />
@@ -553,9 +527,6 @@ export default function BacklogListEntry({
                     value={product?.id ?? ""}
                     selectedLabel={product?.label}
                     onChange={(item) => setProduct(item ? { id: item.id, label: item.label } : null)}
-                    onCreate={editingId ? undefined : (text) => { setExtendProductId(null); setNewProductName(text); }}
-                    onExtend={editingId ? undefined : (product) => { setExtendProductId(Number(product.id)); setNewProductName(product.name); }}
-                    createNoun="product"
                     disabled={!!editingId}
                     placeholder="Select product"
                     notFoundText="No product matches that. Check the glossary."

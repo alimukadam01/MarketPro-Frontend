@@ -2603,17 +2603,14 @@ export const getWorkSettlement = async (token, id, outputId) => {
 export const deleteWorkPayment = (token, id, outputId, paymentId) =>
   backlogCall("delete", `/backlog-work/${id}/outputs/${outputId}/payments/${paymentId}/`, token);
 
-// A customer, supplier or product the page names that MarketPro lacks,
-// created from the open page (BUGS.md #006). Each answers with the new
-// record's id and name; a product also with its variants.
+// A customer or supplier the page names that MarketPro lacks, created from
+// the open page (BUGS.md #006). Each answers with the new record's id and
+// name. No opening balance from a page: the server ignores one.
 export const createWorkCustomer = (token, id, data) =>
   backlogCall("post", `/backlog-work/${id}/new-customer/`, token, data);
 
 export const createWorkSupplier = (token, id, data) =>
   backlogCall("post", `/backlog-work/${id}/new-supplier/`, token, data);
-
-export const createWorkProduct = (token, id, data) =>
-  backlogCall("post", `/backlog-work/${id}/new-product/`, token, data);
 
 // The same, from the invoice create screens: no backlog page involved.
 export const createCustomerWithBalance = (token, data) =>
@@ -2621,24 +2618,6 @@ export const createCustomerWithBalance = (token, data) =>
 
 export const createSupplierWithBalance = (token, data) =>
   backlogCall("post", "/suppliers/create-with-balance/", token, data);
-
-export const createProductWithStock = (token, data) =>
-  backlogCall("post", "/products/create-with-stock/", token, data);
-
-// A product a picker matched by name: its details and variants for the
-// dialog, and the dialog's changes - details, variants updated, new
-// variants with a stock row each. Nothing is deleted.
-export const getProductForEditing = (token, productId) =>
-  backlogCall("get", `/products/${productId}/variants-and-stock/`, token);
-
-export const saveProductVariants = (token, productId, data) =>
-  backlogCall("post", `/products/${productId}/variants-and-stock/`, token, data);
-
-export const getWorkProduct = (token, id, productId) =>
-  backlogCall("get", `/backlog-work/${id}/products/${productId}/`, token);
-
-export const saveWorkProductVariants = (token, id, productId, data) =>
-  backlogCall("post", `/backlog-work/${id}/products/${productId}/`, token, data);
 
 // Names only - variants, customers, suppliers, accounts, units, locations,
 // attributes, projects - never a figure. Rate limited on the server.

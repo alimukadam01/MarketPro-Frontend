@@ -19,9 +19,6 @@ import { useAuth } from "../../services/AuthProvider"
 import {
   attachStagedToInvoice,
   createCustomerWithBalance,
-  createProductWithStock,
-  getProductForEditing,
-  saveProductVariants,
   getActiveBusiness,
   getAvailableProductsList,
   getCustomersList,
@@ -31,7 +28,7 @@ import {
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
 import { Combobox, useCreateAction } from "@/components/ui/combobox";
-import { NewPartyDialog, NewProductDialog } from "@/components/backlog/NewRecordDialogs";
+import { NewPartyDialog } from "@/components/backlog/NewRecordDialogs";
 import Payments from "@/components/ui/payments";
 import InvoiceImages from "@/components/ui/invoice-images";
 import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
@@ -336,24 +333,19 @@ const CreateSalesInvoice = () => {
       // the bare names too, so a search for "shirt" is not defeated by the
       // quantity and variant the label carries
       keywords: [item.product.base.name, item.product.name],
-      // its product, for "Add variants" when the name typed is exactly it
-      group: { id: item.product.base.id, name: item.product.base.name },
       // Listed but not pickable: a product that has run out is still there,
-      // so nobody creates it a second time from the Create button.
+      // so it is not taken for missing - restocked on Inventory, not here.
       disabled: !(item.available_quantity > 0),
     })),
     [products])
 
-  // A customer or product typed here that MarketPro does not have: the
-  // Create button in the picker opens its dialog with the name filled in.
-  const [creating, setCreating] = useState<{ kind: "customer" | "product"; text: string; productId?: number } | null>(null)
+  // A customer typed here that MarketPro does not have: the Create button
+  // in the picker opens its dialog with the name filled in. Products are
+  // not created from an invoice - they and their stock come from the
+  // Products and Inventory screens (docs/INVOICE-WORKFLOWS.md).
+  const [creating, setCreating] = useState<{ kind: "customer"; text: string } | null>(null)
   const customerCreate = useCreateAction(customerOptions, "customer",
     (text) => setCreating({ kind: "customer", text }))
-  // A name that is exactly an existing product's offers "Add variants"
-  // to it instead - the same dialog, with that product loaded.
-  const productCreate = useCreateAction(productOptions, "product",
-    (text) => setCreating({ kind: "product", text }),
-    (group) => setCreating({ kind: "product", text: group.name, productId: Number(group.id) }))
 
   const projectOptions = useMemo(
     () => Object.entries(projects).map(([value, project]) => ({
@@ -530,23 +522,6 @@ const CreateSalesInvoice = () => {
               setValue("customer", String(item.id) as never)
             }}
           />
-          <NewProductDialog
-            open={creating?.kind === "product"}
-            setOpen={(open) => { if (!open) setCreating(null) }}
-            initialName={creating?.text || ""}
-            create={(data) => creating?.productId
-              ? saveProductVariants(token, creating.productId, data)
-              : createProductWithStock(token, data)}
-            loadExisting={creating?.productId
-              ? () => getProductForEditing(token, creating.productId)
-              : undefined}
-            // Only products in stock are listed for a sale.
-            requireQuantity
-            onCreated={async (variants) => {
-              await fetchProducts()
-              if (variants[0]) setValue("newItemProduct", String(variants[0].id) as never)
-            }}
-          />
           <InvoiceImages
             invoiceId={null}
             isSalesInvoice={true}
@@ -575,8 +550,6 @@ const CreateSalesInvoice = () => {
                       options={productOptions}
                       value={field.value}
                       onChange={field.onChange}
-                      onInputChange={productCreate.onInputChange}
-                      createAction={productCreate.createAction}
                       loading={productsLoading}
                       placeholder="Select product"
                       emptyText="No stocked products yet."

@@ -19,9 +19,6 @@ import { useAuth } from "../../services/AuthProvider"
 import {
   applyHeldPayments,
   createSupplierWithBalance,
-  createProductWithStock,
-  getProductForEditing,
-  saveProductVariants,
   getProductVariantsList,
   suppliersAPIPackage,
   updatePurchaseInvoiceAndItems,
@@ -33,7 +30,7 @@ import InvoiceImages from "@/components/ui/invoice-images";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
 import { Combobox, useCreateAction } from "@/components/ui/combobox";
-import { NewPartyDialog, NewProductDialog } from "@/components/backlog/NewRecordDialogs";
+import { NewPartyDialog } from "@/components/backlog/NewRecordDialogs";
 import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
 import { InvoiceItemsTable, RowAction } from "@/components/invoice/InvoiceItemsTable";
 import {
@@ -320,22 +317,16 @@ const UpdatePurchaseInvoice = () => {
     () => Object.entries(products).map(([value, item]) => ({
       value,
       label: item.name,
-      keywords: [item.base_name],
-      // its product, for "Add variants" when the name typed is exactly it
-      group: { id: item.base_id, name: item.base_name },
     })),
     [products])
 
-  // A supplier or product typed here that MarketPro does not have: the
-  // Create button in the picker opens its dialog with the name filled in.
-  const [creating, setCreating] = useState<{ kind: "supplier" | "product"; text: string; productId?: number } | null>(null)
+  // A supplier typed here that MarketPro does not have: the Create button
+  // in the picker opens its dialog with the name filled in. Products are
+  // not created from an invoice - they and their stock come from the
+  // Products and Inventory screens (docs/INVOICE-WORKFLOWS.md).
+  const [creating, setCreating] = useState<{ kind: "supplier"; text: string } | null>(null)
   const partyCreate = useCreateAction(supplierOptions, "supplier",
     (text) => setCreating({ kind: "supplier", text }))
-  // A name that is exactly an existing product's offers "Add variants"
-  // to it instead - the same dialog, with that product loaded.
-  const productCreate = useCreateAction(productOptions, "product",
-    (text) => setCreating({ kind: "product", text }),
-    (group) => setCreating({ kind: "product", text: group.name, productId: Number(group.id) }))
 
   const projectOptions = useMemo(
     () => Object.entries(projects).map(([value, project]) => ({
@@ -584,21 +575,6 @@ const UpdatePurchaseInvoice = () => {
               setValue("supplier", String(item.id))
             }}
           />
-          <NewProductDialog
-            open={creating?.kind === "product"}
-            setOpen={(open) => { if (!open) setCreating(null) }}
-            initialName={creating?.text || ""}
-            create={(data) => creating?.productId
-              ? saveProductVariants(token, creating.productId, data)
-              : createProductWithStock(token, data)}
-            loadExisting={creating?.productId
-              ? () => getProductForEditing(token, creating.productId)
-              : undefined}
-            onCreated={async (variants) => {
-              await fetchProducts()
-              if (variants[0]) setValue("newItemProduct", String(variants[0].id))
-            }}
-          />
           <InvoiceImages
             invoiceId={invoice_id}
             isSalesInvoice={false}
@@ -627,8 +603,6 @@ const UpdatePurchaseInvoice = () => {
                       options={productOptions}
                       value={field.value}
                       onChange={field.onChange}
-                      onInputChange={productCreate.onInputChange}
-                      createAction={productCreate.createAction}
                       loading={productsLoading}
                       placeholder="Select product"
                       emptyText="No products yet."
