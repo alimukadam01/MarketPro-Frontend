@@ -52,8 +52,8 @@ interface UseEntryFlowOptions {
   /** The owner's view of the same page - who entered it, when, how long. */
   review?: OwnerEntry | null;
   /**
-   * Called before the page is handed in or approved: an invoice screen saves
-   * the invoice here. Resolves false to stop (it has said why).
+   * Called before the page is handed in, approved or sent back: an invoice
+   * screen saves the invoice here. Resolves false to stop (it has said why).
    */
   beforeFinish?: () => Promise<boolean>;
   /** Whether there is anything entered yet - Submit needs something. */
@@ -206,6 +206,9 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
 
   const sendBack = async (reason: string) => {
     try {
+      // What the owner corrected before sending the page back is kept, as on
+      // Approve: the entry person picks it up with those corrections in it.
+      if (beforeFinish && !(await beforeFinish())) return false;
       const res = await sendBackBacklogEntry(token, entry.id, reason);
       if (!res.ok) {
         if (res.error) toast.error(res.error);
