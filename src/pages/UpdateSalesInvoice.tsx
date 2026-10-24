@@ -424,8 +424,13 @@ const UpdateSalesInvoice = () => {
   const productOptions = useMemo(
     () => Object.entries(products).map(([value, item]) => ({
       value,
-      label: `${item.product.base.name} (${item.product.name}) (available: ${item.available_quantity})`,
+      label: item.available_quantity > 0
+        ? `${item.product.base.name} (${item.product.name}) (available: ${item.available_quantity})`
+        : `${item.product.base.name} (${item.product.name}) - out of stock`,
       keywords: [item.product.base.name, item.product.name],
+      // Listed but not pickable: a product that has run out is still there,
+      // so nobody creates it a second time from the Create button.
+      disabled: !(item.available_quantity > 0),
     })),
     [products])
 
@@ -468,7 +473,8 @@ const UpdateSalesInvoice = () => {
     if (!token) return;
 
     try {
-      const products = await getAvailableProductsList(token, businessId)
+      // Every product, in stock or not - the ones run out show disabled.
+      const products = await getAvailableProductsList(token, businessId, true)
       if (products) {
         const productMap = createNestedIdMap(products, "product.id")
         setProducts(productMap)

@@ -396,10 +396,12 @@ export const getProductsList = async (
   }
 };
 
-export const getAvailableProductsList = async (token, businessId) => {
+// includeOutOfStock: every active product, in stock or not (0 on hand), so a
+// sale can show what has run out instead of leaving it looking missing.
+export const getAvailableProductsList = async (token, businessId, includeOutOfStock = false) => {
   try {
     const res = await apiClient.get(
-      `/inventory/${businessId}/items/get_available_items/`,
+      `/inventory/${businessId}/items/get_available_items/${includeOutOfStock ? "?include_out_of_stock=1" : ""}`,
       {
         headers: {
           Authorization: token,
