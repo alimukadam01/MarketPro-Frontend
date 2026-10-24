@@ -242,15 +242,18 @@ const variantLabel = (variant: Variant) => Object.values(variant.attributes).joi
 const emptyRow = (location: Picked): StockRow => ({ location, quantity: "", unitPrice: "", unitCost: "" });
 
 /**
- * A product the page names that MarketPro does not have, in two steps:
+ * A product the page names that MarketPro does not have, in three steps:
  *
- *  1. the product - name, unit, description and its variants, built as on
- *     Create Product: pick attributes, type their values, Create Variant;
- *     click a variant to load it back and Update it, reset to start over.
- *     Only the variant list scrolls; the form above it stays put.
- *  2. its stock - a row for each variant, because a product goes on a bill
+ *  1. the product - name, unit, description;
+ *  2. its variants, built as on Create Product: pick attributes, type their
+ *     values, Create Variant; click a variant to load it back and Update
+ *     it, reset to start over. Only the variant list scrolls;
+ *  3. its stock - a row for each variant, because a product goes on a bill
  *     from its stock row: where it is kept, and, if the page says, how many,
  *     the price and the cost.
+ *
+ * Adding variants to a product that exists (loadExisting) opens on step 2:
+ * its details on step 1 are shown, not edited.
  *
  * Nothing is saved until the second step: the product and its rows are
  * created together, so a product never exists without them.
@@ -287,7 +290,7 @@ export function NewProductDialog({
   const extending = !!loadExisting;
   const [existingName, setExistingName] = useState("");
   const [loadingExisting, setLoadingExisting] = useState(false);
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [name, setName] = useState("");
   const [unit, setUnit] = useState<Picked>(null);
   const [desc, setDesc] = useState("");
@@ -302,7 +305,8 @@ export function NewProductDialog({
 
   useEffect(() => {
     if (!open) return;
-    setStep(1);
+    // Adding variants goes straight to them.
+    setStep(loadExisting ? 2 : 1);
     setName(initialName);
     setUnit(null);
     setDesc("");
@@ -410,8 +414,20 @@ export function NewProductDialog({
       return !query || variantLabel(variant).toLowerCase().includes(query);
     });
 
+  const toVariants = () => {
+    if (!name.trim()) {
+      toast.error("Enter the product's name.");
+      return;
+    }
+    if (!unit) {
+      toast.error("Pick the unit.");
+      return;
+    }
+    setStep(2);
+  };
+
   // One stock row per variant, or one for a product without variants. Rows
-  // already filled in keep their values when the user comes back to step 1.
+  // already filled in keep their values when the user comes back a step.
   const toStock = () => {
     if (!name.trim()) {
       toast.error("Enter the product's name.");
@@ -436,7 +452,7 @@ export function NewProductDialog({
     }
     const wanted = extending ? stockTargets.length : Math.max(variants.length, 1);
     setRows((prev) => Array.from({ length: wanted }, (_, i) => prev[i] ?? emptyRow(defaultLocation)));
-    setStep(2);
+    setStep(3);
   };
 
   const setRow = (index: number, change: Partial<StockRow>) =>
@@ -493,7 +509,7 @@ export function NewProductDialog({
 
   const stepTabs = (
     <div className="flex items-center gap-2 text-sm">
-      {[{ n: 1, label: "Product" }, { n: 2, label: "Stock" }].map(({ n, label }, i) => (
+      {[{ n: 1, label: "Product" }, { n: 2, label: "Variants" }, { n: 3, label: "Stock" }].map(({ n, label }, i) => (
         <span key={n} className="flex items-center gap-2">
           {i > 0 && <span className="w-6 h-px bg-border" />}
           <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold ${step === n ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{n}</span>
@@ -510,7 +526,7 @@ export function NewProductDialog({
         // Esc first lets go of a variant being edited, as on Create Product;
         // only with nothing selected does it close the dialog.
         onEscapeKeyDown={(event) => {
-          if (step === 1 && selected !== null) {
+          if (step === 2 && selected !== null) {
             event.preventDefault();
             deselect();
           }
@@ -525,41 +541,53 @@ export function NewProductDialog({
           <DialogUI.DialogDescription>
             {step === 1
               ? extending
-                ? "Already in MarketPro. Add its new variants here - or correct its details and variants. Its variants are not deleted here."
-                : "Name, unit and variants, as on Create Product."
-              : extending
-                ? "Each new variant gets a stock row, as a product goes on a bill from it. Fill in what the page says; the rest can stay empty."
-                : "A product goes on a bill from its stock row, so each variant gets one. Fill in what the page says; the rest can stay empty."}
+                ? "Already in MarketPro: its details are shown here, not changed."
+                : "Name, unit and description, as on Create Product."
+              : step === 2
+                ? extending
+                  ? "Add its new variants, or correct the ones it has. Its variants are not deleted here."
+                  : "Variants are optional: without any, the product has one."
+                : extending
+                  ? "Each new variant gets a stock row, as a product goes on a bill from it. Fill in what the page says; the rest can stay empty."
+                  : "A product goes on a bill from its stock row, so each variant gets one. Fill in what the page says; the rest can stay empty."}
           </DialogUI.DialogDescription>
         </DialogUI.DialogHeader>
 
         {step === 1 ? (
-          // The form stays put; only the variant list below it scrolls.
-          <div className="flex-1 min-h-0 flex flex-col gap-4">
-            <div className="shrink-0 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label htmlFor="new_product_name">Name</Label>
-                  <Input id="new_product_name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="new_product_unit">Unit</Label>
-                  <LookupCombobox
-                    id="new_product_unit"
-                    kind="units"
-                    value={unit?.id ?? ""}
-                    selectedLabel={unit?.label}
-                    onChange={(item) => setUnit(item ? { id: item.id, label: item.label } : null)}
-                    placeholder="Select Unit"
-                  />
-                </div>
+          // An existing product's details are shown, not changed.
+          <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar -mx-1 px-1 py-1 space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="new_product_name">Name</Label>
+                <Input id="new_product_name" value={name} onChange={(e) => setName(e.target.value)}
+                  disabled={extending} autoFocus={!extending} />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="new_product_desc">Description (optional)</Label>
-                <Textarea id="new_product_desc" rows={2} value={desc} onChange={(e) => setDesc(e.target.value)} />
+                <Label htmlFor="new_product_unit">Unit</Label>
+                <LookupCombobox
+                  id="new_product_unit"
+                  kind="units"
+                  value={unit?.id ?? ""}
+                  selectedLabel={unit?.label}
+                  onChange={(item) => setUnit(item ? { id: item.id, label: item.label } : null)}
+                  disabled={extending}
+                  placeholder="Select Unit"
+                />
               </div>
-
-              <h3 className="text-base font-semibold">Add Product Variants (Optional)</h3>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="new_product_desc">Description (optional)</Label>
+              <Textarea id="new_product_desc" rows={3} value={desc} onChange={(e) => setDesc(e.target.value)}
+                disabled={extending} />
+            </div>
+          </div>
+        ) : step === 2 ? (
+          // The variant controls stay put; only the list below them scrolls.
+          <div className="flex-1 min-h-0 flex flex-col gap-4">
+            <div className="shrink-0 space-y-4">
+              <h3 className="text-base font-semibold">
+                {extending ? `Variants of "${existingName || name}"` : "Add Product Variants (Optional)"}
+              </h3>
               {attributeCount > 0 && (
                 <div className="space-y-1">
                   <Label className="font-semibold">Variant Configuration</Label>
@@ -696,6 +724,17 @@ export function NewProductDialog({
           {step === 1 ? (
             <>
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="button" onClick={toVariants} disabled={loadingExisting}>
+                Next: variants
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            </>
+          ) : step === 2 ? (
+            <>
+              <Button type="button" variant="outline" onClick={() => setStep(1)}>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                {extending ? "Product details" : "Back"}
+              </Button>
               {extending && stockTargets.length === 0 ? (
                 <SubmitButton type="button" pending={saving} pendingLabel="Saving…" onClick={toStock}
                   disabled={loadingExisting}>
@@ -710,7 +749,7 @@ export function NewProductDialog({
             </>
           ) : (
             <>
-              <Button type="button" variant="outline" onClick={() => setStep(1)}>
+              <Button type="button" variant="outline" onClick={() => setStep(2)}>
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back
               </Button>
