@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import Payments from "@/components/ui/payments";
+import Payments, { EMPTY_PENDING_PAYMENTS } from "@/components/ui/payments";
 import { InvoiceSection } from "@/components/invoice/InvoiceScreen";
 import { InvoiceItemsTable, RowAction } from "@/components/invoice/InvoiceItemsTable";
 import { ExtraChargesEditor, type ExtraCharge } from "@/components/invoice/ExtraChargesEditor";
@@ -141,6 +141,10 @@ export default function BacklogInvoiceEntry({
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
   const [stagedPayments, setStagedPayments] = useState<StagedPayment[]>([]);
+  // Once the invoice exists, payments added or deleted in the dialog are held
+  // and sent with the save - as on the Update Invoice screens - so a payment
+  // is checked against the total as corrected, not the one saved before.
+  const [pending, setPending] = useState(EMPTY_PENDING_PAYMENTS);
   const [savedPayments, setSavedPayments] = useState<{ id: number; amount: number; status?: string }[]>([]);
   const [paymentsOpen, setPaymentsOpen] = useState(false);
   // A name the page has that MarketPro does not: the create dialog open for
@@ -220,7 +224,12 @@ export default function BacklogInvoiceEntry({
   const cleared = (rows) => rows
     .filter((p) => !p.status || p.status === "C")
     .reduce((sum, p) => sum + Number(p.amount), 0);
-  const paid = outputId ? cleared(savedPayments) + fromKhaata : cleared(stagedPayments);
+  // What will be paid once the screen is saved: the saved payments less any
+  // held for deletion, the held ones to add, and what the khaata covers.
+  const paid = outputId
+    ? cleared(savedPayments.filter((p) => !pending.deletes.some((d) => d.id === p.id)))
+      + cleared(pending.adds) + fromKhaata
+    : cleared(stagedPayments);
 
   const summaryLines = [
     { label: "Subtotal", value: subtotal },
@@ -360,9 +369,33 @@ export default function BacklogInvoiceEntry({
 
     try {
       if (outputId) {
+        // The order the Update Invoice screens use (applyHeldPayments):
+        // payments held for deletion go first, then the invoice, then the
+        // new payments - checked against the corrected total.
+        let failures = 0;
+        let reason = "";
+        for (const payment of pending.deletes) {
+          const res = await deleteWorkPayment(token, entry.id, outputId, payment.id);
+          if (!res.ok) { failures += 1; reason = reason || res.error || ""; }
+        }
         const res = await updateWorkOutput(token, entry.id, outputId, payload(cleanCharges));
         if (!res.ok) {
           if (res.error) toast.error(res.error);
+          setPending({ ...pending, deletes: [] });
+          await refreshMoney(outputId);
+          return false;
+        }
+        const notSent = [];
+        for (const payment of pending.adds) {
+          const added = await postWorkPayment(token, entry.id, outputId,
+            paymentRequestBody(payment.fields, payment.imageFile));
+          if (!added.ok) { failures += 1; reason = reason || added.error || ""; notSent.push(payment); }
+        }
+        // Whatever did not go through stays held, to try again.
+        setPending({ ...EMPTY_PENDING_PAYMENTS, adds: notSent });
+        await refreshMoney(outputId);
+        if (failures) {
+          toast.warning(`Saved, but ${failures} payment change${failures > 1 ? "s" : ""} could not be${reason ? `: ${reason}` : "."}`);
           return false;
         }
         return true;
@@ -433,6 +466,12 @@ export default function BacklogInvoiceEntry({
   useEffect(() => {
     if (outputId && token) loadSettlement(outputId);
   }, [outputId, token, loadSettlement]);
+
+  const refreshMoney = async (id: number) => {
+    const values = await loadValues(id);
+    if (values) setSavedPayments(values.payments || []);
+    await loadSettlement(id);
+  };
 
   const liveApi = useMemo(() => outputId ? {
     list: async () => {
@@ -521,6 +560,10 @@ export default function BacklogInvoiceEntry({
             setOpen={setPaymentsOpen}
             stagedPayments={stagedPayments}
             onStagedChange={outputId ? undefined : setStagedPayments}
+            pending={pending}
+            onPendingChange={outputId ? setPending : undefined}
+            // A draft (no lines) or cancelled invoice bills nothing.
+            billsTotal={isSales ? lines.length > 0 : !["C", "D"].includes(status)}
             accountsLoader={accountsLoader}
             liveApi={liveApi}
           />

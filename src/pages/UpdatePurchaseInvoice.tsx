@@ -18,6 +18,8 @@ import {
 import { useAuth } from "../../services/AuthProvider"
 import {
   applyHeldPayments,
+  createSupplierWithBalance,
+  createProductWithStock,
   getProductVariantsList,
   suppliersAPIPackage,
   updatePurchaseInvoiceAndItems,
@@ -28,7 +30,8 @@ import Payments, { EMPTY_PENDING_PAYMENTS } from "@/components/ui/payments";
 import InvoiceImages from "@/components/ui/invoice-images";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
-import { Combobox } from "@/components/ui/combobox";
+import { Combobox, useCreateAction } from "@/components/ui/combobox";
+import { NewPartyDialog, NewProductDialog } from "@/components/backlog/NewRecordDialogs";
 import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
 import { InvoiceItemsTable, RowAction } from "@/components/invoice/InvoiceItemsTable";
 import {
@@ -318,6 +321,14 @@ const UpdatePurchaseInvoice = () => {
     })),
     [products])
 
+  // A supplier or product typed here that MarketPro does not have: the
+  // Create button in the picker opens its dialog with the name filled in.
+  const [creating, setCreating] = useState<{ kind: "supplier" | "product"; text: string } | null>(null)
+  const partyCreate = useCreateAction(supplierOptions, "supplier",
+    (text) => setCreating({ kind: "supplier", text }))
+  const productCreate = useCreateAction(productOptions, "product",
+    (text) => setCreating({ kind: "product", text }))
+
   const projectOptions = useMemo(
     () => Object.entries(projects).map(([value, project]) => ({
       value,
@@ -341,43 +352,45 @@ const UpdatePurchaseInvoice = () => {
     }
   }
 
-  useEffect(() => {
+  // Outside the effect so a supplier or product created from the pickers
+  // can reload its list and be picked straight away.
+  const fetchProducts = async () => {
+    if (!token) return;
 
-    const fetchProducts = async () => {
-      if (!token) return;
-
-      try {
-        const products = await getProductVariantsList(token)
-        if (products) {
-          const productMap = createIdMap(products)
-          setProducts(productMap)
-        } else {
-          toast.error("Failed to fetch products")
-        }
-      } catch (error) {
-        console.log("Error fetching products:", error)
+    try {
+      const products = await getProductVariantsList(token)
+      if (products) {
+        const productMap = createIdMap(products)
+        setProducts(productMap)
+      } else {
         toast.error("Failed to fetch products")
-      } finally {
-        setProductsLoading(false)
       }
+    } catch (error) {
+      console.log("Error fetching products:", error)
+      toast.error("Failed to fetch products")
+    } finally {
+      setProductsLoading(false)
     }
+  }
 
-    const fetchSuppliers = async () => {
-      try {
-        const suppliers = await suppliersAPIPackage.list(token)
-        if (suppliers) {
-          const supplierMap = createIdMap(suppliers)
-          setSuppliers(supplierMap)
-        } else {
-          toast.error("Failed to fetch suppliers")
-        }
-      } catch (error) {
-        console.log("Error fetching suppliers:", error)
+  const fetchSuppliers = async () => {
+    try {
+      const suppliers = await suppliersAPIPackage.list(token)
+      if (suppliers) {
+        const supplierMap = createIdMap(suppliers)
+        setSuppliers(supplierMap)
+      } else {
         toast.error("Failed to fetch suppliers")
-      } finally {
-        setSuppliersLoading(false)
       }
+    } catch (error) {
+      console.log("Error fetching suppliers:", error)
+      toast.error("Failed to fetch suppliers")
+    } finally {
+      setSuppliersLoading(false)
     }
+  }
+
+  useEffect(() => {
 
     const fetchProjects = async () => {
       try {
@@ -464,6 +477,8 @@ const UpdatePurchaseInvoice = () => {
                   options={supplierOptions}
                   value={field.value}
                   onChange={field.onChange}
+                  onInputChange={partyCreate.onInputChange}
+                  createAction={partyCreate.createAction}
                   loading={suppliersLoading}
                   placeholder="Select supplier"
                   emptyText="No suppliers yet. Add one first."
@@ -549,6 +564,28 @@ const UpdatePurchaseInvoice = () => {
             // bills nothing.
             billsTotal={!["D", "C"].includes(status)}
           />
+          <NewPartyDialog
+            open={creating?.kind === "supplier"}
+            setOpen={(open) => { if (!open) setCreating(null) }}
+            kind="supplier"
+            initialName={creating?.text || ""}
+            create={(data) => createSupplierWithBalance(token, data)}
+            asOf={watch("date_issued")}
+            onCreated={async (item) => {
+              await fetchSuppliers()
+              setValue("supplier", String(item.id))
+            }}
+          />
+          <NewProductDialog
+            open={creating?.kind === "product"}
+            setOpen={(open) => { if (!open) setCreating(null) }}
+            initialName={creating?.text || ""}
+            create={(data) => createProductWithStock(token, data)}
+            onCreated={async (variants) => {
+              await fetchProducts()
+              if (variants[0]) setValue("newItemProduct", String(variants[0].id))
+            }}
+          />
           <InvoiceImages
             invoiceId={invoice_id}
             isSalesInvoice={false}
@@ -577,6 +614,8 @@ const UpdatePurchaseInvoice = () => {
                       options={productOptions}
                       value={field.value}
                       onChange={field.onChange}
+                      onInputChange={productCreate.onInputChange}
+                      createAction={productCreate.createAction}
                       loading={productsLoading}
                       placeholder="Select product"
                       emptyText="No products yet."
