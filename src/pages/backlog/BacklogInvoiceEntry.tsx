@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { ChevronDown, ChevronUp, Plus, RefreshCcw, Trash2, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Trash2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -140,7 +140,6 @@ export default function BacklogInvoiceEntry({
   const [newProduct, setNewProduct] = useState<Picked>(null);
   const [newQuantity, setNewQuantity] = useState("");
   const [newPrice, setNewPrice] = useState("");
-  const [editingKey, setEditingKey] = useState<string | null>(null);
 
   const [stagedPayments, setStagedPayments] = useState<StagedPayment[]>([]);
   // Once the invoice exists, payments added or deleted in the dialog are held
@@ -246,20 +245,9 @@ export default function BacklogInvoiceEntry({
     setNewProduct(null);
     setNewQuantity("");
     setNewPrice("");
-    setEditingKey(null);
   };
 
-  // Esc drops the line being corrected, as it does on the product variants.
-  useEffect(() => {
-    if (!editingKey) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") clearAddRow();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [editingKey]);
-
-  const addOrUpdateLine = () => {
+  const addLine = () => {
     const quantity = parseInt(newQuantity, 10);
     const price = parseFloat(newPrice);
     if (!newProduct) {
@@ -275,32 +263,14 @@ export default function BacklogInvoiceEntry({
       return;
     }
 
-    if (editingKey) {
-      setLines((prev) => prev.map((line) => {
-        if (line.key !== editingKey) return line;
-        const changed = String(line.product) !== String(newProduct.id) || line.quantity !== quantity || line.price !== price;
-        return {
-          ...line,
-          // A sales invoice's update never lowers a saved line or changes its
-          // price, so a corrected sales line is replaced - its stock comes
-          // back and the new figure goes out. A purchase line is updated in
-          // place, stock and all.
-          id: isSales && changed ? null : line.id,
-          product: newProduct.id,
-          label: newProduct.label,
-          quantity,
-          price,
-        };
-      }));
-      clearAddRow();
-      return;
-    }
-
-    // The same product at the same price joins its line, as on the create screens.
+    // The same product at the same price joins its line, as on the invoice
+    // screens (addOrMergeInvoiceItem). A saved line keeps its id, so the
+    // update takes only the extra quantity out of stock. A line is not
+    // edited in place: a wrong one is deleted and added again.
     const same = lines.find((line) => String(line.product) === String(newProduct.id) && line.price === price);
     if (same) {
       setLines((prev) => prev.map((line) => line.key === same.key
-        ? { ...line, quantity: line.quantity + quantity, id: isSales ? null : line.id }
+        ? { ...line, quantity: line.quantity + quantity }
         : line));
       toast.success(`Added ${quantity} to the existing line for this product at this price.`);
     } else {
@@ -311,19 +281,10 @@ export default function BacklogInvoiceEntry({
     clearAddRow();
   };
 
-  const pickLine = (line: Line) => {
-    setEditingKey(line.key);
-    setNewProduct({ id: line.product, label: line.label });
-    setNewQuantity(String(line.quantity));
-    setNewPrice(String(line.price));
-  };
-
   const removeLine = (key: string) => {
-    if (key === editingKey) clearAddRow();
     setLines((prev) => prev.filter((line) => line.key !== key));
   };
 
-  const editingIndex = lines.findIndex((line) => line.key === editingKey);
 
   // -- saving ----------------------------------------------------------------
 
@@ -355,10 +316,6 @@ export default function BacklogInvoiceEntry({
     }
     if (!dateIssued) {
       toast.error("Enter the date on the bill.");
-      return false;
-    }
-    if (editingKey) {
-      toast.error("Update or clear the line you are correcting first (Esc clears it).");
       return false;
     }
     const { charges: cleanCharges, error } = isSales
@@ -651,17 +608,14 @@ export default function BacklogInvoiceEntry({
                       <Label htmlFor="newPrice">{priceLabel}</Label>
                       <Input id="newPrice" type="number" min="0" step="0.01" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} />
                     </div>
-                    <Button type="button" onClick={addOrUpdateLine}>
-                      {editingKey ? <RefreshCcw className="h-4 w-4 mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                      {editingKey ? "Update" : "Add Item"}
+                    <Button type="button" onClick={addLine}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Item
                     </Button>
                   </div>
-                  {/* The reminder gives way on a short screen; the editing
-                      note does not. */}
-                  <p className={`text-xs text-muted-foreground ${editingKey ? "" : "[@media(max-height:760px)]:hidden"}`}>
-                    {editingKey
-                      ? `Editing line ${editingIndex + 1}. Esc clears.`
-                      : "Prices are not filled in - type them as written on the bill."}
+                  {/* Gives way on a short screen. */}
+                  <p className="text-xs text-muted-foreground [@media(max-height:760px)]:hidden">
+                    Prices are not filled in - type them as written on the bill.
                   </p>
                   <InvoiceItemsTable columns={columns} rows={[]} headerOnly />
                 </>
@@ -674,8 +628,6 @@ export default function BacklogInvoiceEntry({
                 rows={lines.map((line) => ({
                   key: line.key,
                   cells: [line.label, line.quantity, money(line.price), `PKR ${money(line.quantity * line.price)}`],
-                  onClick: () => pickLine(line),
-                  selected: line.key === editingKey,
                   actions: (
                     <RowAction label="Delete item" onClick={() => removeLine(line.key)}>
                       <Trash2 className="h-5 w-5" />

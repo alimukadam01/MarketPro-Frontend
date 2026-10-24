@@ -8,10 +8,6 @@ export interface InvoiceItemsRow {
   dimmed?: boolean;
   /** Icon buttons, rendered outside the row the way the invoice screens always have. */
   actions?: ReactNode;
-  /** Clicking the row: the backlog entry screens load it into the add row to correct it. */
-  onClick?: () => void;
-  /** The row being corrected, outlined the way a selected list row is. */
-  selected?: boolean;
 }
 
 interface InvoiceItemsTableProps {
@@ -77,8 +73,7 @@ export function InvoiceItemsTable({
     rows.map((row, idx) => (
       <div key={row.key} className="flex items-center gap-2">
         <div
-          onClick={row.onClick}
-          className={`bg-card rounded-lg h-[35px] flex flex-1 items-center px-4 ${row.selected ? "border-2 border-[#4285F4]" : "border border-border"} ${row.onClick ? "cursor-pointer" : ""} ${row.dimmed ? "opacity-50" : ""}`}
+          className={`bg-card rounded-lg border border-border h-[35px] flex flex-1 items-center px-4 ${row.dimmed ? "opacity-50" : ""}`}
         >
           <div className={`${GRID} text-sm`}>
             <div>{idx + 1}</div>
