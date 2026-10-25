@@ -16,6 +16,7 @@ import {
 import { useAuth } from "../../services/AuthProvider"
 import {
   attachStagedToInvoice,
+  createSupplierWithBalance,
   getProductVariantsList,
   suppliersAPIPackage,
   postPurchaseInvoiceAndItems,
@@ -23,7 +24,8 @@ import {
 } from "../../services/api"
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
-import { Combobox } from "@/components/ui/combobox";
+import { Combobox, useCreateAction } from "@/components/ui/combobox";
+import { NewPartyDialog } from "@/components/backlog/NewRecordDialogs";
 import Payments from "@/components/ui/payments";
 import InvoiceImages from "@/components/ui/invoice-images";
 import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
@@ -71,7 +73,7 @@ const CreatePurchaseInvoice = () => {
   // amount_paid is gone from here: a payment is added through the payments
   // dialog, with its account, method and date, rather than posted as a bare
   // figure that became a receipt with none of those.
-  const { register, handleSubmit, control, watch, reset } = useForm({
+  const { register, handleSubmit, control, watch, reset, setValue } = useForm({
     defaultValues: {
       invoice_number: "",
       supplier: "",
@@ -188,50 +190,63 @@ const CreatePurchaseInvoice = () => {
     [suppliers])
 
   const productOptions = useMemo(
-    () => Object.entries(products).map(([value, item]) => ({ value, label: item.name })),
+    () => Object.entries(products).map(([value, item]) => ({
+      value,
+      label: item.name,
+    })),
     [products])
+
+  // A supplier typed here that MarketPro does not have: the Create button
+  // in the picker opens its dialog with the name filled in. Products are
+  // not created from an invoice - they and their stock come from the
+  // Products and Inventory screens (docs/INVOICE-WORKFLOWS.md).
+  const [creating, setCreating] = useState<{ kind: "supplier"; text: string } | null>(null)
+  const supplierCreate = useCreateAction(supplierOptions, "supplier",
+    (text) => setCreating({ kind: "supplier", text }))
 
   const projectOptions = useMemo(
     () => Object.entries(projects).map(([value, project]) => ({ value, label: project.name })),
     [projects])
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      if (!token) return;
+  // Outside the effect so a product or supplier created from the pickers
+  // can reload its list and be picked straight away.
+  const fetchProducts = async () => {
+    if (!token) return;
 
-      try {
-        const products = await getProductVariantsList(token)
-        if (products) {
-          const productMap = createIdMap(products)
-          setProducts(productMap)
-        } else {
-          toast.error("Failed to fetch products")
-        }
-      } catch (error) {
-        console.log("Error fetching products:", error)
+    try {
+      const products = await getProductVariantsList(token)
+      if (products) {
+        const productMap = createIdMap(products)
+        setProducts(productMap)
+      } else {
         toast.error("Failed to fetch products")
-      } finally {
-        setProductsLoading(false)
       }
+    } catch (error) {
+      console.log("Error fetching products:", error)
+      toast.error("Failed to fetch products")
+    } finally {
+      setProductsLoading(false)
     }
+  }
 
-    const fetchSuppliers = async () => {
-      try {
-        const suppliers = await suppliersAPIPackage.list(token)
-        if (suppliers) {
-          const supplierMap = createIdMap(suppliers)
-          setSuppliers(supplierMap)
-        } else {
-          toast.error("Failed to fetch suppliers")
-        }
-      } catch (error) {
-        console.log("Error fetching suppliers:", error)
+  const fetchSuppliers = async () => {
+    try {
+      const suppliers = await suppliersAPIPackage.list(token)
+      if (suppliers) {
+        const supplierMap = createIdMap(suppliers)
+        setSuppliers(supplierMap)
+      } else {
         toast.error("Failed to fetch suppliers")
-      } finally {
-        setSuppliersLoading(false)
       }
+    } catch (error) {
+      console.log("Error fetching suppliers:", error)
+      toast.error("Failed to fetch suppliers")
+    } finally {
+      setSuppliersLoading(false)
     }
+  }
 
+  useEffect(() => {
     const fetchProjects = async () => {
       try {
         const data = await projectsAPIPackage.list(token)
@@ -303,6 +318,8 @@ const CreatePurchaseInvoice = () => {
                   options={supplierOptions}
                   value={field.value}
                   onChange={field.onChange}
+                  onInputChange={supplierCreate.onInputChange}
+                  createAction={supplierCreate.createAction}
                   loading={suppliersLoading}
                   placeholder="Select supplier"
                   emptyText="No suppliers yet. Add one first."
@@ -388,6 +405,18 @@ const CreatePurchaseInvoice = () => {
             setOpen={setPaymentsOpen}
             stagedPayments={stagedPayments}
             onStagedChange={setStagedPayments}
+          />
+          <NewPartyDialog
+            open={creating?.kind === "supplier"}
+            setOpen={(open) => { if (!open) setCreating(null) }}
+            kind="supplier"
+            initialName={creating?.text || ""}
+            create={(data) => createSupplierWithBalance(token, data)}
+            asOf={watch("date_issued")}
+            onCreated={async (item) => {
+              await fetchSuppliers()
+              setValue("supplier", String(item.id) as never)
+            }}
           />
           <InvoiceImages
             invoiceId={null}

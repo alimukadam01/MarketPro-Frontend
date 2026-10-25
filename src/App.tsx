@@ -54,8 +54,10 @@ import ViewProject from "./pages/ViewProject";
 import CreateProjectTask from "./pages/CreateProjectTask";
 import UpdateProjectTask from "./pages/UpdateProjectTask";
 import Backlog from "./pages/Backlog";
-import CreateBacklogEntry from "./pages/CreateBacklogEntry";
-import UpdateBacklogEntry from "./pages/UpdateBacklogEntry";
+import BacklogWorkQueue from "./pages/backlog/BacklogWorkQueue";
+import { BacklogReviewRoute, BacklogWorkRoute } from "./pages/backlog/BacklogEntryPage";
+import BacklogUpload from "./pages/backlog/BacklogUpload";
+import BacklogGlossary from "./pages/backlog/BacklogGlossary";
 import Accounting from "./pages/Accounting";
 import CreateTransaction from "./pages/CreateTransaction";
 import UpdateTransaction from "./pages/UpdateTransaction";
@@ -140,8 +142,14 @@ const App = () => {
 
           {/* Backlog */}
           <Route path="/backlog" element={<ProtectedRoute><Backlog /></ProtectedRoute>} />
-          <Route path="/backlog/create-entry" element={<ProtectedRoute><CreateBacklogEntry /></ProtectedRoute>} />
-          <Route path="/backlog/update-entry" element={<ProtectedRoute><UpdateBacklogEntry /></ProtectedRoute>} />
+          <Route path="/backlog/upload" element={<ProtectedRoute><BacklogUpload /></ProtectedRoute>} />
+          <Route path="/backlog/glossary" element={<ProtectedRoute><BacklogGlossary /></ProtectedRoute>} />
+          {/* The breadcrumb links "review" on its own; there is no list there. */}
+          <Route path="/backlog/review" element={<Navigate to="/backlog" replace />} />
+          <Route path="/backlog/review/:id" element={<ProtectedRoute><BacklogReviewRoute /></ProtectedRoute>} />
+          {/* The entry screens: the only routes a data entry account can reach. */}
+          <Route path="/backlog/work" element={<ProtectedRoute entry><BacklogWorkQueue /></ProtectedRoute>} />
+          <Route path="/backlog/work/:id" element={<ProtectedRoute entry><BacklogWorkRoute /></ProtectedRoute>} />
 
           {/* Accounting */}
           <Route path="/accounting" element={<ProtectedRoute module="accounting"><Accounting /></ProtectedRoute>} />

@@ -73,6 +73,17 @@ function Payments({
   // invoice bills nothing - for a sale that is one with no lines, for a
   // purchase the status picked - and the refund preview compares against it.
   billsTotal = true,
+  // The backlog entry screens. A data entry account cannot reach the money
+  // accounts or an invoice's payments directly, so the page hands in how to
+  // read the accounts (its name-only lookup) and, once the invoice exists,
+  // how to list, add and remove its payments (the backlog work endpoints).
+  // With these the dialog shows the money fields whatever the user's own
+  // permissions say. liveApi.settlement, when given, stands in for the
+  // invoice's settlement endpoint, so what the khaata settles is shown and
+  // counted exactly as in the standard dialog. liveApi.create and .remove
+  // answer { ok, error }, so the server's reason reaches the screen.
+  accountsLoader = null,
+  liveApi = null,
 }) {
   const { token, getPermissions } = useAuth();
   const isStaged = !invoiceId && typeof onStagedChange === "function";
@@ -94,7 +105,7 @@ function Payments({
   const [paymentDate, setPaymentDate] = useState(
     todayForInput()
   );
-  const hasAccounting = !!getPermissions("accounting")?.["view"];
+  const hasAccounting = !!accountsLoader || !!getPermissions("accounting")?.["view"];
 
   // The method follows the account, so there is nothing for the user to pick.
   // A bank account is a transfer unless cheque details are filled in.
@@ -127,10 +138,12 @@ function Payments({
 
   const fetchPayments = async () => {
     try {
-      const [data, settled] = await Promise.all([
-        getPaymentsList(token, invoiceId, isSalesPayment),
-        getInvoiceSettlement(token, invoiceId, isSalesPayment),
-      ]);
+      const [data, settled] = liveApi
+        ? await Promise.all([liveApi.list(), liveApi.settlement ? liveApi.settlement() : null])
+        : await Promise.all([
+          getPaymentsList(token, invoiceId, isSalesPayment),
+          getInvoiceSettlement(token, invoiceId, isSalesPayment),
+        ]);
       if (data) {
         setPayments(data)
       } else {
@@ -146,7 +159,9 @@ function Payments({
   const fetchAccounts = async () => {
     try {
       // Deactivated accounts take no new money.
-      const data = await moneyAccountsAPIPackage.list(token, "?is_active=true");
+      const data = accountsLoader
+        ? await accountsLoader()
+        : await moneyAccountsAPIPackage.list(token, "?is_active=true");
       if (data) {
         setAccounts(data);
         const defaultAccount = data.find((item) => item.is_default);
@@ -238,16 +253,18 @@ function Payments({
 
         // paymentRequestBody sends a plain object, or FormData when a photo
         // comes with it - the same builder the staged payments go through.
-        const success = await createPayment(
-          token, invoiceId, isSalesPayment, paymentRequestBody(payload, imageFile));
-        if (success) {
+        const body = paymentRequestBody(payload, imageFile);
+        const result = liveApi
+          ? await liveApi.create(body)
+          : { ok: await createPayment(token, invoiceId, isSalesPayment, body), error: null };
+        if (result.ok) {
           toast.success("Payment created successfully!");
           resetForm();
           fetchPayments();
           // Payment status is derived server-side — let the invoice refresh.
           if (onPaymentsChanged) onPaymentsChanged();
         } else {
-          toast.error("Failed to create payment.");
+          toast.error(result.error || "Failed to create payment.");
         }
       } catch (error) {
         console.log("Error creating payment:", error);
@@ -393,13 +410,15 @@ function Payments({
     setRemovingId(paymentId);
     try {
       try {
-        const success = await deletePayment(token, invoiceId, isSalesPayment, paymentId);
-        if (success) {
+        const result = liveApi
+          ? await liveApi.remove(paymentId)
+          : { ok: await deletePayment(token, invoiceId, isSalesPayment, paymentId), error: null };
+        if (result.ok) {
           toast.success("Payment deleted.");
           fetchPayments();
           if (onPaymentsChanged) onPaymentsChanged();
         } else {
-          toast.error("Failed to delete payment.");
+          toast.error(result.error || "Failed to delete payment.");
         }
       } catch (error) {
         console.log("Error deleting payment:", error);
