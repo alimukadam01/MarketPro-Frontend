@@ -6,9 +6,7 @@ import type { ReactNode } from "react";
 export const BACKLOG_TYPES: Record<string, { label: string; tone: string }> = {
   sales_invoice: { label: "Sales invoice", tone: "bg-violet-100 text-violet-700" },
   purchase_invoice: { label: "Purchase invoice", tone: "bg-blue-100 text-blue-700" },
-  product_list: { label: "Product list", tone: "bg-gray-100 text-gray-700" },
   stock_list: { label: "Stock list", tone: "bg-gray-100 text-gray-700" },
-  price_list: { label: "Price list", tone: "bg-gray-100 text-gray-700" },
 };
 
 export const BACKLOG_STATUSES: Record<string, { label: string; tone: string }> = {

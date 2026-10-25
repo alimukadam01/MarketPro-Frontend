@@ -17,8 +17,6 @@ import { uploadBacklogBatch } from "../../../services/api";
 const TYPES = [
   { value: "sales_invoice", label: "Sales invoices" },
   { value: "purchase_invoice", label: "Purchase invoices" },
-  { value: "product_list", label: "Product list" },
-  { value: "price_list", label: "Price list" },
   { value: "stock_list", label: "Stock list" },
 ];
 

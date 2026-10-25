@@ -2572,9 +2572,6 @@ export const submitWorkEntry = (token, id, secondsSpent) =>
 export const postWorkInvoice = (token, id, kind, data) =>
   backlogCall("post", `/backlog-work/${id}/${kind}/`, token, data);
 
-export const postWorkProduct = (token, id, data) =>
-  backlogCall("post", `/backlog-work/${id}/products/`, token, data);
-
 export const postWorkStockLine = (token, id, data) =>
   backlogCall("post", `/backlog-work/${id}/inventory/`, token, data);
 

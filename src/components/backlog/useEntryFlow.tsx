@@ -59,7 +59,7 @@ interface UseEntryFlowOptions {
   /** Whether there is anything entered yet - Submit needs something. */
   hasOutputs: boolean;
   /**
-   * A product, stock or price list: each line is saved as it is entered, so
+   * A stock list: each line is saved as it is entered, so
    * the page can be left and come back to, and it is handed in with "Mark
    * page complete" rather than released.
    */
