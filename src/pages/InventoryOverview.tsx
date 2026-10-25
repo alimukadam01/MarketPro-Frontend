@@ -49,6 +49,7 @@ const cols = [
   { key: "unit_price", label: "Unit Price" },
   { key: "reorder_level", label: "Reorder Level" },
   { key: "last_updated", label: "Last Updated" },
+  { key: "counted_at", label: "Counted" },
 ]
 
 // Track code is left to the search box.
@@ -404,7 +405,7 @@ const InventoryOverview = () => {
             {loading || (inventoryData && inventoryData.length > 0) ? (
               <DataTable
                 columns={cols}
-                colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"}
+                colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"}
                 headerOnly
               />
             ) : null}
@@ -417,7 +418,7 @@ const InventoryOverview = () => {
               data={permissions["view"] ? inventoryData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
-              colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"}
+              colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"}
               rowsOnly
               loading={loading}
             />

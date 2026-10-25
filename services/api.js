@@ -396,10 +396,12 @@ export const getProductsList = async (
   }
 };
 
-export const getAvailableProductsList = async (token, businessId) => {
+// includeOutOfStock: every active product, in stock or not (0 on hand), so a
+// sale can show what has run out instead of leaving it looking missing.
+export const getAvailableProductsList = async (token, businessId, includeOutOfStock = false) => {
   try {
     const res = await apiClient.get(
-      `/inventory/${businessId}/items/get_available_items/`,
+      `/inventory/${businessId}/items/get_available_items/${includeOutOfStock ? "?include_out_of_stock=1" : ""}`,
       {
         headers: {
           Authorization: token,
@@ -2441,50 +2443,209 @@ export const applyHeldPayments = async (
 // ---------------------------------------------------------------------------
 // Backlog
 // ---------------------------------------------------------------------------
+//
+// Two sides. The owner's pages use /backlog-entries/, /backlog-batches/ and
+// the glossary endpoints. The entry screens use /backlog-work/ only - the one
+// API a data entry account can reach - and the owner uses the same screens to
+// review a page, so the record calls below serve both.
 
 export const backlogEntriesAPIPackage = new APIPackage("backlog-entries");
 
-export const createBacklogEntry = async (token, formData) => {
+// { ok, status, data, error }: the entry screens act on the reason a call
+// failed - a page someone else took (409), a field the server refused - so a
+// bare true/false is not enough here.
+const backlogCall = async (method, url, token, data = undefined, headers = {}, config = {}) => {
   try {
-    const res = await apiClient.post("/backlog-entries/", formData, {
-      headers: {
-        Authorization: token,
-        "Content-Type": "multipart/form-data",
-      },
+    const res = await apiClient.request({
+      method,
+      url,
+      data,
+      headers: { Authorization: token, ...headers },
+      ...config,
     });
-    return res.status === 201;
+    return { ok: true, status: res.status, data: res.data, error: null };
   } catch (error) {
-    console.log("Error creating backlog entry:", error);
-    return false;
+    console.log(`Error calling ${url}:`, error);
+    return {
+      ok: false,
+      status: error?.response?.status ?? null,
+      data: error?.response?.data ?? null,
+      error: firstFieldError(error, "Something went wrong. Please try again."),
+    };
   }
 };
 
-export const updateBacklogEntry = async (token, id, formData) => {
-  try {
-    const res = await apiClient.put(`/backlog-entries/${id}/`, formData, {
-      headers: {
-        Authorization: token,
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return res.status === 200;
-  } catch (error) {
-    console.log("Error updating backlog entry:", error);
-    return false;
-  }
+const MULTIPART = { "Content-Type": "multipart/form-data" };
+
+// -- The owner ---------------------------------------------------------------
+
+// No timeout: a book's worth of photos, or its zip, takes as long as the
+// connection needs - the client's 30 seconds would abandon it half sent.
+export const uploadBacklogBatch = (token, formData, onProgress = null) =>
+  backlogCall("post", "/backlog-batches/", token, formData, MULTIPART, {
+    timeout: 0,
+    onUploadProgress: onProgress
+      ? (event) => onProgress(event.total ? Math.round((event.loaded / event.total) * 100) : null)
+      : undefined,
+  });
+
+export const getBacklogMetrics = async (token) => {
+  const res = await backlogCall("get", "/backlog-entries/metrics/", token);
+  return res.ok ? res.data : null;
 };
 
-export const toggleBacklogEntryStatus = async (token, id) => {
-  try {
-    const res = await apiClient.post(`/backlog-entries/${id}/toggle-status/`, {}, {
-      headers: { Authorization: token },
-    });
-    return res.status === 200;
-  } catch (error) {
-    console.log("Error toggling backlog entry status:", error);
-    return false;
-  }
+export const getBacklogReviewQueue = async (token) => {
+  const res = await backlogCall("get", "/backlog-entries/review-queue/", token);
+  return res.ok ? res.data : null;
 };
+
+export const approveBacklogEntry = (token, id) =>
+  backlogCall("post", `/backlog-entries/${id}/approve/`, token, {});
+
+export const sendBackBacklogEntry = (token, id, reason) =>
+  backlogCall("post", `/backlog-entries/${id}/send-back/`, token, { reason });
+
+// A page nobody could read goes back to the pool, with a better photo when
+// one is given.
+export const requeueBacklogEntry = (token, id, imageFile = null) => {
+  if (!imageFile) return backlogCall("post", `/backlog-entries/${id}/requeue/`, token, {});
+  const body = new FormData();
+  body.append("image", imageFile);
+  return backlogCall("post", `/backlog-entries/${id}/requeue/`, token, body, MULTIPART);
+};
+
+// Takes a page off whoever has it open.
+export const releaseBacklogEntry = (token, id) =>
+  backlogCall("post", `/backlog-entries/${id}/release/`, token, {});
+
+export const getBacklogGlossary = async (token) => {
+  const res = await backlogCall("get", "/backlog-glossary/", token);
+  return res.ok ? res.data : null;
+};
+
+export const createGlossaryTerm = (token, data) =>
+  backlogCall("post", "/backlog-glossary/", token, data);
+
+export const updateGlossaryTerm = (token, id, data) =>
+  backlogCall("put", `/backlog-glossary/${id}/`, token, data);
+
+export const deleteGlossaryTerm = (token, id) =>
+  backlogCall("delete", `/backlog-glossary/${id}/`, token);
+
+export const getGlossarySuggestions = async (token) => {
+  const res = await backlogCall("get", "/backlog-glossary-suggestions/", token);
+  return res.ok ? res.data : null;
+};
+
+export const approveGlossarySuggestion = (token, id, overrides = {}) =>
+  backlogCall("post", `/backlog-glossary-suggestions/${id}/approve/`, token, overrides);
+
+export const rejectGlossarySuggestion = (token, id) =>
+  backlogCall("post", `/backlog-glossary-suggestions/${id}/reject/`, token, {});
+
+// -- The entry screens -------------------------------------------------------
+
+export const getWorkQueue = async (token) => {
+  const res = await backlogCall("get", "/backlog-work/queue/", token);
+  return res.ok ? res.data : null;
+};
+
+export const getWorkEntry = (token, id) =>
+  backlogCall("get", `/backlog-work/${id}/`, token);
+
+// 409 when someone else took the page first, or this user already has one
+// open - the queue then tries the next page.
+export const claimWorkEntry = (token, id) =>
+  backlogCall("post", `/backlog-work/${id}/claim/`, token, {});
+
+export const releaseWorkEntry = (token, id) =>
+  backlogCall("post", `/backlog-work/${id}/release/`, token, {});
+
+export const cantReadWorkEntry = (token, id, note, secondsSpent) =>
+  backlogCall("post", `/backlog-work/${id}/cant-read/`, token, { note, seconds_spent: secondsSpent });
+
+export const submitWorkEntry = (token, id, secondsSpent) =>
+  backlogCall("post", `/backlog-work/${id}/submit/`, token, { seconds_spent: secondsSpent });
+
+// kind: "sales-invoice" or "purchase-invoice". The body is exactly what the
+// invoice create screens post.
+export const postWorkInvoice = (token, id, kind, data) =>
+  backlogCall("post", `/backlog-work/${id}/${kind}/`, token, data);
+
+export const postWorkStockLine = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/inventory/`, token, data);
+
+export const getWorkOutput = (token, id, outputId) =>
+  backlogCall("get", `/backlog-work/${id}/outputs/${outputId}/`, token);
+
+export const updateWorkOutput = (token, id, outputId, data) =>
+  backlogCall("put", `/backlog-work/${id}/outputs/${outputId}/`, token, data);
+
+export const deleteWorkOutput = (token, id, outputId) =>
+  backlogCall("delete", `/backlog-work/${id}/outputs/${outputId}/`, token);
+
+// A payment written on the bill. The body is paymentRequestBody's: a plain
+// object, or FormData with a photo.
+export const postWorkPayment = (token, id, outputId, body) =>
+  backlogCall("post", `/backlog-work/${id}/outputs/${outputId}/payments/`, token, body,
+    body instanceof FormData ? MULTIPART : {});
+
+// What the khaata settles onto this invoice and how much one more payment may
+// be - the standard dialog's figures, without the party's balance.
+export const getWorkSettlement = async (token, id, outputId) => {
+  const res = await backlogCall("get", `/backlog-work/${id}/outputs/${outputId}/settlement/`, token);
+  return res.ok ? res.data : null;
+};
+
+export const deleteWorkPayment = (token, id, outputId, paymentId) =>
+  backlogCall("delete", `/backlog-work/${id}/outputs/${outputId}/payments/${paymentId}/`, token);
+
+// A customer or supplier the page names that MarketPro lacks, created from
+// the open page (BUGS.md #006). Each answers with the new record's id and
+// name. No opening balance from a page: the server ignores one.
+export const createWorkCustomer = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/new-customer/`, token, data);
+
+export const createWorkSupplier = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/new-supplier/`, token, data);
+
+// A product a stock page counts that MarketPro lacks - or new variants of
+// one it has - created without stock: the stock line entered next is the
+// count. A stock page only; an invoice never creates a product. Each
+// answers with the product and the new variants' ids and names.
+export const createWorkProduct = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/new-product/`, token, data);
+
+export const getWorkProductVariants = (token, id, productId) =>
+  backlogCall("get", `/backlog-work/${id}/products/${productId}/variants/`, token);
+
+export const addWorkProductVariants = (token, id, productId, data) =>
+  backlogCall("post", `/backlog-work/${id}/products/${productId}/variants/`, token, data);
+
+// The same, from the invoice create screens: no backlog page involved.
+export const createCustomerWithBalance = (token, data) =>
+  backlogCall("post", "/customers/create-with-balance/", token, data);
+
+export const createSupplierWithBalance = (token, data) =>
+  backlogCall("post", "/suppliers/create-with-balance/", token, data);
+
+// Names only - variants, customers, suppliers, accounts, units, locations,
+// attributes, projects - never a figure. Rate limited on the server.
+// withStock (variants): each row also says whether it is in stock - yes or
+// no, never how many - for a sales page to label what has run out.
+export const workLookup = async (token, kind, query = "", withStock = false) => {
+  const res = await backlogCall(
+    "get", `/backlog-work/lookup/${kind}/?q=${encodeURIComponent(query)}${withStock ? "&stock=1" : ""}`, token);
+  return res.ok ? res.data : [];
+};
+
+export const getWorkGlossary = async (token) => {
+  const res = await backlogCall("get", "/backlog-work/glossary/", token);
+  return res.ok ? res.data : null;
+};
+
+export const suggestGlossaryTerm = (token, data) =>
+  backlogCall("post", "/backlog-work/glossary-suggestions/", token, data);
 
 // ---------------------------------------------------------------------------
 // Accounting

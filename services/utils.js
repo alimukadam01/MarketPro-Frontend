@@ -748,6 +748,9 @@ export function transformInventoryItem(data) {
     unit_price: formatCurrency(data.unit_price),
     reorder_level: data.reorder_level,
     last_updated: formatDate(data.updated_at),
+    // The day the quantity was last counted: sales and purchases dated on or
+    // before it no longer move this stock (sales/stock_rule.py).
+    counted_at: data.stock_counted_at ? formatDate(data.stock_counted_at) : "-",
   };
 }
 

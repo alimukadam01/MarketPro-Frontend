@@ -35,6 +35,8 @@ interface ChartCardProps {
   period?: Period;
   periodOptions?: { key: string; label: string }[];
   onPeriodChange?: (period: Period) => void;
+  /** How the tooltip shows a point. Money unless told otherwise. */
+  formatValue?: (value: number) => string;
 }
 
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
@@ -60,7 +62,7 @@ const withLabels = (data) => data && data.map((point) => {
  */
 export function ChartCard({
   title, data, color = "#8b5cf6", valueLabel = "Amount", loading = false,
-  error = false, hint, period, periodOptions, onPeriodChange,
+  error = false, hint, period, periodOptions, onPeriodChange, formatValue = formatCurrency,
 }: ChartCardProps) {
   // Unique per chart: two charts sharing a gradient id would both paint with
   // whichever was defined first.
@@ -109,7 +111,7 @@ export function ChartCard({
                 chart covers, and the tooltip names each point. */}
             <Tooltip
               labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ""}
-              formatter={(value) => [formatCurrency(value), valueLabel]}
+              formatter={(value) => [formatValue(Number(value)), valueLabel]}
               contentStyle={{
                 backgroundColor: "hsl(var(--card))",
                 border: "1px solid hsl(var(--border))",
