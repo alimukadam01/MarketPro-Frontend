@@ -138,6 +138,7 @@ export default function BacklogListEntry({
   const [countedAt, setCountedAt] = useState(todayForInput());
   const [unitPrice, setUnitPrice] = useState("");
   const [unitCost, setUnitCost] = useState("");
+  const [reorderLevel, setReorderLevel] = useState("");
 
   const clearForm = (keepDates = true) => {
     setEditingId(null);
@@ -153,6 +154,7 @@ export default function BacklogListEntry({
     setQuantity("");
     setUnitPrice("");
     setUnitCost("");
+    setReorderLevel("");
     if (!keepDates) setCountedAt(todayForInput());
   };
 
@@ -211,10 +213,10 @@ export default function BacklogListEntry({
           setLocation(values.location ? { id: values.location, label: output.detail || "" } : null);
           setQuantity(values.quantity !== undefined && values.quantity !== null ? String(values.quantity) : "");
           if (values.counted_at) setCountedAt(values.counted_at);
-        } else {
-          setUnitPrice(values.unit_price !== undefined && values.unit_price !== null ? String(values.unit_price) : "");
-          setUnitCost(values.unit_cost !== undefined && values.unit_cost !== null ? String(values.unit_cost) : "");
+          setReorderLevel(values.reorder_level !== undefined && values.reorder_level !== null ? String(values.reorder_level) : "");
         }
+        setUnitPrice(values.unit_price !== undefined && values.unit_price !== null ? String(values.unit_price) : "");
+        setUnitCost(values.unit_cost !== undefined && values.unit_cost !== null ? String(values.unit_cost) : "");
       }
     } catch (error) {
       console.log("Error loading the line:", error);
@@ -255,6 +257,10 @@ export default function BacklogListEntry({
         location: location ? Number(location.id) : null,
         quantity: quantity === "" ? null : parseInt(quantity, 10),
         counted_at: countedAt || null,
+        // Optional: only when the page has them.
+        unit_price: unitPrice === "" ? null : parseFloat(unitPrice),
+        unit_cost: unitCost === "" ? null : parseFloat(unitCost),
+        reorder_level: reorderLevel === "" ? null : parseInt(reorderLevel, 10),
       };
     }
     return {
@@ -384,7 +390,7 @@ export default function BacklogListEntry({
   }[kind];
   const formHint = {
     product_list: "Names and variants only - no prices or stock here.",
-    stock_list: "Only what is on the page - current stock is not shown.",
+    stock_list: "Only what is on the page - current stock and prices are not shown.",
     price_list: "Only what is on the page - the shop's prices are not shown.",
   }[kind];
 
@@ -591,6 +597,26 @@ export default function BacklogListEntry({
                       <Input id="line_counted" type="date" value={countedAt} onChange={(e) => setCountedAt(e.target.value)} />
                       <p className="text-xs text-muted-foreground">
                         Sales and purchases dated on or before the counted date will not change this stock again.
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-1">
+                          <Label htmlFor="line_price">Unit price</Label>
+                          <Input id="line_price" type="number" min="0" step="0.01" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="line_cost">Unit cost</Label>
+                          <Input id="line_cost" type="number" min="0" step="0.01" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="line_reorder">Reorder level</Label>
+                          <Input id="line_reorder" type="number" min="0" step="1" value={reorderLevel} onChange={(e) => setReorderLevel(e.target.value)} />
+                        </div>
+                      </div>
+                      {/* An empty field leaves the stock row's own value. */}
+                      <p className="text-xs text-muted-foreground">
+                        Optional - fill in only what the page shows.
                       </p>
                     </div>
                   </>
