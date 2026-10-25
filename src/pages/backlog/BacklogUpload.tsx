@@ -16,7 +16,7 @@ import { uploadBacklogBatch } from "../../../services/api";
 
 // In the order pages are entered: stock first, then purchases, then sales.
 const TYPES = [
-  { value: "stock_list", label: "Stock list" },
+  { value: "stock_list", label: "Stock lists" },
   { value: "purchase_invoice", label: "Purchase invoices" },
   { value: "sales_invoice", label: "Sales invoices" },
 ];
@@ -36,14 +36,19 @@ const PICKERS = [
 
 function Segmented({ options, value, onChange }) {
   return (
-    <div className="flex flex-wrap gap-1 rounded-md bg-muted p-1" role="group">
+    // The options share the full width equally, so none looks missing.
+    <div
+      className="grid gap-1 rounded-md bg-muted p-1"
+      style={{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }}
+      role="group"
+    >
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
           aria-pressed={value === option.value}
           onClick={() => onChange(option.value)}
-          className={`h-9 px-3 rounded text-sm font-medium whitespace-nowrap ${value === option.value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+          className={`h-9 px-3 rounded text-sm font-medium truncate ${value === option.value ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
         >
           {option.label}
         </button>
