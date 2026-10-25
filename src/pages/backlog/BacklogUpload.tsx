@@ -14,10 +14,11 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { useAuth } from "../../../services/AuthProvider";
 import { uploadBacklogBatch } from "../../../services/api";
 
+// In the order pages are entered: stock first, then purchases, then sales.
 const TYPES = [
-  { value: "sales_invoice", label: "Sales invoices" },
-  { value: "purchase_invoice", label: "Purchase invoices" },
   { value: "stock_list", label: "Stock list" },
+  { value: "purchase_invoice", label: "Purchase invoices" },
+  { value: "sales_invoice", label: "Sales invoices" },
 ];
 
 const PRIORITIES = [
@@ -163,7 +164,7 @@ export default function BacklogUpload() {
             <div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3">
               <div>
                 <Label htmlFor="is_daily">Today's pages</Label>
-                <p className="text-xs text-muted-foreground">Entered first, by the end of tomorrow</p>
+                <p className="text-xs text-muted-foreground">Entered first, by the end of the next working day (Friday is off)</p>
               </div>
               <Switch id="is_daily" checked={isDaily} onCheckedChange={setIsDaily} />
             </div>

@@ -3,10 +3,11 @@ import type { ReactNode } from "react";
 // Labels and colours shared by every backlog screen, so a page type or a
 // priority reads the same on the queue, the owner's list and the entry screen.
 
+// In the order pages are entered (BacklogType.ORDER): stock, purchases, sales.
 export const BACKLOG_TYPES: Record<string, { label: string; tone: string }> = {
-  sales_invoice: { label: "Sales invoice", tone: "bg-violet-100 text-violet-700" },
-  purchase_invoice: { label: "Purchase invoice", tone: "bg-blue-100 text-blue-700" },
   stock_list: { label: "Stock list", tone: "bg-gray-100 text-gray-700" },
+  purchase_invoice: { label: "Purchase invoice", tone: "bg-blue-100 text-blue-700" },
+  sales_invoice: { label: "Sales invoice", tone: "bg-violet-100 text-violet-700" },
 };
 
 export const BACKLOG_STATUSES: Record<string, { label: string; tone: string }> = {

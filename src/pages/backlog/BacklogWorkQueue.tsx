@@ -85,7 +85,7 @@ export default function BacklogWorkQueue() {
   const totals = queue?.totals;
   const cards = [
     { title: "Waiting", value: totals?.waiting, hint: "Pages in the queue" },
-    { title: "From today", value: totals?.daily, hint: "Due by end of tomorrow" },
+    { title: "From today", value: totals?.daily, hint: "Due by the next working day" },
     { title: "Entered today", value: totals?.entered_today, hint: "Submitted for review" },
     { title: "Sent back", value: totals?.sent_back, hint: "Returned by the owner - redo" },
   ];
