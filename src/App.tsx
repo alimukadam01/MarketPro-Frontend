@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from '../services/AuthProvider'
 import ProtectedRoute from './components/ProtectedRoute'
 import Index from "./pages/Index";
+import PhoneDashboard from "./pages/phone/PhoneDashboard";
+import { PhoneOr } from "./components/phone/PhoneOr";
 import Employees from "./pages/Employees";
 
 import Sales from "./pages/Sales";
@@ -83,7 +85,7 @@ const App = () => {
         <Routes>
           {/* Dashboard — token-only guard, no module check */}
           {/* A phone opens these two pages and no others (ProtectedRoute's phone). */}
-          <Route path="/" element={<ProtectedRoute phone><Index /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute phone><PhoneOr phone={<PhoneDashboard />}><Index /></PhoneOr></ProtectedRoute>} />
 
           {/* Sales */}
           <Route path="/sales" element={<ProtectedRoute module="sales"><Sales /></ProtectedRoute>} />

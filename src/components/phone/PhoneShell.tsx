@@ -72,7 +72,7 @@ export function PhoneShell({ children, footer, centered = false }: PhoneShellPro
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <header className="sticky top-0 z-40 h-14 shrink-0 flex items-center justify-between gap-3 border-b bg-card pl-4 pr-2">
+      <header className="sticky top-0 z-40 h-14 shrink-0 flex items-center justify-between gap-3 border-b bg-card pl-4 pr-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <PhoneLogo />
           <div className="flex min-w-0 flex-col leading-tight">
