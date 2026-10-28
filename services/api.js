@@ -2486,12 +2486,13 @@ const MULTIPART = { "Content-Type": "multipart/form-data" };
 // connection needs - the client's 30 seconds would abandon it half sent.
 // onProgress gets { loaded, total } in bytes; `signal` cancels the upload.
 //
-// The two failures an upload meets have no useful body, so they get words of
-// their own. With no answer at all the request never got through - a dropped
-// connection, or a server that refused it for its size before Django saw it
-// (that refusal carries no CORS header, so the browser reports no status). A
-// gateway error comes after the photos arrived, while the server was saving
-// them, so some pages may already be in the queue.
+// The failures an upload meets have no useful body, so they get words of
+// their own. With no answer at all, the browser reports no status: the
+// request never got through, or nginx answered it itself - its 413, 502 and
+// 504 carry no CORS header, so the browser cannot read them either. The hook
+// tells those apart by how much was sent (useBacklogUpload); this message is
+// for nothing sent at all. A gateway error Django's side did answer comes
+// after the photos arrived, so some pages may already be in the queue.
 export const uploadBacklogBatch = async (token, formData, onProgress = null, signal = undefined) => {
   const res = await backlogCall("post", "/backlog-batches/", token, formData, MULTIPART, {
     timeout: 0,
@@ -2503,7 +2504,7 @@ export const uploadBacklogBatch = async (token, formData, onProgress = null, sig
   if (res.ok) return res;
   if (signal?.aborted) return { ...res, cancelled: true, error: null };
   if (res.status === null) {
-    return { ...res, error: "The upload did not reach the server. Check the connection and try again, or send fewer photos at a time." };
+    return { ...res, error: "Nothing was sent: the photos could not be read, or the server could not be reached. Check the connection, pick the photos again and retry." };
   }
   if (res.status === 413) {
     return { ...res, error: "The server refused the upload as too large. Send fewer photos at a time." };

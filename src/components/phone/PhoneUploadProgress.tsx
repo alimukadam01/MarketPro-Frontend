@@ -3,6 +3,7 @@ import { CloudUpload, Smartphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Spinner } from "@/components/ui/spinner";
+import { megabytes } from "@/hooks/use-backlog-upload";
 import { cn } from "@/lib/utils";
 
 interface PhoneUploadProgressProps {
@@ -13,8 +14,6 @@ interface PhoneUploadProgressProps {
   startedAt: number | null;
   onCancel: () => void;
 }
-
-const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
