@@ -53,7 +53,7 @@ export default function BacklogUpload() {
   const navigate = useNavigate();
   const {
     type, setType, bookLabel, setBookLabel, notes, setNotes, priority, setPriority, isDaily, setIsDaily,
-    files, addFiles, clearFiles, zipCount, photoCount, previews, selectionLabel, progress, uploading, upload,
+    files, addFiles, clearFiles, zipCount, photoCount, previews, selectionLabel, progress, stage, uploading, upload,
   } = useBacklogUpload(5);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -156,7 +156,8 @@ export default function BacklogUpload() {
             )}
 
             <SubmitButton type="button" className="w-full h-11" pending={uploading}
-              pendingLabel={progress !== null ? `Uploading… ${progress}%` : "Uploading…"} onClick={handleUpload}>
+              pendingLabel={stage === "saving" ? "Saving the pages…" : progress !== null ? `Uploading… ${progress}%` : "Uploading…"}
+              onClick={handleUpload}>
               <Upload className="h-4 w-4 mr-2" />
               {files.length === 0 ? "Upload pages" : zipCount ? "Upload" : `Upload ${photoCount} page${photoCount === 1 ? "" : "s"}`}
             </SubmitButton>

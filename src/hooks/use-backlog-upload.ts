@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "../../services/AuthProvider";
 import { uploadBacklogBatch } from "../../services/api";
@@ -28,8 +28,35 @@ export function useBacklogUpload(previewLimit: number) {
   const [priority, setPriority] = useState("normal");
   const [isDaily, setIsDaily] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  const [progress, setProgress] = useState<number | null>(null);
+  // Bytes sent and when sending began, for the bar and the time left.
+  const [sent, setSent] = useState<{ loaded: number; total: number | null } | null>(null);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
   const [uploading, setUploading] = useState(false);
+  const abort = useRef<AbortController | null>(null);
+
+  const progress = sent?.total ? Math.min(100, Math.round((sent.loaded / sent.total) * 100)) : null;
+  // Once every byte is out the server unpacks, checks and stores each page,
+  // which on a big batch takes a while of its own - not a stuck 100%.
+  const stage: "sending" | "saving" | null = !uploading ? null : progress === 100 ? "saving" : "sending";
+
+  // A long upload dies with the page: warn before leaving it, and keep a
+  // phone's screen from locking, which can suspend the tab mid-send.
+  useEffect(() => {
+    if (!uploading) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    let lock: WakeLockSentinel | null = null;
+    let released = false;
+    // Absent on older browsers, and refused on a page that is not visible.
+    navigator.wakeLock?.request("screen")
+      .then((sentinel) => { if (released) sentinel.release(); else lock = sentinel; })
+      .catch((error) => console.log("Could not keep the screen on:", error));
+    return () => {
+      released = true;
+      window.removeEventListener("beforeunload", warn);
+      lock?.release().catch(() => {});
+    };
+  }, [uploading]);
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -68,30 +95,38 @@ export function useBacklogUpload(previewLimit: number) {
     body.append("priority", priority);
     body.append("is_daily", isDaily ? "true" : "false");
 
+    abort.current = new AbortController();
     setUploading(true);
-    setProgress(0);
+    setSent({ loaded: 0, total: null });
+    setStartedAt(Date.now());
     try {
-      const res = await uploadBacklogBatch(token, body, setProgress);
+      const res = await uploadBacklogBatch(token, body, setSent, abort.current.signal);
       if (res.ok) {
         const { pages, skipped } = res.data;
         toast.success(`${pages} page${pages === 1 ? "" : "s"} added to the queue${skipped ? `. ${skipped} file${skipped === 1 ? " was" : "s were"} not an image and skipped.` : "."}`);
         return true;
       }
-      if (res.error) toast.error(res.error);
+      if (res.cancelled) toast("Upload cancelled. Your photos are still here.");
+      else if (res.error) toast.error(res.error);
       return false;
     } catch (error) {
       console.log("Error uploading pages:", error);
       toast.error("Failed to upload the pages.");
       return false;
     } finally {
+      abort.current = null;
       setUploading(false);
-      setProgress(null);
+      setSent(null);
+      setStartedAt(null);
     }
   };
+
+  /** Stops the upload while it is still sending; nothing reaches the queue. */
+  const cancel = () => abort.current?.abort();
 
   return {
     type, setType, bookLabel, setBookLabel, notes, setNotes, priority, setPriority, isDaily, setIsDaily,
     files, addFiles, removeFile, clearFiles, zipCount, photoCount, previews, selectionLabel,
-    progress, uploading, upload,
+    progress, sent, startedAt, stage, uploading, upload, cancel,
   };
 }

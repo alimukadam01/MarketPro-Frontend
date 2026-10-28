@@ -2484,13 +2484,35 @@ const MULTIPART = { "Content-Type": "multipart/form-data" };
 
 // No timeout: a book's worth of photos, or its zip, takes as long as the
 // connection needs - the client's 30 seconds would abandon it half sent.
-export const uploadBacklogBatch = (token, formData, onProgress = null) =>
-  backlogCall("post", "/backlog-batches/", token, formData, MULTIPART, {
+// onProgress gets { loaded, total } in bytes; `signal` cancels the upload.
+//
+// The two failures an upload meets have no useful body, so they get words of
+// their own. With no answer at all the request never got through - a dropped
+// connection, or a server that refused it for its size before Django saw it
+// (that refusal carries no CORS header, so the browser reports no status). A
+// gateway error comes after the photos arrived, while the server was saving
+// them, so some pages may already be in the queue.
+export const uploadBacklogBatch = async (token, formData, onProgress = null, signal = undefined) => {
+  const res = await backlogCall("post", "/backlog-batches/", token, formData, MULTIPART, {
     timeout: 0,
+    signal,
     onUploadProgress: onProgress
-      ? (event) => onProgress(event.total ? Math.round((event.loaded / event.total) * 100) : null)
+      ? (event) => onProgress({ loaded: event.loaded, total: event.total ?? null })
       : undefined,
   });
+  if (res.ok) return res;
+  if (signal?.aborted) return { ...res, cancelled: true, error: null };
+  if (res.status === null) {
+    return { ...res, error: "The upload did not reach the server. Check the connection and try again, or send fewer photos at a time." };
+  }
+  if (res.status === 413) {
+    return { ...res, error: "The server refused the upload as too large. Send fewer photos at a time." };
+  }
+  if ([502, 503, 504].includes(res.status)) {
+    return { ...res, error: "The server stopped answering while it saved the pages. Some may already be in the queue - check the backlog before uploading them again." };
+  }
+  return res;
+};
 
 export const getBacklogMetrics = async (token) => {
   const res = await backlogCall("get", "/backlog-entries/metrics/", token);
