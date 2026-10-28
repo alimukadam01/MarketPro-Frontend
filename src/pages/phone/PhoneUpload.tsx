@@ -85,7 +85,7 @@ export default function PhoneUpload() {
         />
       ))}
 
-      <div className="-ml-3 flex items-start gap-1">
+      <div className="-ml-3 flex items-center gap-1">
         <button
           type="button"
           aria-label="Back to the dashboard"
@@ -94,7 +94,7 @@ export default function PhoneUpload() {
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <div className="flex flex-col gap-0.5 pt-1.5">
+        <div className="flex flex-col gap-0.5">
           <h1 className="text-[22px] font-bold">Upload pages</h1>
           <p className="text-sm text-muted-foreground">Each photo becomes one page in the entry queue.</p>
         </div>
