@@ -10,6 +10,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { MODULE_ICONS } from "@/components/layout/module-icons";
 import { PhoneShell } from "@/components/phone/PhoneShell";
 import { PhoneSegmented } from "@/components/phone/PhoneSegmented";
+import { PhoneUploadProgress } from "@/components/phone/PhoneUploadProgress";
 import { UPLOAD_PRIORITIES, UPLOAD_TYPES, useBacklogUpload } from "@/hooks/use-backlog-upload";
 import { cn } from "@/lib/utils";
 
@@ -45,7 +46,7 @@ export default function PhoneUpload() {
   const {
     type, setType, bookLabel, setBookLabel, notes, setNotes, priority, setPriority, isDaily, setIsDaily,
     files, addFiles, removeFile, clearFiles, zipCount, photoCount, previews, selectionLabel,
-    progress, uploading, upload,
+    progress, sent, startedAt, stage, uploading, upload, cancel,
   } = useBacklogUpload(PREVIEW_LIMIT);
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
   const morePhotos = photoCount - previews.length;
@@ -64,7 +65,7 @@ export default function PhoneUpload() {
       className="w-full h-12 gap-2 text-[15px]"
       disabled={files.length === 0}
       pending={uploading}
-      pendingLabel={progress !== null ? `Uploading… ${progress}%` : "Uploading…"}
+      pendingLabel={stage === "saving" ? "Saving the pages…" : progress !== null ? `Uploading… ${progress}%` : "Uploading…"}
       onClick={handleUpload}
     >
       <Upload className="w-[18px] h-[18px]" />
@@ -74,6 +75,9 @@ export default function PhoneUpload() {
 
   return (
     <PhoneShell footer={uploadButton}>
+      {stage && (
+        <PhoneUploadProgress what={selectionLabel} stage={stage} sent={sent} startedAt={startedAt} onCancel={cancel} />
+      )}
       {PICKERS.map(({ key, input }) => (
         <input
           key={key}
