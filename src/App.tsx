@@ -82,7 +82,8 @@ const App = () => {
       <AuthProvider>
         <Routes>
           {/* Dashboard — token-only guard, no module check */}
-          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          {/* A phone opens these two pages and no others (ProtectedRoute's phone). */}
+          <Route path="/" element={<ProtectedRoute phone><Index /></ProtectedRoute>} />
 
           {/* Sales */}
           <Route path="/sales" element={<ProtectedRoute module="sales"><Sales /></ProtectedRoute>} />
@@ -142,7 +143,7 @@ const App = () => {
 
           {/* Backlog */}
           <Route path="/backlog" element={<ProtectedRoute><Backlog /></ProtectedRoute>} />
-          <Route path="/backlog/upload" element={<ProtectedRoute><BacklogUpload /></ProtectedRoute>} />
+          <Route path="/backlog/upload" element={<ProtectedRoute phone><BacklogUpload /></ProtectedRoute>} />
           <Route path="/backlog/glossary" element={<ProtectedRoute><BacklogGlossary /></ProtectedRoute>} />
           {/* The breadcrumb links "review" on its own; there is no list there. */}
           <Route path="/backlog/review" element={<Navigate to="/backlog" replace />} />
