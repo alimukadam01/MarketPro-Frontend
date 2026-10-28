@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { ArrowLeft, FileArchive, FolderOpen, Images, Upload } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
@@ -11,20 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { useAuth } from "../../../services/AuthProvider";
-import { uploadBacklogBatch } from "../../../services/api";
-
-// In the order pages are entered: stock first, then purchases, then sales.
-const TYPES = [
-  { value: "stock_list", label: "Stock lists" },
-  { value: "purchase_invoice", label: "Purchase invoices" },
-  { value: "sales_invoice", label: "Sales invoices" },
-];
-
-const PRIORITIES = [
-  { value: "normal", label: "Normal" },
-  { value: "high", label: "High" },
-];
+import { UPLOAD_PRIORITIES, UPLOAD_TYPES, useBacklogUpload } from "@/hooks/use-backlog-upload";
 
 // What each picker opens. A folder arrives as its files, one by one; a zip
 // is unpacked on the server.
@@ -60,71 +46,20 @@ function Segmented({ options, value, onChange }) {
 /**
  * /backlog/upload - photos of the shop's books, a folder of them or a zip.
  * Each image becomes one page in the entry queue. MarketPro's usual sidebar
- * and header, with the form in one narrow column, so it still works on a
- * phone at the counter with the book open.
+ * and header, with the form in one narrow column. A phone gets PhoneUpload,
+ * laid out for it; the form's state and sending are shared (useBacklogUpload).
  */
 export default function BacklogUpload() {
-  const { token } = useAuth();
   const navigate = useNavigate();
-  const [type, setType] = useState("sales_invoice");
-  const [bookLabel, setBookLabel] = useState("");
-  const [notes, setNotes] = useState("");
-  const [priority, setPriority] = useState("normal");
-  const [isDaily, setIsDaily] = useState(false);
-  const [files, setFiles] = useState<File[]>([]);
-  const [progress, setProgress] = useState<number | null>(null);
-  const [uploading, setUploading] = useState(false);
+  const {
+    type, setType, bookLabel, setBookLabel, notes, setNotes, priority, setPriority, isDaily, setIsDaily,
+    files, addFiles, clearFiles, zipCount, photoCount, previews, selectionLabel, progress, uploading, upload,
+  } = useBacklogUpload(5);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  const addFiles = (list: FileList | null) => {
-    if (!list) return;
-    setFiles((prev) => [...prev, ...Array.from(list)]);
-  };
-
-  const zipCount = files.filter((file) => file.name.toLowerCase().endsWith(".zip")).length;
-  const photoCount = files.length - zipCount;
-  const previews = useMemo(
-    () => files.filter((file) => file.type.startsWith("image/")).slice(0, 5)
-      .map((file) => ({ name: file.name, url: URL.createObjectURL(file) })),
-    [files]);
-  useEffect(() => () => previews.forEach((preview) => URL.revokeObjectURL(preview.url)), [previews]);
-  const selectionLabel = [
-    photoCount && `${photoCount} photo${photoCount > 1 ? "s" : ""}`,
-    zipCount && `${zipCount} zip${zipCount > 1 ? "s" : ""}`,
-  ].filter(Boolean).join(" and ");
-
-  const upload = async () => {
-    if (files.length === 0) {
-      toast.error("Choose some photos, a folder or a zip first.");
-      return;
-    }
-    const body = new FormData();
-    files.forEach((file) => body.append("files", file));
-    body.append("type", type);
-    body.append("book_label", bookLabel.trim());
-    body.append("notes", notes.trim());
-    body.append("priority", priority);
-    body.append("is_daily", isDaily ? "true" : "false");
-
-    setUploading(true);
-    setProgress(0);
-    try {
-      const res = await uploadBacklogBatch(token, body, setProgress);
-      if (res.ok) {
-        const { pages, skipped } = res.data;
-        toast.success(`${pages} page${pages === 1 ? "" : "s"} added to the queue${skipped ? `. ${skipped} file${skipped === 1 ? " was" : "s were"} not an image and skipped.` : "."}`);
-        navigate("/backlog");
-      } else if (res.error) {
-        toast.error(res.error);
-      }
-    } catch (error) {
-      console.log("Error uploading pages:", error);
-      toast.error("Failed to upload the pages.");
-    } finally {
-      setUploading(false);
-      setProgress(null);
-    }
+  const handleUpload = async () => {
+    if (await upload()) navigate("/backlog");
   };
 
   return (
@@ -147,7 +82,7 @@ export default function BacklogUpload() {
           <div className="w-full max-w-md space-y-6">
             <div className="space-y-2">
               <Label>What are these?</Label>
-              <Segmented options={TYPES} value={type} onChange={setType} />
+              <Segmented options={UPLOAD_TYPES} value={type} onChange={setType} />
             </div>
 
             <div className="space-y-1">
@@ -163,7 +98,7 @@ export default function BacklogUpload() {
 
             <div className="space-y-2">
               <Label>Priority</Label>
-              <Segmented options={PRIORITIES} value={priority} onChange={setPriority} />
+              <Segmented options={UPLOAD_PRIORITIES} value={priority} onChange={setPriority} />
             </div>
 
             <div className="flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3">
@@ -202,7 +137,7 @@ export default function BacklogUpload() {
               <div className="rounded-lg border bg-card px-4 py-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-medium">{selectionLabel} selected</span>
-                  <Button variant="ghost" size="sm" onClick={() => setFiles([])} disabled={uploading}>Clear</Button>
+                  <Button variant="ghost" size="sm" onClick={clearFiles} disabled={uploading}>Clear</Button>
                 </div>
                 {previews.length > 0 && (
                   <div className="flex gap-2">
@@ -221,7 +156,7 @@ export default function BacklogUpload() {
             )}
 
             <SubmitButton type="button" className="w-full h-11" pending={uploading}
-              pendingLabel={progress !== null ? `Uploading… ${progress}%` : "Uploading…"} onClick={upload}>
+              pendingLabel={progress !== null ? `Uploading… ${progress}%` : "Uploading…"} onClick={handleUpload}>
               <Upload className="h-4 w-4 mr-2" />
               {files.length === 0 ? "Upload pages" : zipCount ? "Upload" : `Upload ${photoCount} page${photoCount === 1 ? "" : "s"}`}
             </SubmitButton>

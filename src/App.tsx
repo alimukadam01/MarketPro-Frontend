@@ -7,6 +7,7 @@ import { AuthProvider } from '../services/AuthProvider'
 import ProtectedRoute from './components/ProtectedRoute'
 import Index from "./pages/Index";
 import PhoneDashboard from "./pages/phone/PhoneDashboard";
+import PhoneUpload from "./pages/phone/PhoneUpload";
 import { PhoneOr } from "./components/phone/PhoneOr";
 import Employees from "./pages/Employees";
 
@@ -145,7 +146,7 @@ const App = () => {
 
           {/* Backlog */}
           <Route path="/backlog" element={<ProtectedRoute><Backlog /></ProtectedRoute>} />
-          <Route path="/backlog/upload" element={<ProtectedRoute phone><BacklogUpload /></ProtectedRoute>} />
+          <Route path="/backlog/upload" element={<ProtectedRoute phone><PhoneOr phone={<PhoneUpload />}><BacklogUpload /></PhoneOr></ProtectedRoute>} />
           <Route path="/backlog/glossary" element={<ProtectedRoute><BacklogGlossary /></ProtectedRoute>} />
           {/* The breadcrumb links "review" on its own; there is no list there. */}
           <Route path="/backlog/review" element={<Navigate to="/backlog" replace />} />
