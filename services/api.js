@@ -1618,9 +1618,12 @@ export const getTotalInventoryValue = async (token) => {
     if (res.status == 200) {
       return res.data.total_inventory_value;
     }
+
+    return null;
   } catch (error) {
     console.log(error);
-    return [];
+    // null, not [], which every card read as a figure and showed as PKR 0.
+    return null;
   }
 };
 
