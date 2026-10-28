@@ -32,6 +32,8 @@ interface MetricCardProps {
    */
   error?: boolean;
   className?: string;
+  /** Extra classes for the title: a phone's two-up cards set it smaller. */
+  titleClassName?: string;
   /**
    * Extra classes for the figure itself. Some counters colour the number to
    * carry meaning - "Total Restocks Required" is red - and that is part of
@@ -54,7 +56,7 @@ interface MetricCardProps {
  */
 export function MetricCard({
   title, value, hint, loading = false, valueLoading = false, error = false, className,
-  valueClassName, period, periodOptions, onPeriodChange,
+  titleClassName, valueClassName, period, periodOptions, onPeriodChange,
 }: MetricCardProps) {
   const action = period && periodOptions && onPeriodChange ? (
     <PeriodSwitch
@@ -67,7 +69,10 @@ export function MetricCard({
   ) : null;
 
   return (
-    <StatCard title={title} loading={loading || valueLoading} error={error} className={className} action={action}>
+    <StatCard
+      title={title} loading={loading || valueLoading} error={error} className={className}
+      titleClassName={titleClassName} action={action}
+    >
       {/* tabular-nums keeps every digit the same width, so the figure does
           not shiver sideways as it rolls. */}
       <div className={cn("text-3xl font-bold tabular-nums", valueClassName)}>

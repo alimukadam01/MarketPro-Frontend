@@ -37,6 +37,12 @@ interface ChartCardProps {
   onPeriodChange?: (period: Period) => void;
   /** How the tooltip shows a point. Money unless told otherwise. */
   formatValue?: (value: number) => string;
+  /**
+   * Labels the first, middle and last points under the chart. A phone has no
+   * pointer to hover for the tooltip, and no room for the period line beside
+   * the heading.
+   */
+  axisLabels?: boolean;
 }
 
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
@@ -63,10 +69,15 @@ const withLabels = (data) => data && data.map((point) => {
 export function ChartCard({
   title, data, color = "#8b5cf6", valueLabel = "Amount", loading = false,
   error = false, hint, period, periodOptions, onPeriodChange, formatValue = formatCurrency,
+  axisLabels = false,
 }: ChartCardProps) {
   // Unique per chart: two charts sharing a gradient id would both paint with
   // whichever was defined first.
   const gradientId = `chart-fill-${title.replace(/\W+/g, "-").toLowerCase()}`;
+  const points = withLabels(data) || [];
+  const ends = points.length > 2
+    ? [points[0], points[Math.floor((points.length - 1) / 2)], points[points.length - 1]]
+    : points;
 
   const action = period && periodOptions && onPeriodChange ? (
     <PeriodSwitch
@@ -99,7 +110,7 @@ export function ChartCard({
     >
       <div className="h-48 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={withLabels(data) || []} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+          <AreaChart data={points} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
             <defs>
               <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={color} stopOpacity={0.25} />
@@ -135,6 +146,11 @@ export function ChartCard({
           </AreaChart>
         </ResponsiveContainer>
       </div>
+      {axisLabels && ends.length > 0 && (
+        <div className="mt-1 flex justify-between px-2 text-xs text-muted-foreground">
+          {ends.map((point, index) => <span key={index}>{point.label}</span>)}
+        </div>
+      )}
     </StatCard>
   );
 }
