@@ -15,12 +15,44 @@ export const UPLOAD_PRIORITIES = [
   { value: "high", label: "High" },
 ];
 
+// The server skips any one file over this (backlog/uploads.py MAX_IMAGE_BYTES).
+const MAX_PAGE_BYTES = 25 * 1024 * 1024;
+
+class TooLarge extends Error {}
+
+const isZip = (file: File) => file.name.toLowerCase().endsWith(".zip");
+
+/**
+ * The file's bytes, held in memory. A phone's picker hands over a link, not
+ * the file: a photo from Google Drive is downloaded only when it is read, and
+ * Chrome on Android reads every one again when the upload starts. If any of
+ * them reads differently then - still downloading, or Drive reporting another
+ * size - Chrome drops the whole request before a byte is sent, and the server
+ * never hears of it. Read once, here, the upload no longer depends on Drive.
+ * A zip is left as picked: it can be far larger than a phone wants in memory.
+ */
+async function inMemory(file: File) {
+  if (isZip(file)) return file;
+  if (file.size > MAX_PAGE_BYTES) throw new TooLarge();
+  const bytes = await file.arrayBuffer();
+  return new File([bytes], file.name, { type: file.type, lastModified: file.lastModified });
+}
+
+export const megabytes = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+
+// "a.jpg", "a.jpg and b.jpg", "a.jpg, b.jpg and 3 more".
+const namesOf = (names: string[]) =>
+  names.length <= 2 ? names.join(" and ") : `${names.slice(0, 2).join(", ")} and ${names.length - 2} more`;
+
 /**
  * The upload form's state and its sending, shared by the computer's page
  * (BacklogUpload) and the phone's (PhoneUpload), which lay it out
  * differently. `previewLimit` is how many thumbnails the page has room for.
+ * `copyOnPick` reads each file into memory as it is picked (see inMemory);
+ * the phone sets it. The computer's files are on its disk, and a book's
+ * folder there would be gigabytes of memory.
  */
-export function useBacklogUpload(previewLimit: number) {
+export function useBacklogUpload(previewLimit: number, { copyOnPick = false } = {}) {
   const { token } = useAuth();
   const [type, setType] = useState("sales_invoice");
   const [bookLabel, setBookLabel] = useState("");
@@ -58,14 +90,62 @@ export function useBacklogUpload(previewLimit: number) {
     };
   }, [uploading]);
 
-  const addFiles = (list: FileList | null) => {
+  // Files picked but not yet read into memory (copyOnPick), across picks.
+  const [preparing, setPreparing] = useState<{ done: number; total: number } | null>(null);
+  const reading = useRef({ done: 0, total: 0 });
+  // Bumped by Clear, so files still being read for an earlier pick are dropped.
+  const generation = useRef(0);
+
+  const addFiles = async (list: FileList | null) => {
     if (!list) return;
-    setFiles((prev) => [...prev, ...Array.from(list)]);
+    const picked = Array.from(list);
+    if (!copyOnPick) {
+      setFiles((prev) => [...prev, ...picked]);
+      return;
+    }
+    const pick = generation.current;
+    reading.current.total += picked.length;
+    setPreparing({ ...reading.current });
+    const kept: File[] = [];
+    const unreadable: string[] = [];
+    const tooLarge: string[] = [];
+    let next = 0;
+    // Three at a time: a Drive photo is downloaded as it is read.
+    const worker = async () => {
+      while (next < picked.length) {
+        const index = next++;
+        const file = picked[index];
+        try {
+          kept[index] = await inMemory(file);
+        } catch (error) {
+          console.log(`Could not read ${file.name}:`, error);
+          (error instanceof TooLarge ? tooLarge : unreadable).push(file.name);
+        }
+        reading.current.done += 1;
+        setPreparing({ ...reading.current });
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    if (reading.current.done >= reading.current.total) {
+      reading.current = { done: 0, total: 0 };
+      setPreparing(null);
+    }
+    if (pick !== generation.current) return;
+    setFiles((prev) => [...prev, ...kept.filter(Boolean)]);
+    if (unreadable.length) {
+      toast.error(`Couldn't open ${namesOf(unreadable)}. If ${unreadable.length === 1 ? "it is" : "they are"} on Google Drive, download ${unreadable.length === 1 ? "it" : "them"} to the phone and pick ${unreadable.length === 1 ? "it" : "them"} again.`);
+    }
+    if (tooLarge.length) {
+      toast.error(`Left out ${namesOf(tooLarge)}: over 25 MB, too large to be a page.`);
+    }
   };
   const removeFile = (index: number) => setFiles((prev) => prev.filter((_, i) => i !== index));
-  const clearFiles = () => setFiles([]);
+  const clearFiles = () => {
+    generation.current += 1;
+    setFiles([]);
+  };
 
-  const zipCount = files.filter((file) => file.name.toLowerCase().endsWith(".zip")).length;
+  const zipCount = files.filter(isZip).length;
   const photoCount = files.length - zipCount;
   // Each carries its file's place in `files`, so a thumbnail can remove it.
   const previews = useMemo(
@@ -87,6 +167,10 @@ export function useBacklogUpload(previewLimit: number) {
       toast.error("Choose some photos, a folder or a zip first.");
       return false;
     }
+    if (preparing) {
+      toast.error("Wait for the photos to finish opening.");
+      return false;
+    }
     const body = new FormData();
     files.forEach((file) => body.append("files", file));
     body.append("type", type);
@@ -99,8 +183,16 @@ export function useBacklogUpload(previewLimit: number) {
     setUploading(true);
     setSent({ loaded: 0, total: null });
     setStartedAt(Date.now());
+    let last: { loaded: number; total: number | null } = { loaded: 0, total: null };
+    const onProgress = (progress: typeof last) => { last = progress; setSent(progress); };
     try {
-      const res = await uploadBacklogBatch(token, body, setSent, abort.current.signal);
+      const res = await uploadBacklogBatch(token, body, onProgress, abort.current.signal);
+      // With no answer, how far it got is the only clue to what went wrong.
+      if (!res.ok && !res.cancelled && res.status === null && last.loaded > 0) {
+        res.error = last.total && last.loaded >= last.total
+          ? "The photos were sent, but the server's answer never arrived. Some pages may already be in the queue - check the backlog before uploading them again."
+          : `The upload stopped after ${megabytes(last.loaded)}${last.total ? ` of ${megabytes(last.total)}` : ""}. Nothing was added. Check the connection and try again.`;
+      }
       if (res.ok) {
         const { pages, skipped } = res.data;
         toast.success(`${pages} page${pages === 1 ? "" : "s"} added to the queue${skipped ? `. ${skipped} file${skipped === 1 ? " was" : "s were"} not an image and skipped.` : "."}`);
@@ -126,7 +218,7 @@ export function useBacklogUpload(previewLimit: number) {
 
   return {
     type, setType, bookLabel, setBookLabel, notes, setNotes, priority, setPriority, isDaily, setIsDaily,
-    files, addFiles, removeFile, clearFiles, zipCount, photoCount, previews, selectionLabel,
+    files, addFiles, removeFile, clearFiles, zipCount, photoCount, previews, selectionLabel, preparing,
     progress, sent, startedAt, stage, uploading, upload, cancel,
   };
 }

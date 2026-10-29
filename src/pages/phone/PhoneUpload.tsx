@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Spinner } from "@/components/ui/spinner";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { MODULE_ICONS } from "@/components/layout/module-icons";
 import { PhoneShell } from "@/components/phone/PhoneShell";
@@ -45,9 +46,9 @@ export default function PhoneUpload() {
   const navigate = useNavigate();
   const {
     type, setType, bookLabel, setBookLabel, notes, setNotes, priority, setPriority, isDaily, setIsDaily,
-    files, addFiles, removeFile, clearFiles, zipCount, photoCount, previews, selectionLabel,
+    files, addFiles, removeFile, clearFiles, zipCount, photoCount, previews, selectionLabel, preparing,
     progress, sent, startedAt, stage, uploading, upload, cancel,
-  } = useBacklogUpload(PREVIEW_LIMIT);
+  } = useBacklogUpload(PREVIEW_LIMIT, { copyOnPick: true });
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
   const morePhotos = photoCount - previews.length;
 
@@ -63,9 +64,9 @@ export default function PhoneUpload() {
     <SubmitButton
       type="button"
       className="w-full h-12 gap-2 text-[15px]"
-      disabled={files.length === 0}
-      pending={uploading}
-      pendingLabel={stage === "saving" ? "Saving the pages…" : progress !== null ? `Uploading… ${progress}%` : "Uploading…"}
+      disabled={files.length === 0 && !preparing}
+      pending={uploading || !!preparing}
+      pendingLabel={preparing ? "Opening the photos…" : stage === "saving" ? "Saving the pages…" : progress !== null ? `Uploading… ${progress}%` : "Uploading…"}
       onClick={handleUpload}
     >
       <Upload className="w-[18px] h-[18px]" />
@@ -145,6 +146,17 @@ export default function PhoneUpload() {
       </div>
 
       <div className="flex flex-col gap-2.5">
+        {preparing && (
+          // Each photo is read into memory as it is picked (useBacklogUpload's
+          // copyOnPick); one from Google Drive downloads first, which shows.
+          <div role="status" className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 text-sm">
+            <Spinner size={18} className="text-primary" />
+            <span className="flex-1 font-semibold">
+              Opening {preparing.total} photo{preparing.total === 1 ? "" : "s"}…
+            </span>
+            <span className="tabular-nums text-muted-foreground">{preparing.done} of {preparing.total}</span>
+          </div>
+        )}
         {files.length === 0 ? (
           <>
             <span className="text-sm font-semibold">Pages</span>
