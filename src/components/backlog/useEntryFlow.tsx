@@ -18,24 +18,78 @@ import {
   submitWorkEntry,
 } from "../../../services/api";
 
+// What the person has chosen to work on (BUGS #002): "all", or one page type.
+// Remembered per account on this browser; the queue page sets it, and every
+// "& next" follows it.
+export const ALL_TYPES = "all";
+const workingOnKey = (userId: unknown) => `mp-backlog-working-on:${userId ?? "me"}`;
+
+export function loadWorkingOn(userId: unknown) {
+  try {
+    return localStorage.getItem(workingOnKey(userId)) || ALL_TYPES;
+  } catch {
+    return ALL_TYPES;
+  }
+}
+
+export function saveWorkingOn(userId: unknown, type: string) {
+  try {
+    localStorage.setItem(workingOnKey(userId), type);
+  } catch {
+    // Private mode or blocked storage: the choice lasts this visit only.
+  }
+}
+
+/** "Sales invoice" -> "sales invoices", for the messages. */
+export const typePlural = (type: string) => `${(BACKLOG_TYPES[type]?.label || type).toLowerCase()}s`;
+
+type Claimed = { id: number | null; failed: boolean; type: string | null; ranOut: string | null };
+
 /**
  * Takes the next page off the queue for this user, trying the next one along
  * whenever someone else got there first (409). The queue's order is the
- * server's: the user's own open page, pages sent back, today's, high
- * priority, then oldest.
+ * server's: the user's own open page, then by type (stock lists, purchase
+ * invoices, sales invoices), then pages sent back, today's, high priority,
+ * oldest.
+ *
+ * With one type chosen, only that type is taken. When it has run out, the
+ * following types are tried in that order, wrapping round - sales invoices
+ * run out into stock lists - and `ranOut` names the type that ran out, for
+ * the message. The choice itself is kept: new pages of it come first again.
  */
-export async function claimNextPage(token: string, skipId: number | null = null) {
-  const queue = await getWorkQueue(token);
-  if (!queue) return { id: null, failed: true };
-  for (const item of queue.items) {
-    if (item.id === skipId) continue;
-    if (item.mine) return { id: item.id, failed: false };
-    const res = await claimWorkEntry(token, item.id);
-    if (res.ok) return { id: item.id, failed: false };
-    if (res.status !== 409) return { id: null, failed: true };
+export async function claimNextPage(token: string, skipId: number | null = null, type: string = ALL_TYPES): Promise<Claimed> {
+  const tryQueue = async (kind: string | null) => {
+    const queue = await getWorkQueue(token, kind);
+    if (!queue) return { queue: null, id: null, failed: true, type: null };
+    for (const item of queue.items) {
+      if (item.id === skipId) continue;
+      if (item.mine) return { queue, id: item.id, failed: false, type: item.type };
+      const res = await claimWorkEntry(token, item.id);
+      if (res.ok) return { queue, id: item.id, failed: false, type: item.type };
+      if (res.status !== 409) return { queue, id: null, failed: true, type: null };
+    }
+    return { queue, id: null, failed: false, type: null };
+  };
+
+  const chosen = type && type !== ALL_TYPES ? type : null;
+  const first = await tryQueue(chosen);
+  if (first.id || first.failed || !chosen) return { id: first.id, failed: first.failed, type: first.type, ranOut: null };
+
+  const order: string[] = first.queue?.type_order || [];
+  const waiting = first.queue?.totals?.waiting_by_type || {};
+  const at = order.indexOf(chosen);
+  for (let step = 1; step < order.length; step++) {
+    const kind = order[(at + step) % order.length];
+    if (!waiting[kind]) continue;
+    const next = await tryQueue(kind);
+    if (next.id || next.failed) return { id: next.id, failed: next.failed, type: next.type, ranOut: chosen };
   }
-  return { id: null, failed: false };
+  return { id: null, failed: false, type: null, ranOut: chosen };
 }
+
+/** The message for a type that ran out and the one carried on with. */
+export const ranOutMessage = (ranOut: string, now: string) =>
+  `No more ${typePlural(ranOut)}. Now on ${typePlural(now)}.`;
 
 /** The next page waiting for the owner after this one, if any. */
 async function nextForReview(token: string, currentId: number) {
@@ -74,7 +128,7 @@ interface UseEntryFlowOptions {
  *  review  3 of 41 · Glossary · Send back · Approve & next
  */
 export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, list = false }: UseEntryFlowOptions) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const navigate = useNavigate();
   const [seconds, setSeconds] = useState(0);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
@@ -115,8 +169,9 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
   }, [mode, token, entry]);
 
   const goToNextPage = async () => {
-    const next = await claimNextPage(token, entry.id);
+    const next = await claimNextPage(token, entry.id, loadWorkingOn(user?.id));
     if (next.id) {
+      if (next.ranOut && next.type) toast(ranOutMessage(next.ranOut, next.type));
       navigate(`/backlog/work/${next.id}`, { replace: true });
     } else {
       if (!next.failed) toast.success("That was the last page in the queue.");

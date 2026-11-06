@@ -2571,8 +2571,10 @@ export const rejectGlossarySuggestion = (token, id) =>
 
 // -- The entry screens -------------------------------------------------------
 
-export const getWorkQueue = async (token) => {
-  const res = await backlogCall("get", "/backlog-work/queue/", token);
+// `type` narrows the pool to one kind of page (the person's own open page
+// still comes first); null is every kind, in the queue's order.
+export const getWorkQueue = async (token, type = null) => {
+  const res = await backlogCall("get", `/backlog-work/queue/${type ? `?type=${type}` : ""}`, token);
   return res.ok ? res.data : null;
 };
 
