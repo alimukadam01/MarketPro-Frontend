@@ -147,8 +147,9 @@ export function LookupCombobox({
     return {
       label: `Create ${createNoun ? `${createNoun} ` : ""}"${typed}"`,
       onCreate: () => onCreate(typed),
-      // With matches listed, Enter picks the highlighted one instead.
-      onEnter: items.length === 0,
+      // Enter creates, matches listed or not; a match is picked by arrowing
+      // onto it (BUGS #001).
+      onEnter: true,
     };
   }, [onCreate, onExtend, typed, answered, query, items, selectedLabel, createNoun]);
 
