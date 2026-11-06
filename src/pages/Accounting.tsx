@@ -20,13 +20,13 @@ import {
   Filter,
   Lock,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../services/AuthProvider";
 import {
     getCashInHand,
     getTransactionsSummary,
-    getMonthlyCashTrend,
+    getCashTrend,
     transactionsAPIPackage,
 } from "../../services/api";
 import {
@@ -140,8 +140,11 @@ const Accounting = () => {
     const [cashInHand, setCashInHand] = useState(null);
     const [cashLoading, setCashLoading] = useState(true);
     // Null until it lands - never zero-filled, see ChartCard's `loading`.
+    // { trend, period }: the period it covers labels the chart.
     const [cashTrend, setCashTrend] = useState(null);
     const [cashTrendFailed, setCashTrendFailed] = useState(false);
+    // A later period on its way: the chart keeps the old line and spins.
+    const [cashTrendLoading, setCashTrendLoading] = useState(false);
     const [transactionsData, setTransactionsData] = useState(null);
     // true until the first response lands, so the table never flashes
     // "no records" before it has asked. Cleared in a finally, never on
@@ -269,6 +272,33 @@ const Accounting = () => {
 
     const { searchTerm, setSearchTerm, searching } = useDebouncedSearch(fetchTransactions);
 
+    // The chart over the page's period. The latest answer only: a slow reply
+    // for the period before must not draw over the one chosen since.
+    const cashTrendTicket = useRef(0);
+    const fetchCashTrend = async () => {
+        const ticket = ++cashTrendTicket.current;
+        setCashTrendLoading(true);
+        try {
+            const res = await getCashTrend(token, list.period);
+            if (ticket !== cashTrendTicket.current) return;
+            if (res) {
+                setCashTrend(res);
+                setCashTrendFailed(false);
+            } else {
+                toast.error("Failed to fetch cash trend.");
+                setCashTrendFailed(true);
+            }
+        } catch (error) {
+            console.log(error);
+            if (ticket === cashTrendTicket.current) {
+                toast.error("Failed to fetch cash trend.");
+                setCashTrendFailed(true);
+            }
+        } finally {
+            if (ticket === cashTrendTicket.current) setCashTrendLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (!token) return;
 
@@ -288,29 +318,17 @@ const Accounting = () => {
             }
         };
 
-        const fetchCashTrend = async () => {
-            try {
-                const res = await getMonthlyCashTrend(token);
-                if (res) {
-                    setCashTrend(res);
-                } else {
-                    toast.error("Failed to fetch cash trend.");
-                    setCashTrendFailed(true);
-                }
-            } catch (error) {
-                console.log(error);
-                toast.error("Failed to fetch cash trend.");
-                setCashTrendFailed(true);
-            }
-        };
-
         fetchCashInHand();
         fetchCashTrend();
         fetchTransactions();
     }, [token, isDeleted]);
 
-    // A new period refetches the rows, and with them money in and out.
-    useOnChange(list.period, () => fetchTransactions());
+    // A new period refetches the rows, and with them money in and out - and
+    // the Net Cash Movement chart, which covers the same period.
+    useOnChange(list.period, () => {
+        fetchTransactions();
+        fetchCashTrend();
+    });
 
 
     return (
@@ -393,8 +411,9 @@ const Accounting = () => {
                                 <div className="flex flex-col gap-6">
                                     <ChartCard
                                         title="Net Cash Movement"
-                                        hint="This month"
-                                        data={cashTrend}
+                                        hint={cashTrend ? periodHint(cashTrend.period) : undefined}
+                                        data={cashTrend ? cashTrend.trend : null}
+                                        loading={cashTrendLoading}
                                         error={cashTrendFailed}
                                         color="#8b5cf6"
                                     />

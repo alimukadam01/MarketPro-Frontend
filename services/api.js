@@ -3040,6 +3040,23 @@ export const getProfitEstimate = async (token, period = null) => {
   }
 };
 
+// Net cash movement over the Accounting page's period, custom and all time
+// included: { trend, period } - or null when it fails. All time is asked for
+// by name: withPeriod sends nothing for it, which a trend reads as this month.
+export const getCashTrend = async (token, period) => {
+  const query = period?.key === "all" ? "?period=all" : withPeriod("", period);
+  try {
+    const res = await apiClient.get(`accounting-kpis/cash-trend/${query}`, {
+      headers: { Authorization: token },
+    });
+    if (res.status === 200) return res.data;
+    return null;
+  } catch (error) {
+    console.log("Error fetching the cash trend:", error);
+    return null;
+  }
+};
+
 export const getMonthlyCashTrend = async (token) => {
   try {
     const res = await apiClient.get("accounting-kpis/monthly-cash-trend/", {
