@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowRight, BookOpen, Clock, EyeOff, Undo2 } from "lucide-react";
+import { ArrowRight, BookOpen, Clock, CornerUpLeft, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { GlossaryDialog, NoteDialog } from "./BacklogDialogs";
@@ -70,7 +70,7 @@ interface UseEntryFlowOptions {
  * Everything around the form on an entry screen: the timer, the pills beside
  * the title, the buttons at the right end of it, and their dialogs.
  *
- *  entry   Release to queue · Glossary · Can't read · Submit & next
+ *  entry   Release to queue · Glossary · Return page · Submit & next
  *  review  3 of 41 · Glossary · Send back · Approve & next
  */
 export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, list = false }: UseEntryFlowOptions) {
@@ -175,12 +175,12 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
         if (res.error) toast.error(res.error);
         return false;
       }
-      toast.success(`Item #${entry.id} sent to the owner.`);
+      toast.success(`Item #${entry.id} returned to the owner.`);
       await goToNextPage();
       return true;
     } catch (error) {
       console.log("Error flagging the page:", error);
-      toast.error("Failed to send the page to the owner.");
+      toast.error("Failed to return the page.");
       return false;
     }
   };
@@ -254,7 +254,8 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
   const actions = !entry ? null : mode === "entry" ? (
     <>
       {!list && (
-        <Button type="button" variant="ghost" onClick={release}>
+        <Button type="button" variant="ghost" onClick={release}
+          title="Put the page back in the queue for anyone to take">
           <Undo2 className="h-4 w-4 mr-2" />
           Release to queue
         </Button>
@@ -263,9 +264,12 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
         <BookOpen className="h-4 w-4 mr-2" />
         Glossary
       </Button>
-      <Button type="button" variant="outline" onClick={() => setCantReadOpen(true)}>
-        <EyeOff className="h-4 w-4 mr-2" />
-        Can't read
+      {/* "Return page" to the person entering; the owner's screens and the
+          code still call it can't read (cant_read). */}
+      <Button type="button" variant="outline" onClick={() => setCantReadOpen(true)}
+        title="Send the page back to the owner with your reason">
+        <CornerUpLeft className="h-4 w-4 mr-2" />
+        Return page
       </Button>
       <SubmitButton type="button" pending={finishing} pendingLabel="Submitting…" onClick={submit}
         disabled={!hasOutputs && !beforeFinish}>
@@ -306,11 +310,11 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
       <NoteDialog
         open={cantReadOpen}
         setOpen={setCantReadOpen}
-        title="Can't read this page?"
-        description={`Item #${entry.id} goes to the owner with your note. Anything you entered from it is kept until they decide.`}
-        label="Note for the owner"
+        title="Return this page?"
+        description={`Item #${entry.id} goes back to the owner with your note. Anything you entered from it is kept until they decide.`}
+        label="Why are you returning it?"
         placeholder="The bottom half is cut off - the total and the last two lines are missing."
-        confirmLabel="Send to owner & next"
+        confirmLabel="Return page & next"
         onConfirm={cantRead}
       />
       <NoteDialog
