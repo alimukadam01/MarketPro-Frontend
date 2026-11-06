@@ -13,17 +13,19 @@ import { ExtraChargesEditor, type ExtraCharge } from "@/components/invoice/Extra
 import { AmountToggleInput, InvoiceSummaryCard, PaymentButton } from "@/components/invoice/InvoiceRail";
 import { EntryShell } from "@/components/backlog/EntryShell";
 import { PagePhoto } from "@/components/backlog/PagePhoto";
+import { JoinPages } from "@/components/backlog/JoinPages";
 import { LookupCombobox, type LookupItem } from "@/components/backlog/LookupCombobox";
 import { SentBackNote } from "@/components/backlog/SentBackNote";
 import { NewRecordsNote } from "@/components/backlog/NewRecordsNote";
 import { NewPartyDialog } from "@/components/backlog/NewRecordDialogs";
 import { useEntryFlow } from "@/components/backlog/useEntryFlow";
-import type { OwnerEntry, WorkEntry } from "@/components/backlog/meta";
+import type { EntryPage, OwnerEntry, WorkEntry } from "@/components/backlog/meta";
 import { useAuth } from "../../../services/AuthProvider";
 import {
   createWorkCustomer,
   createWorkSupplier,
   deleteWorkPayment,
+  detachWorkPage,
   getWorkOutput,
   getWorkSettlement,
   paymentRequestBody,
@@ -109,6 +111,29 @@ export default function BacklogInvoiceEntry({
   const priceKey = isSales ? "unit_price" : "unit_cost";
   const partyKind = isSales ? "customers" : "suppliers";
   const partyLabel = isSales ? "Customer" : "Supplier";
+
+  // The invoice's pages (BUGS #003), kept here: joining or detaching one
+  // answers with the page as it now is, without reloading the form.
+  const [pages, setPages] = useState<EntryPage[]>(entry.pages || []);
+  const [canAddPage, setCanAddPage] = useState(!!entry.can_add_page);
+  const pagesChanged = (updated: WorkEntry) => {
+    setPages(updated.pages || []);
+    setCanAddPage(!!updated.can_add_page);
+  };
+  const detachPage = async (pageId: number) => {
+    try {
+      const res = await detachWorkPage(token, entry.id, pageId);
+      if (res.ok) {
+        pagesChanged(res.data);
+        toast.success("Page detached. It is back in the queue on its own.");
+      } else if (res.error) {
+        toast.error(res.error);
+      }
+    } catch (error) {
+      console.log("Error detaching the page:", error);
+      toast.error("Failed to detach the page.");
+    }
+  };
 
   const existing = (entry.outputs || []).find((o) => o.kind === entry.type) || null;
   const [outputId, setOutputId] = useState<number | null>(existing?.id ?? null);
@@ -539,7 +564,12 @@ export default function BacklogInvoiceEntry({
           the other one's bar need: on a short screen the page scrolls
           (EntryShell) instead of the open section being squeezed to nothing. */}
       <div className="h-full flex gap-6 min-h-[480px]">
-        <PagePhoto src={entry.image} className="w-[360px] shrink-0" />
+        {/* The photo and, under it at its width, Add the next page. */}
+        <div className="w-[360px] shrink-0 min-h-0 flex flex-col gap-3">
+          <PagePhoto src={entry.image} pages={pages} onDetach={mode === "entry" ? detachPage : undefined}
+            className="flex-1" />
+          {mode === "entry" && <JoinPages entryId={entry.id} canAdd={canAddPage} onChanged={pagesChanged} />}
+        </div>
 
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
           <div className="shrink-0 space-y-4 pb-6 border-b border-border">

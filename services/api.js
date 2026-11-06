@@ -2592,6 +2592,18 @@ export const releaseWorkEntry = (token, id) =>
 export const cantReadWorkEntry = (token, id, note, secondsSpent) =>
   backlogCall("post", `/backlog-work/${id}/cant-read/`, token, { note, seconds_spent: secondsSpent });
 
+// An invoice across several pages (BUGS #003). Adding without a pageId joins
+// the page uploaded after this invoice's last; each answers with the page as
+// the entry screen shows it, its `pages` included.
+export const addWorkPage = (token, id, pageId = null) =>
+  backlogCall("post", `/backlog-work/${id}/pages/`, token, pageId ? { page_id: pageId } : {});
+
+export const getJoinablePages = (token, id) =>
+  backlogCall("get", `/backlog-work/${id}/pages/`, token);
+
+export const detachWorkPage = (token, id, pageId) =>
+  backlogCall("delete", `/backlog-work/${id}/pages/${pageId}/`, token);
+
 export const submitWorkEntry = (token, id, secondsSpent) =>
   backlogCall("post", `/backlog-work/${id}/submit/`, token, { seconds_spent: secondsSpent });
 

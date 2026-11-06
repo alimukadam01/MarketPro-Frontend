@@ -93,12 +93,23 @@ export interface QueueItem {
 }
 
 /** A page open on an entry screen (/backlog-work/{id}/). */
+/** One page of an invoice that runs across several (BUGS #003). */
+export interface EntryPage {
+  id: number;
+  page_number: number;
+  image: string | null;
+}
+
 export interface WorkEntry extends QueueItem {
   image: string | null;
   outputs: BacklogOutput[];
   claimed_at: string | null;
   completed_list: boolean;
   cant_read_note: string;
+  /** Every page, the first being this one. */
+  pages?: EntryPage[];
+  /** Whether "Add the next page" has a page to add. */
+  can_add_page?: boolean;
 }
 
 /**
