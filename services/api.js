@@ -2571,8 +2571,10 @@ export const rejectGlossarySuggestion = (token, id) =>
 
 // -- The entry screens -------------------------------------------------------
 
-export const getWorkQueue = async (token) => {
-  const res = await backlogCall("get", "/backlog-work/queue/", token);
+// `type` narrows the pool to one kind of page (the person's own open page
+// still comes first); null is every kind, in the queue's order.
+export const getWorkQueue = async (token, type = null) => {
+  const res = await backlogCall("get", `/backlog-work/queue/${type ? `?type=${type}` : ""}`, token);
   return res.ok ? res.data : null;
 };
 
@@ -2589,6 +2591,18 @@ export const releaseWorkEntry = (token, id) =>
 
 export const cantReadWorkEntry = (token, id, note, secondsSpent) =>
   backlogCall("post", `/backlog-work/${id}/cant-read/`, token, { note, seconds_spent: secondsSpent });
+
+// An invoice across several pages (BUGS #003). Adding without a pageId joins
+// the page uploaded after this invoice's last; each answers with the page as
+// the entry screen shows it, its `pages` included.
+export const addWorkPage = (token, id, pageId = null) =>
+  backlogCall("post", `/backlog-work/${id}/pages/`, token, pageId ? { page_id: pageId } : {});
+
+export const getJoinablePages = (token, id) =>
+  backlogCall("get", `/backlog-work/${id}/pages/`, token);
+
+export const detachWorkPage = (token, id, pageId) =>
+  backlogCall("delete", `/backlog-work/${id}/pages/${pageId}/`, token);
 
 export const submitWorkEntry = (token, id, secondsSpent) =>
   backlogCall("post", `/backlog-work/${id}/submit/`, token, { seconds_spent: secondsSpent });
@@ -3036,6 +3050,23 @@ export const getProfitEstimate = async (token, period = null) => {
     }
   } catch (error) {
     console.log(error);
+    return null;
+  }
+};
+
+// Net cash movement over the Accounting page's period, custom and all time
+// included: { trend, period } - or null when it fails. All time is asked for
+// by name: withPeriod sends nothing for it, which a trend reads as this month.
+export const getCashTrend = async (token, period) => {
+  const query = period?.key === "all" ? "?period=all" : withPeriod("", period);
+  try {
+    const res = await apiClient.get(`accounting-kpis/cash-trend/${query}`, {
+      headers: { Authorization: token },
+    });
+    if (res.status === 200) return res.data;
+    return null;
+  } catch (error) {
+    console.log("Error fetching the cash trend:", error);
     return null;
   }
 };

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowRight, BookOpen, Clock, EyeOff, Undo2 } from "lucide-react";
+import { ArrowRight, BookOpen, Clock, CornerUpLeft, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { GlossaryDialog, NoteDialog } from "./BacklogDialogs";
@@ -18,24 +18,78 @@ import {
   submitWorkEntry,
 } from "../../../services/api";
 
+// What the person has chosen to work on (BUGS #002): "all", or one page type.
+// Remembered per account on this browser; the queue page sets it, and every
+// "& next" follows it.
+export const ALL_TYPES = "all";
+const workingOnKey = (userId: unknown) => `mp-backlog-working-on:${userId ?? "me"}`;
+
+export function loadWorkingOn(userId: unknown) {
+  try {
+    return localStorage.getItem(workingOnKey(userId)) || ALL_TYPES;
+  } catch {
+    return ALL_TYPES;
+  }
+}
+
+export function saveWorkingOn(userId: unknown, type: string) {
+  try {
+    localStorage.setItem(workingOnKey(userId), type);
+  } catch {
+    // Private mode or blocked storage: the choice lasts this visit only.
+  }
+}
+
+/** "Sales invoice" -> "sales invoices", for the messages. */
+export const typePlural = (type: string) => `${(BACKLOG_TYPES[type]?.label || type).toLowerCase()}s`;
+
+type Claimed = { id: number | null; failed: boolean; type: string | null; ranOut: string | null };
+
 /**
  * Takes the next page off the queue for this user, trying the next one along
  * whenever someone else got there first (409). The queue's order is the
- * server's: the user's own open page, pages sent back, today's, high
- * priority, then oldest.
+ * server's: the user's own open page, then by type (stock lists, purchase
+ * invoices, sales invoices), then pages sent back, today's, high priority,
+ * oldest.
+ *
+ * With one type chosen, only that type is taken. When it has run out, the
+ * following types are tried in that order, wrapping round - sales invoices
+ * run out into stock lists - and `ranOut` names the type that ran out, for
+ * the message. The choice itself is kept: new pages of it come first again.
  */
-export async function claimNextPage(token: string, skipId: number | null = null) {
-  const queue = await getWorkQueue(token);
-  if (!queue) return { id: null, failed: true };
-  for (const item of queue.items) {
-    if (item.id === skipId) continue;
-    if (item.mine) return { id: item.id, failed: false };
-    const res = await claimWorkEntry(token, item.id);
-    if (res.ok) return { id: item.id, failed: false };
-    if (res.status !== 409) return { id: null, failed: true };
+export async function claimNextPage(token: string, skipId: number | null = null, type: string = ALL_TYPES): Promise<Claimed> {
+  const tryQueue = async (kind: string | null) => {
+    const queue = await getWorkQueue(token, kind);
+    if (!queue) return { queue: null, id: null, failed: true, type: null };
+    for (const item of queue.items) {
+      if (item.id === skipId) continue;
+      if (item.mine) return { queue, id: item.id, failed: false, type: item.type };
+      const res = await claimWorkEntry(token, item.id);
+      if (res.ok) return { queue, id: item.id, failed: false, type: item.type };
+      if (res.status !== 409) return { queue, id: null, failed: true, type: null };
+    }
+    return { queue, id: null, failed: false, type: null };
+  };
+
+  const chosen = type && type !== ALL_TYPES ? type : null;
+  const first = await tryQueue(chosen);
+  if (first.id || first.failed || !chosen) return { id: first.id, failed: first.failed, type: first.type, ranOut: null };
+
+  const order: string[] = first.queue?.type_order || [];
+  const waiting = first.queue?.totals?.waiting_by_type || {};
+  const at = order.indexOf(chosen);
+  for (let step = 1; step < order.length; step++) {
+    const kind = order[(at + step) % order.length];
+    if (!waiting[kind]) continue;
+    const next = await tryQueue(kind);
+    if (next.id || next.failed) return { id: next.id, failed: next.failed, type: next.type, ranOut: chosen };
   }
-  return { id: null, failed: false };
+  return { id: null, failed: false, type: null, ranOut: chosen };
 }
+
+/** The message for a type that ran out and the one carried on with. */
+export const ranOutMessage = (ranOut: string, now: string) =>
+  `No more ${typePlural(ranOut)}. Now on ${typePlural(now)}.`;
 
 /** The next page waiting for the owner after this one, if any. */
 async function nextForReview(token: string, currentId: number) {
@@ -70,11 +124,11 @@ interface UseEntryFlowOptions {
  * Everything around the form on an entry screen: the timer, the pills beside
  * the title, the buttons at the right end of it, and their dialogs.
  *
- *  entry   Release to queue · Glossary · Can't read · Submit & next
+ *  entry   Release to queue · Glossary · Return page · Submit & next
  *  review  3 of 41 · Glossary · Send back · Approve & next
  */
 export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, list = false }: UseEntryFlowOptions) {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const navigate = useNavigate();
   const [seconds, setSeconds] = useState(0);
   const [glossaryOpen, setGlossaryOpen] = useState(false);
@@ -115,8 +169,9 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
   }, [mode, token, entry]);
 
   const goToNextPage = async () => {
-    const next = await claimNextPage(token, entry.id);
+    const next = await claimNextPage(token, entry.id, loadWorkingOn(user?.id));
     if (next.id) {
+      if (next.ranOut && next.type) toast(ranOutMessage(next.ranOut, next.type));
       navigate(`/backlog/work/${next.id}`, { replace: true });
     } else {
       if (!next.failed) toast.success("That was the last page in the queue.");
@@ -175,12 +230,12 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
         if (res.error) toast.error(res.error);
         return false;
       }
-      toast.success(`Item #${entry.id} sent to the owner.`);
+      toast.success(`Item #${entry.id} returned to the owner.`);
       await goToNextPage();
       return true;
     } catch (error) {
       console.log("Error flagging the page:", error);
-      toast.error("Failed to send the page to the owner.");
+      toast.error("Failed to return the page.");
       return false;
     }
   };
@@ -254,7 +309,8 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
   const actions = !entry ? null : mode === "entry" ? (
     <>
       {!list && (
-        <Button type="button" variant="ghost" onClick={release}>
+        <Button type="button" variant="ghost" onClick={release}
+          title="Put the page back in the queue for anyone to take">
           <Undo2 className="h-4 w-4 mr-2" />
           Release to queue
         </Button>
@@ -263,9 +319,12 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
         <BookOpen className="h-4 w-4 mr-2" />
         Glossary
       </Button>
-      <Button type="button" variant="outline" onClick={() => setCantReadOpen(true)}>
-        <EyeOff className="h-4 w-4 mr-2" />
-        Can't read
+      {/* "Return page" to the person entering; the owner's screens and the
+          code still call it can't read (cant_read). */}
+      <Button type="button" variant="outline" onClick={() => setCantReadOpen(true)}
+        title="Send the page back to the owner with your reason">
+        <CornerUpLeft className="h-4 w-4 mr-2" />
+        Return page
       </Button>
       <SubmitButton type="button" pending={finishing} pendingLabel="Submitting…" onClick={submit}
         disabled={!hasOutputs && !beforeFinish}>
@@ -306,11 +365,11 @@ export function useEntryFlow({ entry, mode, review, beforeFinish, hasOutputs, li
       <NoteDialog
         open={cantReadOpen}
         setOpen={setCantReadOpen}
-        title="Can't read this page?"
-        description={`Item #${entry.id} goes to the owner with your note. Anything you entered from it is kept until they decide.`}
-        label="Note for the owner"
+        title="Return this page?"
+        description={`Item #${entry.id} goes back to the owner with your note. Anything you entered from it is kept until they decide.`}
+        label="Why are you returning it?"
         placeholder="The bottom half is cut off - the total and the last two lines are missing."
-        confirmLabel="Send to owner & next"
+        confirmLabel="Return page & next"
         onConfirm={cantRead}
       />
       <NoteDialog

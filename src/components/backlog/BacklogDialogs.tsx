@@ -39,7 +39,7 @@ interface NoteDialogProps {
 }
 
 /**
- * Can't read (the entry person tells the owner what is wrong with the page)
+ * Return page (the entry person tells the owner what is wrong with the page)
  * and Send back (the owner tells the entry person what to fix). Both are a
  * note the other side will act on, so both require one.
  */

@@ -4,8 +4,11 @@ import { toast } from "sonner";
 import { ArrowRight } from "lucide-react";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { PeriodSwitch } from "@/components/ui/period-switch";
 import { EntryShell } from "@/components/backlog/EntryShell";
-import { claimNextPage } from "@/components/backlog/useEntryFlow";
+import {
+  ALL_TYPES, claimNextPage, loadWorkingOn, ranOutMessage, saveWorkingOn, typePlural,
+} from "@/components/backlog/useEntryFlow";
 import { BACKLOG_PRIORITIES, BACKLOG_TYPES, Pill, formatWhen, priorityOf, type QueueItem } from "@/components/backlog/meta";
 import { useAuth } from "../../../services/AuthProvider";
 import { claimWorkEntry, getWorkQueue } from "../../../services/api";
@@ -19,15 +22,21 @@ const GRID = "grid grid-cols-[72px_136px_minmax(0,1fr)_88px_112px_minmax(0,1.2fr
  * to the user.
  */
 export default function BacklogWorkQueue() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const navigate = useNavigate();
-  const [queue, setQueue] = useState<{ totals: Record<string, number>; items: QueueItem[] } | null>(null);
+  // What this person has chosen to work on: the list, Start next item and
+  // every "& next" on the entry screen follow it (BUGS #002).
+  const [workingOn, setWorkingOn] = useState(() => loadWorkingOn(user?.id));
+  const [queue, setQueue] = useState<{
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    totals: Record<string, any>; items: QueueItem[]; type_order?: string[];
+  } | null>(null);
   const [starting, setStarting] = useState(false);
   const [openingId, setOpeningId] = useState<number | null>(null);
 
-  const fetchQueue = async () => {
+  const fetchQueue = async (type = workingOn) => {
     try {
-      const data = await getWorkQueue(token);
+      const data = await getWorkQueue(token, type === ALL_TYPES ? null : type);
       if (data) {
         setQueue(data);
       } else {
@@ -43,11 +52,18 @@ export default function BacklogWorkQueue() {
     if (token) fetchQueue();
   }, [token]);
 
+  const chooseWorkingOn = (type: string) => {
+    setWorkingOn(type);
+    saveWorkingOn(user?.id, type);
+    fetchQueue(type);
+  };
+
   const startNext = async () => {
     setStarting(true);
     try {
-      const next = await claimNextPage(token);
+      const next = await claimNextPage(token, null, workingOn);
       if (next.id) {
+        if (next.ranOut && next.type) toast(ranOutMessage(next.ranOut, next.type));
         navigate(`/backlog/work/${next.id}`);
       } else if (!next.failed) {
         toast.success("The queue is empty. Nothing to enter right now.");
@@ -83,6 +99,15 @@ export default function BacklogWorkQueue() {
   };
 
   const totals = queue?.totals;
+  const byType = totals?.waiting_by_type || {};
+  const typeOptions = [
+    { key: ALL_TYPES, label: `All · ${totals?.waiting ?? 0}` },
+    ...(queue?.type_order || Object.keys(BACKLOG_TYPES)).map((type) => ({
+      key: type,
+      label: `${typePlural(type).replace(/^./, (c) => c.toUpperCase())} · ${byType[type] ?? 0}`,
+    })),
+  ];
+  const upNext = workingOn === ALL_TYPES ? totals?.waiting : byType[workingOn];
   const cards = [
     { title: "Waiting", value: totals?.waiting, hint: "Pages in the queue" },
     { title: "From today", value: totals?.daily, hint: "Due by the next working day" },
@@ -113,7 +138,17 @@ export default function BacklogWorkQueue() {
         </div>
 
         <section className="flex-1 min-h-0 flex flex-col">
-          <h2 className="shrink-0 text-xl font-semibold mb-4">Up next ({totals?.waiting ?? 0})</h2>
+          <div className="shrink-0 mb-4 flex flex-wrap items-center justify-between gap-4">
+            <h2 className="text-xl font-semibold">Up next ({upNext ?? 0})</h2>
+            {/* Working on: the list and every "& next" keep to this type.
+                When it runs out, the next type in the order follows. */}
+            <PeriodSwitch
+              label="What you are working on"
+              options={typeOptions}
+              value={{ key: workingOn }}
+              onChange={(choice) => chooseWorkingOn(choice.key)}
+            />
+          </div>
           <div className="shrink-0 bg-card rounded-lg border h-[35px] flex items-center px-4 mb-[10px]">
             <div className={`${GRID} text-sm font-medium text-muted-foreground`}>
               <div>Item</div><div>Type</div><div>Book</div><div>Priority</div><div>Uploaded</div><div>Note</div>
