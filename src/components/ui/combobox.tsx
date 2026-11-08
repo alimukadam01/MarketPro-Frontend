@@ -25,7 +25,7 @@ export interface ComboboxCreateAction {
   /** The button's tooltip and accessible name: 'Create customer "Zubair"'. */
   label: string;
   onCreate: () => void;
-  /** Enter creates too - for when nothing in the list matches. */
+  /** Enter creates too, unless a row is highlighted to pick (BUGS #001). */
   onEnter?: boolean;
   /** The button's text; "Create" unless it adds to something that exists. */
   buttonText?: string;
@@ -114,9 +114,7 @@ interface ComboboxProps {
    */
   optionsStale?: boolean;
   /**
-   * Highlight the first row as the user types, so Enter picks it. Used with
-   * createAction: Enter takes the match when there is one, and creates what
-   * was typed when there is none.
+   * Highlight the first row as the user types, so Enter picks it.
    */
   autoHighlight?: boolean;
   /** Offer to create what was typed: a Create button where the chevron is. */
@@ -135,8 +133,9 @@ const optionMatches = (option: ComboboxOption, query: string) => {
 /**
  * The Create button for a picker whose options are all on the page (the
  * invoice create screens): offered once the text typed is not exactly one
- * of them, with Enter creating too when nothing matches it at all - the
- * same test the list's own filter applies.
+ * of them. Enter creates too, even with partial matches listed - "Wajid"
+ * with "Wajid Ali" on file is a new customer unless the user arrows onto
+ * Wajid Ali (BUGS #001).
  *
  *   const party = useCreateAction(customerOptions, "customer", openDialog);
  *   <Combobox ... onInputChange={party.onInputChange} createAction={party.createAction} />
@@ -154,9 +153,7 @@ export function useCreateAction(
     const texts = (option: ComboboxOption) => [option.label, ...(option.keywords ?? [])]
       .map((text) => String(text ?? "").trim().toLowerCase());
     if (options.some((option) => texts(option).some((text) => text === q))) return null;
-    const anyMatch = options.some((option) =>
-      [...texts(option), String(option.value)].some((text) => text.includes(q)));
-    return { label: `Create ${noun} "${typed}"`, onCreate: () => onCreate(typed), onEnter: !anyMatch };
+    return { label: `Create ${noun} "${typed}"`, onCreate: () => onCreate(typed), onEnter: true };
   }, [options, typed, noun, onCreate]);
   return { onInputChange: setQuery, createAction };
 }
@@ -226,9 +223,11 @@ export function Combobox({
 
   // Enter, the same on every picker:
   //   a row arrowed onto      Base UI picks it, as always;
-  //   a Create / Add variants that Enter may take - nothing matches, or the
-  //                           text is exactly a product's - it runs;
-  //   otherwise               the first enabled match is picked.
+  //   a Create / Add variants it runs - even with partial matches listed:
+  //                           a match is picked by arrowing onto it, so
+  //                           "Wajid" never silently becomes "Wajid Ali";
+  //   otherwise               (a picker that creates nothing) the first
+  //                           enabled match is picked.
   // Nothing is highlighted on its own (no autoHighlight): a server list's
   // rows arrive after the keystroke, so a highlight set while typing could
   // sit on a row from the text before - Enter then picked the wrong one.
@@ -464,7 +463,7 @@ export function Combobox({
                     permanent blank strip above the first option. */}
                 <ComboboxPrimitive.Empty>
                   <div className="px-3 py-4 text-sm text-muted-foreground">
-                    {createAction ? "Not in MarketPro yet. Press Enter or Create to add it." : notFoundText}
+                    {createAction ? "Not in MarketPro yet." : notFoundText}
                   </div>
                 </ComboboxPrimitive.Empty>
                 {canScrollUp && (
@@ -501,6 +500,13 @@ export function Combobox({
                 </ComboboxPrimitive.List>
                 {canScrollDown && (
                   <ScrollArrow direction="down" onHoverStart={startScroll} onHoverEnd={stopScroll} />
+                )}
+                {/* Enter creates what was typed even with matches listed, so
+                    say so, and how to pick a match instead. */}
+                {createAction && (
+                  <div className="shrink-0 border-t px-3 py-1.5 text-xs text-muted-foreground">
+                    Enter: {createAction.label}. To pick from the list, use ↑ ↓ first.
+                  </div>
                 )}
               </>
             )}
