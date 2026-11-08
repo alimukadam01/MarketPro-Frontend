@@ -90,7 +90,9 @@ export function PeriodSwitch({
     page ? "h-8 text-sm" : "h-7 text-xs",
     hidden
       ? "pointer-events-none max-w-0 px-0 mr-0 opacity-0"
-      : cn("max-w-[140px] opacity-100", page ? "px-3 mr-0.5" : "px-2.5 mr-0.5"),
+      // Wide enough for a label with a count ("Purchase invoices · 20"):
+      // a narrower cap clips the text and eats the padding.
+      : cn("max-w-[240px] opacity-100", page ? "px-3 mr-0.5" : "px-2.5 mr-0.5"),
     selected ? "bg-white text-foreground shadow-sm" : "text-gray-600 hover:text-foreground",
   );
 
