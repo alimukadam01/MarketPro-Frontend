@@ -19,7 +19,9 @@ import {
     getUnitsList,
     getProductVariantTypesList,
     updateProductAndVariants,
+    getProductFields,
 } from "../../services/api"
+import { ProductFieldLinks, type FieldLink, type ProductFieldOption } from "@/components/ui/product-field-links"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
@@ -53,6 +55,29 @@ const UpdateProduct = () => {
     // variant label comes out with an empty segment ("Red / ").
     const variantReady = attributeCount > 0 &&
         Object.values(currentAttributes).every((value) => String(value ?? "").trim() !== "")
+
+    const [productFields, setProductFields] = useState<ProductFieldOption[]>([])
+    const [fieldLinks, setFieldLinks] = useState<FieldLink[]>([])
+    // A field retired since this product was set up still shows, so saving
+    // keeps it rather than dropping it unasked.
+    const [linkedFields, setLinkedFields] = useState<ProductFieldOption[]>([])
+    const fieldOptions = useMemo(() => [
+        ...productFields,
+        ...linkedFields.filter((linked) => !productFields.some((field) => field.id === linked.id)),
+    ], [productFields, linkedFields])
+
+    // The business's extra fields, for "Asked on invoices".
+    useEffect(() => {
+        if (!token) return
+        const fetchProductFields = async () => {
+            try {
+                setProductFields(await getProductFields(token))
+            } catch (error) {
+                console.log("Error fetching product fields:", error)
+            }
+        }
+        fetchProductFields()
+    }, [token])
 
     // react-hook-form setup
     const { register, handleSubmit, control, reset } = useForm({
@@ -152,6 +177,11 @@ const UpdateProduct = () => {
             unit: data.unit.id
         })
         setProductVariants(data.variants)
+        const links = data.field_links || []
+        setFieldLinks(links.map((link) => ({ field: link.field, applies_to: link.applies_to, required: link.required })))
+        setLinkedFields(links.map((link) => ({
+            id: link.field, label: link.label, field_type: link.field_type, is_active: link.is_active,
+        })))
     }
 
     const onProductUpdate = async (data) => {
@@ -163,7 +193,8 @@ const UpdateProduct = () => {
 
         const productData = {
             ...rest,
-            variants: productVariants
+            variants: productVariants,
+            field_links: fieldLinks,
         }
 
         try {
@@ -312,6 +343,8 @@ const UpdateProduct = () => {
                                     <Label htmlFor="desc">Description</Label>
                                     <Textarea id="desc" {...register("desc")} placeholder="Add product description here..." rows={6} />
                                 </div>
+
+                                <ProductFieldLinks fields={fieldOptions} value={fieldLinks} onChange={setFieldLinks} />
                             </div>
 
                             {/* Second Column */}

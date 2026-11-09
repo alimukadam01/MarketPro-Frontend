@@ -8,7 +8,7 @@ import { ACCESS_DENIED_MESSAGE } from "../../../services/utils";
  * Renders a single cell. When the content is wider than the cell, it scrolls
  * itself back and forth instead of showing a scrollbar.
  */
-function MarqueeCell({ children }) {
+export function MarqueeCell({ children }) {
   const cellRef = useRef(null);
   const contentRef = useRef(null);
   const [shift, setShift] = useState(0);

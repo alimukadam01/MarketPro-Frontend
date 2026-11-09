@@ -14,7 +14,10 @@ import {
   dateInputToDateTime,
   normaliseExtraCharges,
   nullIfBlank,
-  todayForInput
+  todayForInput,
+  formatLineDiscount,
+  lineProductLabel,
+  lineTotal,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -40,6 +43,10 @@ import { Combobox, useCreateAction } from "@/components/ui/combobox";
 import { NewPartyDialog } from "@/components/backlog/NewRecordDialogs";
 import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
 import { InvoiceItemsTable, RowAction } from "@/components/invoice/InvoiceItemsTable";
+import {
+  EMPTY_LINE_DISCOUNT, ExtraFieldInputs, LineDiscountInput, answersForSave, discountForSave,
+  missingRequiredField, type LineDiscountDraft,
+} from "@/components/invoice/LineExtrasInputs";
 import { ExtraChargesEditor } from "@/components/invoice/ExtraChargesEditor";
 import {
   AmountToggleInput,
@@ -55,6 +62,12 @@ type SalesInvoiceFormItem = {
   unit_price: number
   total: number
   is_returned?: boolean
+  // plans/product-extra-fields.md. A saved line keeps these: it is not
+  // edited in place, so they are only set when a line is added.
+  extra_fields?: Record<string, string | number>
+  extra_fields_display?: { label: string, value: string | number }[]
+  discount?: { type?: string, value?: number }
+  returned_quantity?: number
 }
 
 /**
@@ -181,10 +194,18 @@ const UpdateSalesInvoice = () => {
   const taxType = watch("tax_type")
   const invoiceItems = watch("items") || []
   const amountPaid = watch("amount_paid") || 0
+  // The add-line row's extra-field answers and discount (plans/product-extra-fields.md).
+  const [lineAnswers, setLineAnswers] = useState<Record<string, string>>({})
+  const [lineDiscount, setLineDiscount] = useState<LineDiscountDraft>(EMPTY_LINE_DISCOUNT)
 
+  // Each line is already after its own discount; the gross beside it gives
+  // the Line discounts row.
   const subtotal = invoiceItems
     .filter(item => !item.is_returned)
     .reduce((sum, item) => sum + item.total, 0)
+  const lineDiscounts = invoiceItems
+    .filter(item => !item.is_returned)
+    .reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price), 0) - subtotal
   const discountAmount = discountType === "percentage" ? (subtotal * discount) / 100 : discount
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
 
@@ -284,6 +305,8 @@ const UpdateSalesInvoice = () => {
         product_id: item.product.id,
         quantity: item.quantity,
         unit_price: item.unit_price,
+        extra_fields: item.extra_fields || {},
+        discount: item.discount || {},
       })),
     }
 
@@ -323,16 +346,26 @@ const UpdateSalesInvoice = () => {
   const addItem = (product, quantity, unit_price) => {
     if (product && quantity > 0) {
       const selectedProduct = products[product]
+      const variant = selectedProduct.product
+      const missing = missingRequiredField(variant, "sale", lineAnswers)
+      if (missing) {
+        toast.error(`Enter the ${missing.label.toLowerCase()}.`)
+        document.getElementById(`line-field-${missing.id}`)?.focus()
+        return
+      }
       const newInvoiceItem = {
         // Negative, so it can never equal a saved line's id (the update
         // treats a matching id as that line) or repeat after a delete,
         // which length + 1 did - and deleting one then removed both.
         id: -(Date.now() + Math.random()),
-        product: selectedProduct.product,
+        product: variant,
         quantity,
         unit_price,
-        total: quantity * unit_price,
+        extra_fields: answersForSave(variant, "sale", lineAnswers),
+        discount: discountForSave(lineDiscount),
+        total: 0,
       };
+      newInvoiceItem.total = lineTotal(newInvoiceItem);
       // Same product at a different price is its own line; at the same
       // price it joins the line already there (addOrMergeInvoiceItem).
       const merged = addOrMergeInvoiceItem(invoiceItems, newInvoiceItem);
@@ -342,6 +375,8 @@ const UpdateSalesInvoice = () => {
       setValue("items", merged);
       setValue("newItemProduct", "");
       setValue("newItemQuantity", 0);
+      setLineAnswers({})
+      setLineDiscount(EMPTY_LINE_DISCOUNT)
     }
   }
 
@@ -391,8 +426,13 @@ const UpdateSalesInvoice = () => {
         product: item.product,
         quantity: item.net_quantity,
         unit_price: item.unit_price,
-        total: (item.net_quantity * item.unit_price) || 0,
-        is_returned: item.is_returned
+        // After the line's discount, as the server worked it out.
+        total: item.line_total ?? ((item.net_quantity * item.unit_price) || 0),
+        is_returned: item.is_returned,
+        extra_fields: item.extra_fields || {},
+        extra_fields_display: item.extra_fields_display || [],
+        discount: item.discount || {},
+        returned_quantity: item.returned_quantity || 0,
       })),
       amount_paid: amount_paid || 0,
       newItemProduct: "",
@@ -551,6 +591,8 @@ const UpdateSalesInvoice = () => {
     if (selectedProduct) {
       setValue("newItemPrice", selectedProduct.unit_price, { shouldDirty: false });
     }
+    // Another product asks other fields: its answers start empty.
+    setLineAnswers({})
   }, [selectedProduct])
 
   useEffect(() => {
@@ -559,7 +601,11 @@ const UpdateSalesInvoice = () => {
     setReturningItem(null)
   }, [itemReturned == true])
 
+  // The Disc. column only shows once some line has a discount.
+  const anyLineDiscount = invoiceItems.some((item) => !!formatLineDiscount(item.discount))
+
   const summaryLines = [
+    ...(lineDiscounts > 0.005 ? [{ label: "Line discounts", value: lineDiscounts, sign: "−" as const }] : []),
     { label: "Subtotal", value: subtotal },
     ...(discountAmount ? [{ label: "Discount", value: discountAmount, sign: "−" as const }] : []),
     ...(taxAmount ? [{
@@ -791,8 +837,10 @@ const UpdateSalesInvoice = () => {
         first
         pinned={
           <>
-            <div className="flex gap-4 items-end">
-              <div className="flex-1 min-w-0 space-y-1">
+            {/* Wraps rather than squeezes: beside Extra Charges the section is half the
+                page wide, and the product picker keeps room to read. */}
+            <div className="flex flex-wrap gap-x-4 gap-y-3 items-end">
+              <div className="flex-1 min-w-[260px] space-y-1">
                 <Label htmlFor="newItemProduct">Product</Label>
                 <Controller
                   name="newItemProduct"
@@ -811,6 +859,13 @@ const UpdateSalesInvoice = () => {
                   )}
                 />
               </div>
+              <ExtraFieldInputs
+                variant={selectedProduct?.product}
+                side="sale"
+                answers={lineAnswers}
+                onChange={setLineAnswers}
+                onEnter={() => addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemPrice") || 0.0)))}
+              />
               <div className="w-28 space-y-1">
                 <Label htmlFor="newItemQuantity">Quantity</Label>
                 <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
@@ -819,6 +874,7 @@ const UpdateSalesInvoice = () => {
                 <Label htmlFor="newItemPrice">Unit Price</Label>
                 <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
               </div>
+              <LineDiscountInput value={lineDiscount} onChange={setLineDiscount} />
               <Button
                 type="button"
                 onClick={() =>
@@ -829,23 +885,24 @@ const UpdateSalesInvoice = () => {
                 Add Item
               </Button>
             </div>
-            <InvoiceItemsTable columns={["Product", "Quantity", "Unit Price", "Total"]} actionCount={2} rows={[]} headerOnly />
+            <InvoiceItemsTable showDiscount={anyLineDiscount} columns={["Product", "Quantity", "Unit Price", "Disc.", "Total"]} actionCount={2} rows={[]} headerOnly />
           </>
         }
         aside={invoiceItems.length > 0 ? `${invoiceItems.length} items · ${unitCount} units` : undefined}
       >
-        <InvoiceItemsTable
+        <InvoiceItemsTable showDiscount={anyLineDiscount}
           rowsOnly
-          columns={["Product", "Quantity", "Unit Price", "Total"]}
+          columns={["Product", "Quantity", "Unit Price", "Disc.", "Total"]}
           actionCount={2}
           emptyText="No items on this invoice."
           rows={invoiceItems.map((item, idx) => ({
             key: `${item.id}-${idx}`,
             dimmed: item.is_returned,
             cells: [
-              `${item.product.base.name} (${item.product.name})`,
+              <span title={lineProductLabel(item)}>{lineProductLabel(item)}</span>,
               item.quantity,
               Number(item.unit_price).toLocaleString(),
+              formatLineDiscount(item.discount),
               Number(item.total).toLocaleString(),
             ],
             actions: (

@@ -14,6 +14,9 @@ import {
   generateInvoiceNumber,
   normaliseExtraCharges,
   todayForInput,
+  formatLineDiscount,
+  lineProductLabel,
+  lineTotal,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -33,6 +36,10 @@ import Payments from "@/components/ui/payments";
 import InvoiceImages from "@/components/ui/invoice-images";
 import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
 import { InvoiceItemsTable, RowAction } from "@/components/invoice/InvoiceItemsTable";
+import {
+  EMPTY_LINE_DISCOUNT, ExtraFieldInputs, LineDiscountInput, answersForSave, discountForSave,
+  missingRequiredField, type LineDiscountDraft,
+} from "@/components/invoice/LineExtrasInputs";
 import { ExtraChargesEditor, type ExtraCharge } from "@/components/invoice/ExtraChargesEditor";
 import {
   AmountToggleInput,
@@ -49,6 +56,9 @@ const CreateSalesInvoice = () => {
   const { pending, run } = usePending();
 
   const [invoiceItems, setInvoiceItems] = useState([])
+  // The add-line row's extra-field answers and discount (plans/product-extra-fields.md).
+  const [lineAnswers, setLineAnswers] = useState<Record<string, string>>({})
+  const [lineDiscount, setLineDiscount] = useState<LineDiscountDraft>(EMPTY_LINE_DISCOUNT)
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
   const [projects, setProjects] = useState([])
@@ -128,7 +138,12 @@ const CreateSalesInvoice = () => {
   const discount = parseFloat(String(watch("discount") || 0))
   const tax = parseFloat(String(watch("tax") || 0))
 
+  // Each line is already after its own discount; the gross beside it gives
+  // the Line discounts row. sub_total on the server is the same figure.
   const subtotal = invoiceItems.reduce((sum, item) => sum + item.total, 0)
+  const grossSubtotal = invoiceItems.reduce(
+    (sum, item) => sum + Number(item.quantity) * Number(item.unit_price), 0)
+  const lineDiscounts = grossSubtotal - subtotal
   const [discountType, setDiscountType] = useState("percentage")
   const [taxType, setTaxType] = useState("percentage")
   const discountAmount = discountType === "percentage" ? (subtotal * discount) / 100 : discount
@@ -176,6 +191,8 @@ const CreateSalesInvoice = () => {
       product_id: item.product.id,
       quantity: item.quantity,
       unit_price: item.unit_price,
+      extra_fields: item.extra_fields || {},
+      discount: item.discount || {},
     }))
 
     // Cleaned here rather than posted raw, so a malformed row is named on
@@ -228,23 +245,35 @@ const CreateSalesInvoice = () => {
 
     if (product && quantity > 0) {
       const selectedProduct = products[product]
+      const variant = selectedProduct.product
+      const missing = missingRequiredField(variant, "sale", lineAnswers)
+      if (missing) {
+        toast.error(`Enter the ${missing.label.toLowerCase()}.`)
+        document.getElementById(`line-field-${missing.id}`)?.focus()
+        return
+      }
       const newInvoiceItem = {
         // Negative, so it can never equal a saved line's id (the update
         // treats a matching id as that line) or repeat after a delete,
         // which length + 1 did - and deleting one then removed both.
         id: -(Date.now() + Math.random()),
-        product: selectedProduct.product,
+        product: variant,
         quantity,
         unit_price,
-        total: quantity * unit_price,
+        extra_fields: answersForSave(variant, "sale", lineAnswers),
+        discount: discountForSave(lineDiscount),
+        total: 0,
       };
-      // Same product at a different price is its own line; at the same
-      // price it joins the line already there (addOrMergeInvoiceItem).
+      newInvoiceItem.total = lineTotal(newInvoiceItem);
+      // Same product at a different price, colour or discount is its own
+      // line; otherwise it joins the line already there (addOrMergeInvoiceItem).
       const merged = addOrMergeInvoiceItem(invoiceItems, newInvoiceItem);
       if (merged.length === invoiceItems.length) {
         toast.success(`Added ${quantity} to the existing line for this product at this price.`);
       }
       setInvoiceItems(merged);
+      setLineAnswers({})
+      setLineDiscount(EMPTY_LINE_DISCOUNT)
       reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true });
     }
   }
@@ -358,9 +387,15 @@ const CreateSalesInvoice = () => {
     if (selectedProduct) {
       setValue("newItemPrice", selectedProduct.unit_price, { shouldDirty: false });
     }
+    // Another product asks other fields: its answers start empty.
+    setLineAnswers({})
   }, [selectedProduct])
 
+  // The Disc. column only shows once some line has a discount.
+  const anyLineDiscount = invoiceItems.some((item) => !!formatLineDiscount(item.discount))
+
   const summaryLines = [
+    ...(lineDiscounts > 0.005 ? [{ label: "Line discounts", value: lineDiscounts, sign: "−" as const }] : []),
     { label: "Subtotal", value: subtotal },
     ...(discountAmount ? [{ label: "Discount", value: discountAmount, sign: "−" as const }] : []),
     ...(taxAmount ? [{
@@ -538,8 +573,10 @@ const CreateSalesInvoice = () => {
         first
         pinned={
           <>
-            <div className="flex gap-4 items-end">
-              <div className="flex-1 min-w-0 space-y-1">
+            {/* Wraps rather than squeezes: beside Extra Charges the section is half the
+                page wide, and the product picker keeps room to read. */}
+            <div className="flex flex-wrap gap-x-4 gap-y-3 items-end">
+              <div className="flex-1 min-w-[260px] space-y-1">
                 <Label htmlFor="newItemProduct">Product</Label>
                 <Controller
                   name="newItemProduct"
@@ -558,6 +595,15 @@ const CreateSalesInvoice = () => {
                   )}
                 />
               </div>
+              <ExtraFieldInputs
+                variant={selectedProduct?.product}
+                side="sale"
+                answers={lineAnswers}
+                onChange={setLineAnswers}
+                onEnter={() =>
+                  addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemPrice") || 0.0)))
+                }
+              />
               <div className="w-28 space-y-1">
                 <Label htmlFor="newItemQuantity">Quantity</Label>
                 <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
@@ -566,6 +612,7 @@ const CreateSalesInvoice = () => {
                 <Label htmlFor="newItemPrice">Unit Price</Label>
                 <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
               </div>
+              <LineDiscountInput value={lineDiscount} onChange={setLineDiscount} />
               <Button
                 type="button"
                 onClick={() =>
@@ -576,21 +623,22 @@ const CreateSalesInvoice = () => {
                 Add Item
               </Button>
             </div>
-            <InvoiceItemsTable columns={["Product", "Quantity", "Unit Price", "Total"]} rows={[]} headerOnly />
+            <InvoiceItemsTable showDiscount={anyLineDiscount} columns={["Product", "Quantity", "Unit Price", "Disc.", "Total"]} rows={[]} headerOnly />
           </>
         }
         aside={invoiceItems.length > 0 ? `${invoiceItems.length} items · ${unitCount} units` : undefined}
       >
-        <InvoiceItemsTable
+        <InvoiceItemsTable showDiscount={anyLineDiscount}
           rowsOnly
-          columns={["Product", "Quantity", "Unit Price", "Total"]}
+          columns={["Product", "Quantity", "Unit Price", "Disc.", "Total"]}
           emptyText="No items yet. Pick a product above to add the first one."
           rows={invoiceItems.map((item) => ({
             key: item.id,
             cells: [
-              `${item.product.base.name} (${item.product.name})`,
+              <span title={lineProductLabel(item)}>{lineProductLabel(item)}</span>,
               item.quantity,
               Number(item.unit_price).toLocaleString(),
+              formatLineDiscount(item.discount),
               Number(item.total).toLocaleString(),
             ],
             actions: (

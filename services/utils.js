@@ -221,10 +221,14 @@ export const todayForInput = () => {
 export const addOrMergeInvoiceItem = (items, newItem, priceKey = "unit_price") => {
   const list = items || [];
   const samePrice = (a, b) => Number(a[priceKey]) === Number(b[priceKey]);
+  // The same line also means the same extra-field answers (the colour code)
+  // and the same discount: a gallon in 1453 and one in 5674 are two lines, as
+  // the server's UNIQUE key says (plans/product-extra-fields.md).
   const index = list.findIndex(
     (item) =>
       String(item.product?.id) === String(newItem.product?.id) &&
-      samePrice(item, newItem)
+      samePrice(item, newItem) &&
+      sameLineExtras(item, newItem)
   );
 
   if (index === -1) return [...list, newItem];
@@ -232,8 +236,89 @@ export const addOrMergeInvoiceItem = (items, newItem, priceKey = "unit_price") =
   return list.map((item, position) => {
     if (position !== index) return item;
     const quantity = Number(item.quantity) + Number(newItem.quantity);
-    return { ...item, quantity, total: quantity * Number(item[priceKey]) };
+    const merged = { ...item, quantity };
+    return { ...merged, total: lineTotal(merged, priceKey) };
   });
+};
+
+// -- Invoice line extras: extra-field answers and a line discount ------------
+// The server writes one canonical form (sales/lines.py); these mirror it so a
+// screen merges, adds up and shows a line exactly as the backend will.
+
+const canonicalNumber = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.round(number * 100) / 100;
+};
+
+/** {"<field id>": answer} with blanks dropped and keys in order. */
+export const canonicalExtraFields = (answers) => {
+  const out = {};
+  Object.keys(answers || {})
+    .sort((a, b) => Number(a) - Number(b))
+    .forEach((key) => {
+      const value = answers[key];
+      if (value === null || value === undefined || String(value).trim() === "") return;
+      out[key] = typeof value === "number" ? value : String(value).trim();
+    });
+  return out;
+};
+
+/** {} for no discount (or 0), else {type, value}. */
+export const canonicalLineDiscount = (discount) => {
+  const value = canonicalNumber(discount?.value);
+  if (!discount || !["percentage", "amount"].includes(discount.type) || !value || value <= 0) return {};
+  return { type: discount.type, value };
+};
+
+export const sameLineExtras = (a, b) =>
+  JSON.stringify(canonicalExtraFields(a?.extra_fields)) === JSON.stringify(canonicalExtraFields(b?.extra_fields)) &&
+  JSON.stringify(canonicalLineDiscount(a?.discount)) === JSON.stringify(canonicalLineDiscount(b?.discount));
+
+/**
+ * What a line bills after its discount - the one sum, kept equal to
+ * sales/lines.py: line_total. A percentage is off the line; an amount is off
+ * the whole line, shrinking with a return (`returned_quantity`, sales only).
+ */
+export const lineTotal = (item, priceKey = "unit_price") => {
+  const quantity = Number(item?.quantity) || 0;
+  const gross = quantity * (Number(item?.[priceKey]) || 0);
+  const discount = canonicalLineDiscount(item?.discount);
+  if (!discount.type) return gross;
+  if (discount.type === "percentage") return gross - (gross * discount.value) / 100;
+  const returned = Number(item?.returned_quantity) || 0;
+  const whole = quantity + returned;
+  return gross - (whole ? (discount.value * quantity) / whole : 0);
+};
+
+/** The extra fields a product's lines ask for on this side ("sale" or "purchase"). */
+export const askedFields = (variant, side) =>
+  (variant?.base?.extra_fields || []).filter(
+    (field) => field.applies_to === side || field.applies_to === "both");
+
+/** "Colour code 5674 · Batch no. 12": a saved line's display rows, or a new
+ *  line's answers named from the product's fields. */
+export const formatLineExtras = (item) => {
+  if (item?.extra_fields_display?.length) {
+    return item.extra_fields_display.map((row) => `${row.label} ${row.value}`).join(" · ");
+  }
+  const answers = canonicalExtraFields(item?.extra_fields);
+  const names = Object.fromEntries((item?.product?.base?.extra_fields || []).map((f) => [String(f.id), f.label]));
+  return Object.entries(answers).map(([id, value]) => `${names[id] || "Detail"} ${value}`).join(" · ");
+};
+
+/** "10%", "500" or "" for a line's Disc. column. */
+export const formatLineDiscount = (discount) => {
+  const d = canonicalLineDiscount(discount);
+  if (!d.type) return "";
+  return d.type === "percentage" ? `${d.value}%` : Number(d.value).toLocaleString();
+};
+
+/** A line's product cell: "Base (Variant)", then its answers. */
+export const lineProductLabel = (item) => {
+  const name = `${item?.product?.base?.name ?? ""} (${item?.product?.name ?? ""})`;
+  const extras = formatLineExtras(item);
+  return extras ? `${name} · ${extras}` : name;
 };
 
 export const nullIfBlank = (value) =>
@@ -781,6 +866,10 @@ export function transformProductVariant(data) {
     name: `${data.base.name} (${data.name})`,
     unit: `${data.base.unit.name} (${data.base.unit.abv})`,
     desc: data.base.desc || "",
+    // The extra fields the product's invoice lines ask for - the colour code
+    // (plans/product-extra-fields.md). Kept under base, where the invoice
+    // screens' field inputs read them.
+    base: { extra_fields: data.base.extra_fields || [] },
   };
 }
 
