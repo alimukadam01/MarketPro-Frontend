@@ -226,6 +226,87 @@ export function GlossaryDialog({
   );
 }
 
+// -- The term form, shared ---------------------------------------------------
+
+/**
+ * A glossary term as the form holds it. `link` is what the term names in
+ * MarketPro - customer, supplier or product - or "shorthand" for none.
+ */
+export type TermDraft = { term: string; meaning: string; link: string; record: LookupItem | null };
+
+/** The pill a stored kind opens on. Kinds the form no longer offers (shade,
+ *  unit, payment) open on Just shorthand, and are saved as shorthand. */
+export const linkOfKind = (kind?: string) =>
+  LINKS.some((item) => item.key === kind) ? (kind as string) : "shorthand";
+
+/** What the term means: as typed, or else the linked record's name. */
+export const meaningOf = (draft: TermDraft) =>
+  draft.meaning.trim() || String(draft.record?.name ?? draft.record?.label ?? "").trim();
+
+/**
+ * The term's fields, the same for everyone who adds one (plans part 03, 3.2):
+ * the data entry person's suggestion and the owner's or an employee's term.
+ * As written and Means side by side, then whether it names something in
+ * MarketPro, then which one.
+ */
+export function GlossaryTermFields({
+  value, onChange, idPrefix,
+}: {
+  value: TermDraft;
+  onChange: (draft: TermDraft) => void;
+  idPrefix: string;
+}) {
+  const current = LINKS.find((item) => item.key === value.link);
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1">
+          <Label htmlFor={`${idPrefix}-term`}>As written on the page</Label>
+          <Input id={`${idPrefix}-term`} value={value.term}
+            onChange={(e) => onChange({ ...value, term: e.target.value })} placeholder="Bhai jan" />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor={`${idPrefix}-meaning`}>Means</Label>
+          <Input id={`${idPrefix}-meaning`} value={value.meaning}
+            onChange={(e) => onChange({ ...value, meaning: e.target.value })} placeholder="Hassan Builders" />
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <Label>Is it a name in MarketPro?</Label>
+        <div className="inline-flex rounded-md bg-muted p-1 gap-1" role="group">
+          {LINKS.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              aria-pressed={value.link === item.key}
+              onClick={() => onChange({ ...value, link: item.key, record: null })}
+              className={`h-8 px-3 rounded text-sm font-medium whitespace-nowrap ${value.link === item.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {current?.lookup && (
+        <div className="space-y-1">
+          <Label htmlFor={`${idPrefix}-record`}>Which {current.label.toLowerCase()}</Label>
+          <LookupCombobox
+            id={`${idPrefix}-record`}
+            kind={current.lookup}
+            value={value.record?.id ?? ""}
+            selectedLabel={value.record?.label}
+            onChange={(record) => onChange({ ...value, record })}
+            placeholder={`Pick the ${current.label.toLowerCase()}`}
+            clearable
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
 function SuggestTermForm({
   entryId,
   initialTerm,
@@ -236,20 +317,17 @@ function SuggestTermForm({
   onDone: () => void;
 }) {
   const { token } = useAuth();
-  const [term, setTerm] = useState(initialTerm);
-  const [meaning, setMeaning] = useState("");
-  const [link, setLink] = useState("customer");
-  const [record, setRecord] = useState<LookupItem | null>(null);
+  const [draft, setDraft] = useState<TermDraft>({ term: initialTerm, meaning: "", link: "customer", record: null });
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const current = LINKS.find((item) => item.key === link);
+  const current = LINKS.find((item) => item.key === draft.link);
 
   const send = async () => {
-    if (!term.trim()) {
+    if (!draft.term.trim()) {
       toast.error("Write the term as it is on the page.");
       return;
     }
-    const means = meaning.trim() || record?.label || "";
+    const means = meaningOf(draft);
     if (!means) {
       toast.error("Say what it means.");
       return;
@@ -257,10 +335,10 @@ function SuggestTermForm({
     setSaving(true);
     try {
       const res = await suggestGlossaryTerm(token, {
-        term: term.trim(),
+        term: draft.term.trim(),
         meaning: means,
-        kind: link,
-        ...(current?.lookup && record ? { [link]: record.id } : {}),
+        kind: draft.link,
+        ...(current?.lookup && draft.record ? { [draft.link]: draft.record.id } : {}),
         note: note.trim(),
         ...(entryId ? { entry: entryId } : {}),
       });
@@ -289,48 +367,7 @@ function SuggestTermForm({
       </DialogUI.DialogHeader>
 
       <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar space-y-4 -mx-1 px-1 py-1">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <Label htmlFor="suggest-term">As written on the page</Label>
-            <Input id="suggest-term" value={term} onChange={(e) => setTerm(e.target.value)} placeholder="Bhai jan" />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="suggest-meaning">Means</Label>
-            <Input id="suggest-meaning" value={meaning} onChange={(e) => setMeaning(e.target.value)} placeholder="Hassan Builders" />
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <Label>Is it a name in MarketPro?</Label>
-          <div className="inline-flex rounded-md bg-muted p-1 gap-1" role="group">
-            {LINKS.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                aria-pressed={link === item.key}
-                onClick={() => { setLink(item.key); setRecord(null); }}
-                className={`h-8 px-3 rounded text-sm font-medium whitespace-nowrap ${link === item.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {current?.lookup && (
-          <div className="space-y-1">
-            <Label htmlFor="suggest-record">Which {current.label.toLowerCase()}</Label>
-            <LookupCombobox
-              id="suggest-record"
-              kind={current.lookup}
-              value={record?.id ?? ""}
-              selectedLabel={record?.label}
-              onChange={setRecord}
-              placeholder={`Pick the ${current.label.toLowerCase()}`}
-              clearable
-            />
-          </div>
-        )}
+        <GlossaryTermFields value={draft} onChange={setDraft} idPrefix="suggest" />
 
         <div className="space-y-1">
           <Label htmlFor="suggest-note">Note for the owner (optional)</Label>

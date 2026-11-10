@@ -547,7 +547,7 @@ export const methodsForAccount = (account, current = null) => {
  * invoice they meant to settle.
  */
 export const formatInvoiceOption = (invoice) => {
-  const party = invoice.customer?.name || invoice.supplier?.name || "";
+  const party = invoice.customer ? formatCustomerLabel(invoice.customer) : invoice.supplier?.name || "";
   const label = [invoice.invoice_number || `#${invoice.id}`, party]
     .filter(Boolean)
     .join(" · ");
@@ -593,6 +593,17 @@ export const formatPartyBalanceOption = (party) =>
  * a bare name rather than trailing empty brackets, and customers (which have
  * no business_name at all) are unaffected.
  */
+/**
+ * How a customer reads wherever MarketPro names one: "Wajid Ali · 03313689402",
+ * the phone after a middle dot as in the other lists. Just the name when there
+ * is no phone. Suppliers keep formatPartyLabel's "Name (Business)".
+ */
+export const formatCustomerLabel = (customer) => {
+  const name = customer?.name || "";
+  const phone = String(customer?.phone ?? "").trim();
+  return phone && phone !== "N/A" ? `${name} · ${phone}` : name;
+};
+
 export const formatPartyLabel = (party) =>
   party?.business_name
     ? `${party.name} (${party.business_name})`
@@ -753,7 +764,7 @@ export function transformSalesInvoice(data) {
   return {
     id: data.id,
     invoice_no: data.invoice_number ? data.invoice_number : "N/A",
-    customer: data.customer?.name || "—",
+    customer: data.customer ? formatCustomerLabel(data.customer) : "—",
     status: data.status,
     payment_status: data.payment_status,
     date_issued: formatDateOrDash(data.date_issued),
@@ -903,7 +914,7 @@ export function transformProject(data) {
   return {
     id: data.id,
     name: data.name,
-    customer: data.customer?.name || "None",
+    customer: data.customer ? formatCustomerLabel(data.customer) : "None",
     status: ProjectStatusMap[data.status],
     purchase_invoices: data.num_purchase_inv,
     sales_invoices: data.num_sales_inv,

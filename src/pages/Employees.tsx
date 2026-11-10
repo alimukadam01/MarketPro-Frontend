@@ -58,7 +58,9 @@ const cols = [
     key: "modules",
     label: "Modules with access",
     render: (value, row) => (
-      <div className="flex flex-wrap gap-1">
+      // One line, never wrapped: the row is 35px, and wrapped pills squeezed
+      // and overlapped. Wider than the cell, the cell scrolls them (MarqueeCell).
+      <div className="inline-flex flex-nowrap gap-1">
         {/* A data entry account has no modules: only the entry screens. */}
         {row.role === "backlog" ? (
           <Badge variant="outline" className="text-xs">Data entry · backlog screens only</Badge>
@@ -66,7 +68,7 @@ const cols = [
           <span className="text-muted-foreground text-xs">No access</span>
         ) : (
           value.map(({ key, label }) => (
-            <Badge key={key} variant="secondary" className="text-xs">
+            <Badge key={key} variant="secondary" className="text-xs shrink-0 whitespace-nowrap">
               {label}
             </Badge>
           ))

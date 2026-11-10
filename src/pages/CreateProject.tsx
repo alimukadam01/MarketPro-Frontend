@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
-import { createIdMap, formatPartyLabel, ProjectStatusMap, PQStatusMap } from "../../services/utils";
+import { createIdMap, formatPartyLabel, ProjectStatusMap, PQStatusMap, formatCustomerLabel } from "../../services/utils";
 import { createCompleteProject, getCustomersList, suppliersAPIPackage, getProductVariantsList } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
@@ -154,8 +154,8 @@ const CreateProject = () => {
     const customerOptions = useMemo(
         () => Object.entries(customers).map(([value, customer]) => ({
             value,
-            label: customer.name,
-            keywords: [customer.phone_number, customer.city?.name].filter(Boolean),
+            label: formatCustomerLabel(customer),
+            keywords: [customer.phone, customer.phone_number, customer.city?.name].filter(Boolean),
         })),
         [customers]);
 

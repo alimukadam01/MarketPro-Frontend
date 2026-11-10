@@ -27,20 +27,21 @@ import {
 import { useAuth } from "../../services/AuthProvider";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
-    formatPartyLabel,
-    createIdMap,
-    getImageUrl,
-    TransactionTypeGroups,
-    TransactionTypeMap,
-    PaymentMethodMap,
-    TransactionStatusMap,
-    ReferenceForType,
-    SourceKindMap,
-    methodsForAccount,
-    formatAccountOption,
-    formatInvoiceOption,
-    formatDate,
-    isNoteType,
+  formatPartyLabel,
+  createIdMap,
+  getImageUrl,
+  TransactionTypeGroups,
+  TransactionTypeMap,
+  PaymentMethodMap,
+  TransactionStatusMap,
+  ReferenceForType,
+  SourceKindMap,
+  methodsForAccount,
+  formatAccountOption,
+  formatInvoiceOption,
+  formatDate,
+  isNoteType,
+  formatCustomerLabel,
 } from "../../services/utils";
 import { Combobox } from "@/components/ui/combobox";
 import { Spinner } from "@/components/ui/spinner";
@@ -386,7 +387,10 @@ const UpdateTransaction = () => {
         const isEmpty = Object.keys(config.options).length === 0;
         const referenceOptions = Object.entries(config.options).map(([key, party]) => ({
             value: String(key),
-            label: formatPartyLabel(party as Record<string, unknown>),
+            // A customer with the phone beside the name; a supplier with its business.
+            label: referenceKind === "customer"
+                ? formatCustomerLabel(party as Record<string, unknown>)
+                : formatPartyLabel(party as Record<string, unknown>),
         }));
 
         return (
