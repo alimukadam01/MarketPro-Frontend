@@ -8,7 +8,7 @@ import { ACCESS_DENIED_MESSAGE } from "../../../services/utils";
  * Renders a single cell. When the content is wider than the cell, it scrolls
  * itself back and forth instead of showing a scrollbar.
  */
-function MarqueeCell({ children }) {
+export function MarqueeCell({ children }) {
   const cellRef = useRef(null);
   const contentRef = useRef(null);
   const [shift, setShift] = useState(0);
@@ -18,8 +18,18 @@ function MarqueeCell({ children }) {
     const content = contentRef.current;
     if (!cell || !content) return;
 
-    const overflow = content.scrollWidth - cell.clientWidth;
-    setShift(overflow > 0 ? overflow : 0);
+    const measure = () => {
+      const overflow = content.scrollWidth - cell.clientWidth;
+      setShift(overflow > 0 ? overflow : 0);
+    };
+    measure();
+    // Again whenever the cell or its content changes size - a window resized,
+    // a sidebar opened - or a row that fits at one width would never start
+    // scrolling at another.
+    const observer = new ResizeObserver(measure);
+    observer.observe(cell);
+    observer.observe(content);
+    return () => observer.disconnect();
   }, [children]);
 
   return (

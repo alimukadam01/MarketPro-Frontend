@@ -3,7 +3,7 @@ import {
   getCitiesList, getCustomersList, getEmployeesList, getLocationsList, getUnitsList,
   moneyAccountsAPIPackage, productsAPIPackage, projectsAPIPackage, suppliersAPIPackage,
 } from "../../services/api";
-import { AccountTypeMap, formatPartyLabel } from "../../services/utils";
+import { AccountTypeMap, formatPartyLabel, formatCustomerLabel } from "../../services/utils";
 
 export type FilterOption = { value: string; label: string; keywords?: string[] };
 
@@ -19,7 +19,7 @@ type Loading = Record<FilterOptionKind, boolean>;
 // the keywords let the dropdown still be searched by phone or city.
 const LOADERS: Record<FilterOptionKind, (token: string, user) => Promise<FilterOption[] | null>> = {
   customers: async (token) => (await getCustomersList(token))?.map((c) => ({
-    value: String(c.id), label: c.name,
+    value: String(c.id), label: formatCustomerLabel(c),
     keywords: [c.phone, c.phone_number, c.city?.name].filter(Boolean),
   })),
   suppliers: async (token) => (await suppliersAPIPackage.list(token))?.map((s) => ({

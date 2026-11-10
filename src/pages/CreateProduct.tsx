@@ -16,8 +16,10 @@ import {
     getProductVariantTypesList,
     getUnitsList,
     postProductAndVariants,
-    postProduct
+    postProduct,
+    getProductFields,
 } from "../../services/api"
+import { ProductFieldLinks, type FieldLink, type ProductFieldOption } from "@/components/ui/product-field-links"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
@@ -46,6 +48,22 @@ const CreateProduct = () => {
     const variantReady = attributeCount > 0 &&
         Object.values(currentAttributes).every((value) => String(value ?? "").trim() !== "")
 
+    const [productFields, setProductFields] = useState<ProductFieldOption[]>([])
+    const [fieldLinks, setFieldLinks] = useState<FieldLink[]>([])
+
+    // The business's extra fields, for "Asked on invoices".
+    useEffect(() => {
+        if (!token) return
+        const fetchProductFields = async () => {
+            try {
+                setProductFields(await getProductFields(token))
+            } catch (error) {
+                console.log("Error fetching product fields:", error)
+            }
+        }
+        fetchProductFields()
+    }, [token])
+
     // react-hook-form setup
     const { register, handleSubmit, control } = useForm({
         defaultValues: {
@@ -66,7 +84,8 @@ const CreateProduct = () => {
 
         const productData = {
             ...rest,
-            variants: productVariants
+            variants: productVariants,
+            field_links: fieldLinks,
         }
 
         try {
@@ -271,6 +290,8 @@ const CreateProduct = () => {
                                     <Label htmlFor="desc">Description</Label>
                                     <Textarea id="desc" {...register("desc")} placeholder="Add product description here..." rows={6} />
                                 </div>
+
+                                <ProductFieldLinks fields={productFields} value={fieldLinks} onChange={setFieldLinks} />
                             </div>
 
                             {/* Second Column */}

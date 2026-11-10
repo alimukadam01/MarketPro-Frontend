@@ -6,16 +6,12 @@ import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { SearchField } from "@/components/ui/search-field";
 import { Spinner } from "@/components/ui/spinner";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import * as DialogUI from "@/components/ui/dialog";
 import { RowAction } from "@/components/invoice/InvoiceItemsTable";
-import { GLOSSARY_KINDS } from "@/components/backlog/BacklogDialogs";
-import { LookupCombobox, type LookupItem } from "@/components/backlog/LookupCombobox";
+import { GLOSSARY_KINDS, GlossaryTermFields, linkOfKind, meaningOf, type TermDraft } from "@/components/backlog/BacklogDialogs";
 import { personName, type GlossaryRow } from "@/components/backlog/meta";
 import { useAuth } from "../../../services/AuthProvider";
 import {
@@ -30,9 +26,6 @@ import {
 import { formatDate } from "../../../services/utils";
 
 const GRID = "grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.4fr)_minmax(0,1.2fr)_140px] gap-4 items-center w-full";
-
-// Which record a kind of term may point at.
-const LINKABLE: Record<string, string> = { customer: "customers", supplier: "suppliers", product: "products" };
 
 const linkText = (links) =>
   links ? `${GLOSSARY_KINDS[links.kind] || links.kind}: ${links.name}` : "-";
@@ -227,30 +220,41 @@ export default function BacklogGlossary() {
 
 function TermDialog({ term, onClose, onSaved }) {
   const { token } = useAuth();
-  const [form, setForm] = useState({ term: "", meaning: "", kind: "shorthand" });
-  const [record, setRecord] = useState<LookupItem | null>(null);
+  // The same form a data entry person suggests a term with
+  // (GlossaryTermFields): one way to add a term, whoever adds it.
+  const [draft, setDraft] = useState<TermDraft>({ term: "", meaning: "", link: "shorthand", record: null });
   const [saving, setSaving] = useState(false);
   const isNew = !term?.id;
 
   useEffect(() => {
     if (!term) return;
-    setForm({ term: term.term || "", meaning: term.meaning || "", kind: term.kind || "shorthand" });
-    setRecord(term.links_to ? { id: term.links_to.id, label: term.links_to.name } : null);
+    setDraft({
+      term: term.term || "",
+      meaning: term.meaning || "",
+      // A term kept as a shade, unit or payment opens on Just shorthand.
+      link: term.id ? linkOfKind(term.kind) : "customer",
+      record: term.links_to ? { id: term.links_to.id, label: term.links_to.name } : null,
+    });
   }, [term]);
 
   const save = async () => {
-    if (!form.term.trim() || !form.meaning.trim()) {
-      toast.error("A term needs both what is written and what it means.");
+    if (!draft.term.trim()) {
+      toast.error("Write the term as it is on the page.");
       return;
     }
-    const link = LINKABLE[form.kind] ? form.kind : null;
+    const meaning = meaningOf(draft);
+    if (!meaning) {
+      toast.error("Say what it means.");
+      return;
+    }
+    const linked = draft.link !== "shorthand" && draft.record ? draft.link : null;
     const data = {
-      term: form.term.trim(),
-      meaning: form.meaning.trim(),
-      kind: form.kind,
-      customer: link === "customer" && record ? record.id : null,
-      supplier: link === "supplier" && record ? record.id : null,
-      product: link === "product" && record ? record.id : null,
+      term: draft.term.trim(),
+      meaning,
+      kind: draft.link,
+      customer: linked === "customer" ? draft.record.id : null,
+      supplier: linked === "supplier" ? draft.record.id : null,
+      product: linked === "product" ? draft.record.id : null,
     };
     setSaving(true);
     try {
@@ -269,8 +273,6 @@ function TermDialog({ term, onClose, onSaved }) {
     }
   };
 
-  const lookup = LINKABLE[form.kind];
-
   return (
     <DialogUI.Dialog open={!!term} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogUI.DialogContent className="max-w-lg">
@@ -281,41 +283,7 @@ function TermDialog({ term, onClose, onSaved }) {
           </DialogUI.DialogDescription>
         </DialogUI.DialogHeader>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <Label htmlFor="term">As written</Label>
-              <Input id="term" value={form.term} onChange={(e) => setForm((f) => ({ ...f, term: e.target.value }))} placeholder="S.W" />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="term_kind">Kind</Label>
-              <Select value={form.kind} onValueChange={(kind) => { setForm((f) => ({ ...f, kind })); setRecord(null); }}>
-                <SelectTrigger id="term_kind"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {Object.entries(GLOSSARY_KINDS).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>{label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="meaning">Means</Label>
-            <Input id="meaning" value={form.meaning} onChange={(e) => setForm((f) => ({ ...f, meaning: e.target.value }))} placeholder="Sweet White" />
-          </div>
-          {lookup && (
-            <div className="space-y-1">
-              <Label htmlFor="term_link">Linked {form.kind} (optional)</Label>
-              <LookupCombobox
-                id="term_link"
-                kind={lookup}
-                value={record?.id ?? ""}
-                selectedLabel={record?.label}
-                onChange={setRecord}
-                placeholder={`Pick the ${form.kind}`}
-                clearable
-              />
-            </div>
-          )}
+          <GlossaryTermFields value={draft} onChange={setDraft} idPrefix="term" />
         </div>
         <DialogUI.DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
