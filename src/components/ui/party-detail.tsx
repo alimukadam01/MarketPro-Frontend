@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/ui/combobox";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { PeriodMetricCard } from "@/components/dashboard/PeriodMetricCard";
+import { ALL_TIME, PAGE_PERIODS } from "../../../services/periods";
 import PartyLedgerSection from "@/components/ui/party-ledger";
 import PartyActions from "@/components/ui/party-actions";
 import RecordPaymentDialog from "@/components/ui/record-payment-dialog";
@@ -396,11 +397,15 @@ export function PartyDetail({ party }: { party: "customer" | "supplier" }) {
                             error={!summaryLoading && summary == null}
                         />
                         {/* Its own period: what was billed to this party over
-                            it. The balance beside it is always everything. */}
+                            it. The balance beside it is always everything.
+                            All time is offered and is the default; the key is
+                            new (-v2) so a period remembered from before, when
+                            the default was Year, does not hide that. */}
                         <PeriodMetricCard
                             title="Total Business"
-                            storageKey={`${party}-total-business`}
-                            defaultPeriod={{ key: "year" }}
+                            storageKey={`${party}-total-business-v2`}
+                            defaultPeriod={ALL_TIME}
+                            periodOptions={PAGE_PERIODS}
                             fetcher={(period) => config.fetchSummary(token, party_id, period)}
                             pick={(data: { total_business: number }) => formatCurrency(data.total_business)}
                             errorMessage={`Failed to fetch ${party} total business.`}
