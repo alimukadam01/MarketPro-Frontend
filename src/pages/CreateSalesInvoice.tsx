@@ -97,7 +97,7 @@ const CreateSalesInvoice = () => {
       notes: "",
       date_issued: todayForInput(),
       date_due: todayForInput(),
-      discount: "0.0",
+      discount: "0",
       tax: "0.0",
       extra_charges: [] as ExtraCharge[],
       project: project_id ? String(project_id) : null,
@@ -192,7 +192,7 @@ const CreateSalesInvoice = () => {
       quantity: item.quantity,
       unit_price: item.unit_price,
       extra_fields: item.extra_fields || {},
-      discount: item.discount || {},
+      discount: item.discount || { type: "percentage", value: 0 },
     }))
 
     // Cleaned here rather than posted raw, so a malformed row is named on
@@ -273,8 +273,12 @@ const CreateSalesInvoice = () => {
       }
       setInvoiceItems(merged);
       setLineAnswers({})
+      // The row is cleared for the next item: product, quantity, price, its
+      // extra fields and discount.
       setLineDiscount(EMPTY_LINE_DISCOUNT)
-      reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true });
+      setValue("newItemProduct", "" as never);
+      setValue("newItemQuantity", 0 as never);
+      setValue("newItemPrice", 0 as never);
     }
   }
 
@@ -573,10 +577,11 @@ const CreateSalesInvoice = () => {
         first
         pinned={
           <>
-            {/* Wraps rather than squeezes: beside Extra Charges the section is half the
-                page wide, and the product picker keeps room to read. */}
-            <div className="flex flex-wrap gap-x-4 gap-y-3 items-end">
-              <div className="flex-1 min-w-[260px] space-y-1">
+            {/* Row 1: product (two parts), quantity, price, discount. Row 2: the
+                product's extra fields, one part each. Add Item has a column of its own
+                and comes last in the page, so Tab goes discount -> extra fields -> Add Item. */}
+            <div className="grid grid-cols-[repeat(5,minmax(0,1fr))_auto] gap-x-4 gap-y-3 items-end">
+              <div className="col-span-2 min-w-0 space-y-1">
                 <Label htmlFor="newItemProduct">Product</Label>
                 <Controller
                   name="newItemProduct"
@@ -595,6 +600,15 @@ const CreateSalesInvoice = () => {
                   )}
                 />
               </div>
+              <div className="min-w-0 space-y-1">
+                <Label htmlFor="newItemQuantity">Quantity</Label>
+                <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <Label htmlFor="newItemPrice">Unit Price</Label>
+                <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
+              </div>
+              <LineDiscountInput value={lineDiscount} onChange={setLineDiscount} />
               <ExtraFieldInputs
                 variant={selectedProduct?.product}
                 side="sale"
@@ -604,24 +618,18 @@ const CreateSalesInvoice = () => {
                   addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemPrice") || 0.0)))
                 }
               />
-              <div className="w-28 space-y-1">
-                <Label htmlFor="newItemQuantity">Quantity</Label>
-                <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
+              {/* Placed in row 1, column 6, but last in the page: Tab reaches it after the extra fields. */}
+              <div className="col-start-6 row-start-1">
+                <Button
+                  type="button"
+                  onClick={() =>
+                    addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemPrice") || 0.0)))
+                  }
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
               </div>
-              <div className="w-32 space-y-1">
-                <Label htmlFor="newItemPrice">Unit Price</Label>
-                <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
-              </div>
-              <LineDiscountInput value={lineDiscount} onChange={setLineDiscount} />
-              <Button
-                type="button"
-                onClick={() =>
-                  addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemPrice") || 0.0)))
-                }
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Item
-              </Button>
             </div>
             <InvoiceItemsTable showDiscount={anyLineDiscount} columns={["Product", "Quantity", "Unit Price", "Disc.", "Total"]} rows={[]} headerOnly />
           </>

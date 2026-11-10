@@ -17,7 +17,8 @@ import { askedFields } from "../../../services/utils";
 export type Side = "sale" | "purchase";
 export type LineDiscountDraft = { type: "percentage" | "amount"; value: string };
 
-export const EMPTY_LINE_DISCOUNT: LineDiscountDraft = { type: "percentage", value: "" };
+// A line's discount starts at 0 - never blank (the server stores 0% for none).
+export const EMPTY_LINE_DISCOUNT: LineDiscountDraft = { type: "percentage", value: "0" };
 
 /** The first required field left blank, for the "Enter the colour code." toast. */
 export const missingRequiredField = (variant, side: Side, answers: Record<string, string>) =>
@@ -35,12 +36,13 @@ export const answersForSave = (variant, side: Side, answers: Record<string, stri
   return out;
 };
 
-/** {} or {type, value}, from the draft the input holds. */
+/** {type, value} from the draft the input holds; blank or 0 is 0%, as the
+ *  server stores it. */
 export const discountForSave = (draft: LineDiscountDraft) => {
   const value = Number(draft?.value);
   return draft?.value !== "" && Number.isFinite(value) && value > 0
     ? { type: draft.type, value: Math.round(value * 100) / 100 }
-    : {};
+    : { type: "percentage", value: 0 };
 };
 
 export function ExtraFieldInputs({
@@ -59,7 +61,7 @@ export function ExtraFieldInputs({
   return (
     <>
       {fields.map((field, index) => (
-        <div key={field.id} className="w-36 space-y-1">
+        <div key={field.id} className="min-w-0 space-y-1">
           <Label htmlFor={`line-field-${field.id}`}>
             {field.label}
             {field.required ? <span className="text-destructive"> *</span> : null}
@@ -90,12 +92,13 @@ export function LineDiscountInput({
   idPrefix?: string;
 }) {
   return (
-    <div className="w-36 space-y-1">
+    <div className="min-w-0 space-y-1">
       <Label htmlFor={`${idPrefix}-discount`}>Discount</Label>
       <AmountToggleInput
         id={`${idPrefix}-discount`}
         type={value.type}
         onToggle={() => onChange({ ...value, type: value.type === "percentage" ? "amount" : "percentage" })}
+        toggleInTabOrder={false}
         inputProps={{
           type: "number",
           min: 0,

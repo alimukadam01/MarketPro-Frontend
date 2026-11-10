@@ -72,13 +72,13 @@ const savedLine = (line): Line => ({
   price: Number(line.price || 0),
   extra_fields: line.extra_fields || {},
   extra_fields_display: line.extra_fields_display || [],
-  discount: line.discount || {},
+  discount: line.discount || { type: "percentage", value: 0 },
 });
 
 /** What a line bills after its discount (services/utils lineTotal). */
 const lineAmount = (line: Line) => lineTotal(line, "price");
 
-/** "Base (Variant) · Colour code 5674". */
+/** "Base (Variant) · 5674": the answers after the product, values only. */
 const lineLabel = (line: Line) => {
   const extras = formatLineExtras({ ...line, product: { base: { extra_fields: line.fields || [] } } });
   return extras ? `${line.label} · ${extras}` : line.label;
@@ -382,7 +382,7 @@ export default function BacklogInvoiceEntry({
         quantity: line.quantity,
         [priceKey]: line.price,
         extra_fields: line.extra_fields || {},
-        discount: line.discount || {},
+        discount: line.discount || { type: "percentage", value: 0 },
       })),
     };
     return isSales
@@ -653,9 +653,11 @@ export default function BacklogInvoiceEntry({
               aside={lines.length > 0 ? `${lines.length} items · ${unitCount} units` : undefined}
               pinned={
                 <>
-                  {/* Wraps rather than squeezes the product picker. */}
-                  <div className="flex flex-wrap gap-x-3 gap-y-3 items-end">
-                    <div className="flex-1 min-w-[240px] space-y-1">
+                  {/* Row 1: product (two parts), quantity, price, discount. Row 2: the
+                      product's extra fields, one part each. Add Item has a column of its own
+                      and comes last in the page, so Tab goes discount -> extra fields -> Add Item. */}
+                  <div className="grid grid-cols-[repeat(5,minmax(0,1fr))_auto] gap-x-4 gap-y-3 items-end">
+                    <div className="col-span-2 min-w-0 space-y-1">
                       <Label htmlFor="newProduct">Product</Label>
                       <LookupCombobox
                         id="newProduct"
@@ -672,6 +674,15 @@ export default function BacklogInvoiceEntry({
                         notFoundText="No product matches that. Check the glossary."
                       />
                     </div>
+                    <div className="min-w-0 space-y-1">
+                      <Label htmlFor="newQuantity">Qty</Label>
+                      <Input id="newQuantity" type="number" min="0" value={newQuantity} onChange={(e) => setNewQuantity(e.target.value)} />
+                    </div>
+                    <div className="min-w-0 space-y-1">
+                      <Label htmlFor="newPrice">{priceLabel}</Label>
+                      <Input id="newPrice" type="number" min="0" step="0.01" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} />
+                    </div>
+                    <LineDiscountInput value={lineDiscount} onChange={setLineDiscount} idPrefix="entry-line" />
                     <ExtraFieldInputs
                       variant={pickedVariant}
                       side={side}
@@ -679,19 +690,13 @@ export default function BacklogInvoiceEntry({
                       onChange={setLineAnswers}
                       onEnter={addLine}
                     />
-                    <div className="w-24 space-y-1">
-                      <Label htmlFor="newQuantity">Qty</Label>
-                      <Input id="newQuantity" type="number" min="0" value={newQuantity} onChange={(e) => setNewQuantity(e.target.value)} />
+                    {/* Placed in row 1, column 6, but last in the page: Tab reaches it after the extra fields. */}
+                    <div className="col-start-6 row-start-1">
+                      <Button type="button" onClick={addLine}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Item
+                      </Button>
                     </div>
-                    <div className="w-28 space-y-1">
-                      <Label htmlFor="newPrice">{priceLabel}</Label>
-                      <Input id="newPrice" type="number" min="0" step="0.01" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} />
-                    </div>
-                    <LineDiscountInput value={lineDiscount} onChange={setLineDiscount} idPrefix="entry-line" />
-                    <Button type="button" onClick={addLine}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Item
-                    </Button>
                   </div>
                   {/* Gives way on a short screen. */}
                   <p className="text-xs text-muted-foreground [@media(max-height:760px)]:hidden">

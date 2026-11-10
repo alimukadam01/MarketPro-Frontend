@@ -296,15 +296,14 @@ export const askedFields = (variant, side) =>
   (variant?.base?.extra_fields || []).filter(
     (field) => field.applies_to === side || field.applies_to === "both");
 
-/** "Colour code 5674 · Batch no. 12": a saved line's display rows, or a new
- *  line's answers named from the product's fields. */
+/** "5674 · 12": a line's answers for the line tables - the values only, in
+ *  field order, without the field names. A saved line has them as display
+ *  rows; a new one has its raw answers, already in the same order. */
 export const formatLineExtras = (item) => {
   if (item?.extra_fields_display?.length) {
-    return item.extra_fields_display.map((row) => `${row.label} ${row.value}`).join(" · ");
+    return item.extra_fields_display.map((row) => row.value).join(" · ");
   }
-  const answers = canonicalExtraFields(item?.extra_fields);
-  const names = Object.fromEntries((item?.product?.base?.extra_fields || []).map((f) => [String(f.id), f.label]));
-  return Object.entries(answers).map(([id, value]) => `${names[id] || "Detail"} ${value}`).join(" · ");
+  return Object.values(canonicalExtraFields(item?.extra_fields)).join(" · ");
 };
 
 /** "10%", "500" or "" for a line's Disc. column. */
