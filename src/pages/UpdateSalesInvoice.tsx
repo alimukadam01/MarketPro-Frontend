@@ -18,6 +18,7 @@ import {
   formatLineDiscount,
   lineProductLabel,
   lineTotal,
+  formatCustomerLabel,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -459,8 +460,8 @@ const UpdateSalesInvoice = () => {
   const customerOptions = useMemo(
     () => Object.entries(customers).map(([value, customer]) => ({
       value,
-      label: customer.name,
-      keywords: [customer.phone_number, customer.city?.name].filter(Boolean),
+      label: formatCustomerLabel(customer),
+      keywords: [customer.phone, customer.phone_number, customer.city?.name].filter(Boolean),
     })),
     [customers])
 

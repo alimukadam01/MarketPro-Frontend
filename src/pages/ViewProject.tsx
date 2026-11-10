@@ -9,12 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
-import { 
-    createIdMap, 
-    ProjectStatusMap, 
-    PQStatusMap,
-    SalesInvoiceStatusMap,
-    PurchaseInvoiceStatusMap
+import {
+  createIdMap,
+  ProjectStatusMap,
+  PQStatusMap,
+  SalesInvoiceStatusMap,
+  PurchaseInvoiceStatusMap,
+  formatCustomerLabel,
 } from "../../services/utils";
 import {
     createCompleteProject,
@@ -192,8 +193,8 @@ const ViewProject = () => {
     const customerOptions = useMemo(
         () => Object.entries(customers).map(([value, customer]) => ({
             value,
-            label: customer.name,
-            keywords: [customer.phone_number, customer.city?.name].filter(Boolean),
+            label: formatCustomerLabel(customer),
+            keywords: [customer.phone, customer.phone_number, customer.city?.name].filter(Boolean),
         })),
         [customers]);
 
@@ -518,7 +519,7 @@ const ViewProject = () => {
                                     {salesInvoices.map((entry) => (
                                         <div key={entry.id} className="flex items-center gap-2">
                                             <div className="bg-card rounded-lg flex flex-1 justify-between px-2 py-1 bg-transparent border border-border box-border">
-                                                <div className="font-medium">{entry.sales_invoice.invoice_number} — {entry.sales_invoice.customer.name}</div>
+                                                <div className="font-medium">{entry.sales_invoice.invoice_number} — {formatCustomerLabel(entry.sales_invoice.customer)}</div>
                                                 <div className="text-muted-foreground text-sm">{entry.sales_invoice.total_items} items · PKR {entry.sales_invoice.total.toLocaleString()} · {SalesInvoiceStatusMap[entry.sales_invoice.status]}</div>
                                             </div>
                                             <div className="flex items-center h-7">

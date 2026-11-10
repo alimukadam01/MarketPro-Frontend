@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Controller } from "react-hook-form";
 import { ArrowLeft, ArrowRight, CheckCircle2Icon, Plus, X } from "lucide-react";
-import { formatPartyLabel, TargetPeriodTypeMap } from "../../../services/utils";
+import { formatPartyLabel, TargetPeriodTypeMap, formatCustomerLabel } from "../../../services/utils";
 import {
   getCustomersList,
   getEmployeesList,
@@ -882,7 +882,7 @@ export const loadTargetEntities = async (token, businessId, owner) => {
       settle("employees", () => getEmployeesList(token, businessId)),
     ]);
 
-  entities.customer = (customers || []).map((c) => ({ id: c.id, name: c.name }));
+  entities.customer = (customers || []).map((c) => ({ id: c.id, name: formatCustomerLabel(c) }));
   // Lookup is by id, so `name` here is purely the label.
   entities.supplier = (suppliers || []).map((s) => ({
     id: s.id,

@@ -28,20 +28,21 @@ import {
 import { useAuth } from "../../services/AuthProvider";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
-    createIdMap,
-    TransactionTypeGroups,
-    TransactionTypeMap,
-    PaymentMethodMap,
-    MethodsForAccountType,
-    ReferenceForType,
-    ExpenseCategoryMap,
-    formatAccountOption,
-    formatInvoiceOption,
-    formatPartyKhaataOption,
-    buildKhaataPositions,
-    isNoteType,
-    pendingInvoicesOnly,
-    todayForInput,
+  createIdMap,
+  TransactionTypeGroups,
+  TransactionTypeMap,
+  PaymentMethodMap,
+  MethodsForAccountType,
+  ReferenceForType,
+  ExpenseCategoryMap,
+  formatAccountOption,
+  formatInvoiceOption,
+  formatPartyKhaataOption,
+  buildKhaataPositions,
+  isNoteType,
+  pendingInvoicesOnly,
+  todayForInput,
+  formatCustomerLabel,
 } from "../../services/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
@@ -325,8 +326,10 @@ const CreateTransaction = () => {
                 empty: "No customers on this business yet",
                 options: allCustomers as PickerOptions,
                 loading: notePartiesLoading,
+                // The phone beside the name, then what the khaata says.
                 render: (party) =>
-                    formatPartyKhaataOption(party, khaataPositions[`customer:${party.id}`]),
+                    formatPartyKhaataOption({ ...party, name: formatCustomerLabel(party) },
+                        khaataPositions[`customer:${party.id}`]),
             },
             supplier: {
                 name: "supplier" as const,
