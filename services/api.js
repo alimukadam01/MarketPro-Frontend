@@ -571,6 +571,28 @@ export const getProductVariantsList = async (token, searchQuery = null) => {
   }
 };
 
+/**
+ * The business's extra fields (made in Django admin), for the product form's
+ * "Asked on invoices" section. [] when there are none or the call fails: the
+ * section then simply does not show.
+ */
+export const getProductFields = async (token) => {
+  try {
+    const res = await apiClient.get("/product-fields/", {
+      headers: {
+        Authorization: token,
+      },
+    });
+    if (res.status === 200) {
+      return res.data;
+    }
+    return [];
+  } catch (error) {
+    console.log("There was an error fetching the product fields: ", error);
+    return [];
+  }
+};
+
 export const postProductAndVariants = async (token, productData) => {
   try {
     const res = await apiClient.post(

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { MarqueeCell } from "@/components/ui/data-table";
 
 export interface InvoiceItemsRow {
   key: string | number;
@@ -23,12 +24,22 @@ interface InvoiceItemsTableProps {
    */
   headerOnly?: boolean;
   rowsOnly?: boolean;
+  /**
+   * Whether the "Disc." column shows. Pages pass it whenever some line has a
+   * discount; without one the column and its cells are left out, and the
+   * table is as it always was.
+   */
+  showDiscount?: boolean;
 }
 
 // The product takes whatever width is left; quantity, price and total are
 // narrow fixed columns held together at the right of the row, right-aligned so
 // the figures line up digit for digit down the list.
 const GRID = "grid grid-cols-[40px_minmax(0,1fr)_72px_104px_112px] items-center gap-4 w-full";
+// With a narrow Disc. column before Total (a line discount: "10%" or "500").
+// Tighter, so the product keeps room on a half-width section.
+const GRID_WITH_DISCOUNT = "grid grid-cols-[32px_minmax(0,1fr)_56px_88px_56px_96px] items-center gap-3 w-full";
+const DISCOUNT_COLUMN = "Disc.";
 
 // The first column after S.no is the product; the rest are figures.
 const align = (index: number) => (index === 0 ? "" : "text-right tabular-nums");
@@ -48,7 +59,14 @@ export function InvoiceItemsTable({
   emptyText = "No items yet.",
   headerOnly = false,
   rowsOnly = false,
+  showDiscount = true,
 }: InvoiceItemsTableProps) {
+  const discountAt = columns.indexOf(DISCOUNT_COLUMN);
+  const dropAt = discountAt >= 0 && !showDiscount ? discountAt : -1;
+  const shownColumns = dropAt >= 0 ? columns.filter((_, index) => index !== dropAt) : columns;
+  const cellsOf = (row: InvoiceItemsRow) =>
+    dropAt >= 0 ? row.cells.filter((_, index) => index !== dropAt) : row.cells;
+  const grid = shownColumns.includes(DISCOUNT_COLUMN) ? GRID_WITH_DISCOUNT : GRID;
   const actionSlots = Array.from({ length: actionCount }).map((_, index) => (
     <div key={index} className="w-5 shrink-0" />
   ));
@@ -56,9 +74,9 @@ export function InvoiceItemsTable({
   const header = (
     <div className="flex items-center gap-2">
       <div className="bg-card rounded-lg border h-[35px] flex flex-1 items-center px-4">
-        <div className={`${GRID} text-sm font-medium text-muted-foreground`}>
+        <div className={`${grid} text-sm font-medium text-muted-foreground`}>
           <div>S.no</div>
-          {columns.map((column, index) => (
+          {shownColumns.map((column, index) => (
             <div key={column} className={`truncate ${align(index)}`}>{column}</div>
           ))}
         </div>
@@ -75,12 +93,19 @@ export function InvoiceItemsTable({
         <div
           className={`bg-card rounded-lg border border-border h-[35px] flex flex-1 items-center px-4 ${row.dimmed ? "opacity-50" : ""}`}
         >
-          <div className={`${GRID} text-sm`}>
+          <div className={`${grid} text-sm`}>
             <div>{idx + 1}</div>
-            {row.cells.map((cell, index) => (
+            {cellsOf(row).map((cell, index, cells) => index === 0 ? (
+              // The product scrolls when it is wider than its cell, as on the
+              // list pages: with a colour code after it, half a page is often
+              // too narrow, and truncating would hide the colour.
+              <div key={index} className="min-w-0">
+                <MarqueeCell>{cell}</MarqueeCell>
+              </div>
+            ) : (
               <div
                 key={index}
-                className={`min-w-0 truncate ${align(index)} ${index === 0 ? "font-medium" : ""} ${index === row.cells.length - 1 ? "font-semibold" : ""}`}
+                className={`min-w-0 truncate ${align(index)} ${index === cells.length - 1 ? "font-semibold" : ""}`}
               >
                 {cell}
               </div>

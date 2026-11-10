@@ -24,17 +24,21 @@ export function AmountToggleInput({
   type,
   onToggle,
   inputProps,
+  toggleInTabOrder = true,
 }: {
   id: string;
   type: string;
   onToggle: () => void;
   inputProps: ComponentProps<typeof Input>;
+  /** False keeps Tab from stopping on the % / PKR button (it still clicks):
+   *  on an invoice line, Tab goes from the discount straight to the next field. */
+  toggleInTabOrder?: boolean;
 }) {
   return (
     <div className="relative">
       <Input id={id} placeholder="0.0" {...inputProps} />
       <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-        <Button type="button" variant="outline" onClick={onToggle}>
+        <Button type="button" variant="outline" onClick={onToggle} tabIndex={toggleInTabOrder ? undefined : -1}>
           {type === "percentage" ? "%" : "PKR"}
         </Button>
       </span>

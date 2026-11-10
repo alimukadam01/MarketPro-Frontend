@@ -37,7 +37,7 @@ interface InvoiceScreenProps {
  *   title · status            actions │ ┌ Summary ┐
  *   field · field · field · field     │ │         │
  *   ──────────────────────────────────│ │         │
- *   items (60%)      │ charges (40%)  │ │  Total  │
+ *   items (65%)      │ charges (35%)  │ │  Total  │
  *   (scrolls)         │ (scrolls)     │ └─────────┘
  *                                     │ fields, buttons
  *
@@ -115,11 +115,11 @@ export function InvoiceScreen({
                 {/* no-scrollbar: still scrolls, without the bar. No top
                     padding here: it lives inside each section's sticky block,
                     or the rows would show through the gap above it. */}
-                <div className={`${side ? "w-3/5 pr-6" : "w-full pr-1"} min-w-0 min-h-0 overflow-y-auto no-scrollbar -ml-1 pl-1 pb-6`}>
+                <div className={`${side ? "w-[65%] pr-6" : "w-full pr-1"} min-w-0 min-h-0 overflow-y-auto no-scrollbar -ml-1 pl-1 pb-6`}>
                   {children}
                 </div>
                 {side && (
-                  <div className="w-2/5 min-w-0 min-h-0 overflow-y-auto no-scrollbar border-l border-border pl-6 -mr-1 pr-1 pb-6">
+                  <div className="w-[35%] min-w-0 min-h-0 overflow-y-auto no-scrollbar border-l border-border pl-6 -mr-1 pr-1 pb-6">
                     {side}
                   </div>
                 )}

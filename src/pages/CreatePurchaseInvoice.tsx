@@ -12,6 +12,9 @@ import {
   formatPartyLabel,
   createIdMap,
   todayForInput,
+  formatLineDiscount,
+  formatLineExtras,
+  lineTotal,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -31,6 +34,10 @@ import InvoiceImages from "@/components/ui/invoice-images";
 import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
 import { InvoiceItemsTable, RowAction } from "@/components/invoice/InvoiceItemsTable";
 import {
+  EMPTY_LINE_DISCOUNT, ExtraFieldInputs, LineDiscountInput, answersForSave, discountForSave,
+  missingRequiredField, type LineDiscountDraft,
+} from "@/components/invoice/LineExtrasInputs";
+import {
   AmountToggleInput,
   InvoiceSummaryCard,
   PaymentButton,
@@ -45,14 +52,26 @@ type StagedImage = { id: string; file: File; caption: string; preview: string }
 // A row added here keeps the raw variant off the products list, which carries
 // its nested base; show "Base (Variant)" when it is there.
 const productLabel = (product) =>
-  product?.base ? `${product.base.name} (${product.name})` : product?.name
+  // base.name, not base: a row loaded from the record is flat but keeps a
+  // base for the extra fields its product asks (transformProductVariant).
+  product?.base?.name ? `${product.base.name} (${product.name})` : product?.name
 
-const ITEM_COLUMNS = ["Product", "Quantity", "Unit Cost", "Total"]
+const ITEM_COLUMNS = ["Product", "Quantity", "Unit Cost", "Disc.", "Total"]
+
+/** "Base (Variant) · 12": the answers after the product, values only. */
+const withExtras = (label: string, item) => {
+  const extras = formatLineExtras(item)
+  return extras ? `${label} · ${extras}` : label
+}
+
 
 const CreatePurchaseInvoice = () => {
   const { pending, run } = usePending();
 
   const [invoiceItems, setInvoiceItems] = useState([])
+  // The add-line row's extra-field answers and discount (plans/product-extra-fields.md).
+  const [lineAnswers, setLineAnswers] = useState<Record<string, string>>({})
+  const [lineDiscount, setLineDiscount] = useState<LineDiscountDraft>(EMPTY_LINE_DISCOUNT)
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [projects, setProjects] = useState([])
@@ -93,6 +112,14 @@ const CreatePurchaseInvoice = () => {
   const tax = parseFloat(String(watch("tax") || 0))
 
   const subtotal = invoiceItems.reduce((sum, item) => sum + item.total, 0)
+  // Each line is already after its own discount; the gross beside it gives
+  // the Line discounts row.
+  const lineDiscounts = invoiceItems.reduce(
+    (sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0) - subtotal
+  // The variant picked in the add-line row: its fields are asked for.
+  const pickedProductId = watch("newItemProduct")
+  const pickedVariant = products[pickedProductId]
+  useEffect(() => { setLineAnswers({}) }, [pickedProductId])
   const [taxType, setTaxType] = useState("percentage")
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
   const totalAmount = subtotal + taxAmount
@@ -114,7 +141,9 @@ const CreatePurchaseInvoice = () => {
     const items = invoiceItems.map(item => ({
       product_id: item.product.id,
       quantity: item.quantity,
-      unit_cost: item.unit_cost
+      unit_cost: item.unit_cost,
+      extra_fields: item.extra_fields || {},
+      discount: item.discount || { type: "percentage", value: 0 },
     }))
 
     try {
@@ -156,6 +185,12 @@ const CreatePurchaseInvoice = () => {
   const addItem = (product, quantity, unit_cost) => {
     if (product && quantity > 0) {
       const selectedProduct = products[product]
+      const missing = missingRequiredField(selectedProduct, "purchase", lineAnswers)
+      if (missing) {
+        toast.error(`Enter the ${missing.label.toLowerCase()}.`)
+        document.getElementById(`line-field-${missing.id}`)?.focus()
+        return
+      }
       const newInvoiceItem = {
         // Negative, so it can never equal a saved line's id (the update
         // treats a matching id as that line) or repeat after a delete,
@@ -164,8 +199,11 @@ const CreatePurchaseInvoice = () => {
         product: selectedProduct,
         quantity,
         unit_cost,
-        total: quantity * unit_cost,
+        extra_fields: answersForSave(selectedProduct, "purchase", lineAnswers),
+        discount: discountForSave(lineDiscount),
+        total: 0,
       }
+      newInvoiceItem.total = lineTotal(newInvoiceItem, "unit_cost")
       // Same product at a different price is its own line; at the same
       // price it joins the line already there (addOrMergeInvoiceItem).
       const merged = addOrMergeInvoiceItem(invoiceItems, newInvoiceItem, "unit_cost")
@@ -173,7 +211,13 @@ const CreatePurchaseInvoice = () => {
         toast.success(`Added ${quantity} to the existing line for this product at this cost.`)
       }
       setInvoiceItems(merged)
-      reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true })
+      setLineAnswers({})
+      // The row is cleared for the next item: product, quantity, price, its
+      // extra fields and discount.
+      setLineDiscount(EMPTY_LINE_DISCOUNT)
+      setValue("newItemProduct", "" as never)
+      setValue("newItemQuantity", 0 as never)
+      setValue("newItemCost", 0 as never)
     }
   }
 
@@ -268,7 +312,11 @@ const CreatePurchaseInvoice = () => {
     fetchProjects()
   }, [token])
 
+  // The Disc. column only shows once some line has a discount.
+  const anyLineDiscount = invoiceItems.some((item) => !!formatLineDiscount(item.discount))
+
   const summaryLines = [
+    ...(lineDiscounts > 0.005 ? [{ label: "Line discounts", value: lineDiscounts, sign: "−" as const }] : []),
     { label: "Subtotal", value: subtotal },
     ...(taxAmount ? [{
       label: taxType === "percentage" ? `Tax (${tax}%)` : "Tax",
@@ -435,8 +483,11 @@ const CreatePurchaseInvoice = () => {
         aside={invoiceItems.length > 0 ? `${invoiceItems.length} items · ${unitCount} units` : undefined}
         pinned={
           <>
-            <div className="flex gap-4 items-end">
-              <div className="flex-1 min-w-0 space-y-1">
+            {/* Row 1: product (two parts), quantity, price, discount. Row 2: the
+                product's extra fields, one part each. Add Item has a column of its own
+                and comes last in the page, so Tab goes discount -> extra fields -> Add Item. */}
+            <div className="grid grid-cols-[repeat(5,minmax(0,1fr))_auto] gap-x-4 gap-y-3 items-end">
+              <div className="col-span-2 min-w-0 space-y-1">
                 <Label htmlFor="newItemProduct">Product</Label>
                 <Controller
                   name="newItemProduct"
@@ -455,38 +506,52 @@ const CreatePurchaseInvoice = () => {
                   )}
                 />
               </div>
-              <div className="w-28 space-y-1">
+              <div className="min-w-0 space-y-1">
                 <Label htmlFor="newItemQuantity">Quantity</Label>
                 <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
               </div>
-              <div className="w-32 space-y-1">
+              <div className="min-w-0 space-y-1">
                 <Label htmlFor="newItemCost">Unit Cost</Label>
                 <Input id="newItemCost" type="number" {...register("newItemCost")} />
               </div>
-              <Button
-                type="button"
-                onClick={() =>
-                  addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemCost") || 0.0)))
-                }
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Item
-              </Button>
+              <LineDiscountInput value={lineDiscount} onChange={setLineDiscount} />
+              <ExtraFieldInputs
+                variant={pickedVariant}
+                side="purchase"
+                answers={lineAnswers}
+                onChange={setLineAnswers}
+                onEnter={() => addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemCost") || 0.0)))}
+              />
+              {/* Placed in row 1, column 6, but last in the page: Tab reaches it after the extra fields. */}
+              <div className="col-start-6 row-start-1">
+                <Button
+                  type="button"
+                  onClick={() =>
+                    addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemCost") || 0.0)))
+                  }
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
+              </div>
             </div>
-            <InvoiceItemsTable columns={ITEM_COLUMNS} rows={[]} headerOnly />
+            <InvoiceItemsTable showDiscount={anyLineDiscount} columns={ITEM_COLUMNS} rows={[]} headerOnly />
           </>
         }
       >
-        <InvoiceItemsTable
+        <InvoiceItemsTable showDiscount={anyLineDiscount}
           rowsOnly
           columns={ITEM_COLUMNS}
           emptyText="No items yet. Pick a product above to add the first one."
           rows={invoiceItems.map((item) => ({
             key: item.id,
             cells: [
-              productLabel(item.product),
+              <span title={withExtras(productLabel(item.product), item)}>
+                {withExtras(productLabel(item.product), item)}
+              </span>,
               item.quantity,
               Number(item.unit_cost).toLocaleString(),
+              formatLineDiscount(item.discount),
               Number(item.total).toLocaleString(),
             ],
             actions: (

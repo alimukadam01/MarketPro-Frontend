@@ -34,9 +34,16 @@ import {
   updateWorkOutput,
   workLookup,
 } from "../../../services/api";
-import { PurchaseInvoiceStatusMap, normaliseExtraCharges } from "../../../services/utils";
+import {
+  PurchaseInvoiceStatusMap, formatLineDiscount, formatLineExtras, lineTotal, normaliseExtraCharges,
+  sameLineExtras,
+} from "../../../services/utils";
+import {
+  EMPTY_LINE_DISCOUNT, ExtraFieldInputs, LineDiscountInput, answersForSave, discountForSave,
+  missingRequiredField, type LineDiscountDraft,
+} from "@/components/invoice/LineExtrasInputs";
 
-type Picked = { id: number | string; label: string } | null;
+type Picked = { id: number | string; label: string; extra_fields?: unknown[] } | null;
 
 type Line = {
   key: string;
@@ -46,6 +53,35 @@ type Line = {
   label: string;
   quantity: number;
   price: number;
+  // plans/product-extra-fields.md: set when a line is added, kept after - a
+  // line is not edited in place.
+  extra_fields?: Record<string, string | number>;
+  extra_fields_display?: { label: string; value: string | number }[];
+  discount?: { type?: string; value?: number };
+  /** The extra fields its product asks, to name a new line's answers. */
+  fields?: unknown[];
+};
+
+/** A line as the entry form loads it back from the server. */
+const savedLine = (line): Line => ({
+  key: `saved-${line.id}`,
+  id: line.id,
+  product: line.product,
+  label: line.label,
+  quantity: Number(line.quantity),
+  price: Number(line.price || 0),
+  extra_fields: line.extra_fields || {},
+  extra_fields_display: line.extra_fields_display || [],
+  discount: line.discount || { type: "percentage", value: 0 },
+});
+
+/** What a line bills after its discount (services/utils lineTotal). */
+const lineAmount = (line: Line) => lineTotal(line, "price");
+
+/** "Base (Variant) · 5674": the answers after the product, values only. */
+const lineLabel = (line: Line) => {
+  const extras = formatLineExtras({ ...line, product: { base: { extra_fields: line.fields || [] } } });
+  return extras ? `${line.label} · ${extras}` : line.label;
 };
 
 type StagedPayment = { id: string; amount: number; status: string; fields: object; imageFile?: File | null };
@@ -162,6 +198,9 @@ export default function BacklogInvoiceEntry({
   const [newProduct, setNewProduct] = useState<Picked>(null);
   const [newQuantity, setNewQuantity] = useState("");
   const [newPrice, setNewPrice] = useState("");
+  // The add row's extra-field answers and discount.
+  const [lineAnswers, setLineAnswers] = useState<Record<string, string>>({});
+  const [lineDiscount, setLineDiscount] = useState<LineDiscountDraft>(EMPTY_LINE_DISCOUNT);
 
   const [stagedPayments, setStagedPayments] = useState<StagedPayment[]>([]);
   // Once the invoice exists, payments added or deleted in the dialog are held
@@ -211,14 +250,7 @@ export default function BacklogInvoiceEntry({
         setNotes(values.notes || "");
         setProject(values.project ? { id: values.project.id, label: values.project.label } : null);
         setCharges(values.extra_charges || []);
-        setLines((values.lines || []).map((line) => ({
-          key: `saved-${line.id}`,
-          id: line.id,
-          product: line.product,
-          label: line.label,
-          quantity: Number(line.quantity),
-          price: Number(line.price || 0),
-        })));
+        setLines((values.lines || []).map(savedLine));
         setSavedPayments(values.payments || []);
       } catch (error) {
         console.log("Error loading the invoice:", error);
@@ -234,7 +266,13 @@ export default function BacklogInvoiceEntry({
 
   // -- the figures -----------------------------------------------------------
 
-  const subtotal = lines.reduce((sum, line) => sum + line.quantity * line.price, 0);
+  // Each line after its own discount; the gross beside it gives the Line
+  // discounts row.
+  const subtotal = lines.reduce((sum, line) => sum + lineAmount(line), 0);
+  const lineDiscounts = lines.reduce((sum, line) => sum + line.quantity * line.price, 0) - subtotal;
+  const side = isSales ? "sale" : "purchase";
+  // The picked product as the extra-field inputs read it.
+  const pickedVariant = newProduct ? { base: { extra_fields: newProduct.extra_fields || [] } } : null;
   const discountValue = parseFloat(discount) || 0;
   const taxValue = parseFloat(tax) || 0;
   const discountAmount = isSales ? (discountType === "percentage" ? (subtotal * discountValue) / 100 : discountValue) : 0;
@@ -254,7 +292,11 @@ export default function BacklogInvoiceEntry({
       + cleared(pending.adds) + fromKhaata
     : cleared(stagedPayments);
 
+  // The Disc. column only shows once some line has a discount.
+  const anyLineDiscount = lines.some((item) => !!formatLineDiscount(item.discount))
+
   const summaryLines = [
+    ...(lineDiscounts > 0.005 ? [{ label: "Line discounts", value: lineDiscounts, sign: "−" as const }] : []),
     { label: "Subtotal", value: subtotal },
     ...(discountAmount ? [{ label: "Discount", value: discountAmount, sign: "−" as const }] : []),
     ...(taxAmount ? [{ label: taxType === "percentage" ? `Tax (${taxValue}%)` : "Tax", value: taxAmount, sign: "+" as const }] : []),
@@ -267,6 +309,8 @@ export default function BacklogInvoiceEntry({
     setNewProduct(null);
     setNewQuantity("");
     setNewPrice("");
+    setLineAnswers({});
+    setLineDiscount(EMPTY_LINE_DISCOUNT);
   };
 
   const addLine = () => {
@@ -285,11 +329,24 @@ export default function BacklogInvoiceEntry({
       return;
     }
 
-    // The same product at the same price joins its line, as on the invoice
-    // screens (addOrMergeInvoiceItem). A saved line keeps its id, so the
-    // update takes only the extra quantity out of stock. A line is not
-    // edited in place: a wrong one is deleted and added again.
-    const same = lines.find((line) => String(line.product) === String(newProduct.id) && line.price === price);
+    const missing = missingRequiredField(pickedVariant, side, lineAnswers);
+    if (missing) {
+      toast.error(`Enter the ${missing.label.toLowerCase()}.`);
+      document.getElementById(`line-field-${missing.id}`)?.focus();
+      return;
+    }
+    const extras = {
+      extra_fields: answersForSave(pickedVariant, side, lineAnswers),
+      discount: discountForSave(lineDiscount),
+    };
+
+    // The same product at the same price, with the same answers and discount,
+    // joins its line, as on the invoice screens (addOrMergeInvoiceItem). A
+    // saved line keeps its id, so the update takes only the extra quantity
+    // out of stock. A line is not edited in place: a wrong one is deleted and
+    // added again.
+    const same = lines.find((line) => String(line.product) === String(newProduct.id) && line.price === price
+      && sameLineExtras(line, extras));
     if (same) {
       setLines((prev) => prev.map((line) => line.key === same.key
         ? { ...line, quantity: line.quantity + quantity }
@@ -298,6 +355,7 @@ export default function BacklogInvoiceEntry({
     } else {
       setLines((prev) => [...prev, {
         key: newKey(), id: null, product: newProduct.id, label: newProduct.label, quantity, price,
+        ...extras, fields: newProduct.extra_fields || [],
       }]);
     }
     clearAddRow();
@@ -323,6 +381,8 @@ export default function BacklogInvoiceEntry({
         product_id: Number(line.product),
         quantity: line.quantity,
         [priceKey]: line.price,
+        extra_fields: line.extra_fields || {},
+        discount: line.discount || { type: "percentage", value: 0 },
       })),
     };
     return isSales
@@ -415,10 +475,7 @@ export default function BacklogInvoiceEntry({
       // add them again.
       const values = await loadValues(output.id);
       if (values) {
-        setLines((values.lines || []).map((line) => ({
-          key: `saved-${line.id}`, id: line.id, product: line.product, label: line.label,
-          quantity: Number(line.quantity), price: Number(line.price || 0),
-        })));
+        setLines((values.lines || []).map(savedLine));
         setSavedPayments(values.payments || []);
       }
       return true;
@@ -520,7 +577,7 @@ export default function BacklogInvoiceEntry({
   );
 
   const priceLabel = isSales ? "Unit Price" : "Unit Cost";
-  const columns = ["Product", "Qty", isSales ? "Price" : "Cost", "Total"];
+  const columns = ["Product", "Qty", isSales ? "Price" : "Cost", "Disc.", "Total"];
 
   return (
     <EntryShell
@@ -596,49 +653,72 @@ export default function BacklogInvoiceEntry({
               aside={lines.length > 0 ? `${lines.length} items · ${unitCount} units` : undefined}
               pinned={
                 <>
-                  <div className="flex gap-3 items-end">
-                    <div className="flex-1 min-w-0 space-y-1">
+                  {/* Row 1: product (two parts), quantity, price, discount. Row 2: the
+                      product's extra fields, one part each. Add Item has a column of its own
+                      and comes last in the page, so Tab goes discount -> extra fields -> Add Item. */}
+                  <div className="grid grid-cols-[repeat(5,minmax(0,1fr))_auto] gap-x-4 gap-y-3 items-end">
+                    <div className="col-span-2 min-w-0 space-y-1">
                       <Label htmlFor="newProduct">Product</Label>
                       <LookupCombobox
                         id="newProduct"
                         kind="variants"
                         value={newProduct?.id ?? ""}
                         selectedLabel={newProduct?.label}
-                        onChange={(item) => setNewProduct(item ? { id: item.id, label: item.label } : null)}
+                        onChange={(item) => {
+                          setNewProduct(item ? { id: item.id, label: item.label, extra_fields: (item.extra_fields as unknown[]) || [] } : null);
+                          setLineAnswers({});
+                        }}
                         markOutOfStock={isSales}
                         placeholder="Select product"
                         emptyText="No products yet."
                         notFoundText="No product matches that. Check the glossary."
                       />
                     </div>
-                    <div className="w-24 space-y-1">
+                    <div className="min-w-0 space-y-1">
                       <Label htmlFor="newQuantity">Qty</Label>
                       <Input id="newQuantity" type="number" min="0" value={newQuantity} onChange={(e) => setNewQuantity(e.target.value)} />
                     </div>
-                    <div className="w-28 space-y-1">
+                    <div className="min-w-0 space-y-1">
                       <Label htmlFor="newPrice">{priceLabel}</Label>
                       <Input id="newPrice" type="number" min="0" step="0.01" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} />
                     </div>
-                    <Button type="button" onClick={addLine}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Item
-                    </Button>
+                    <LineDiscountInput value={lineDiscount} onChange={setLineDiscount} idPrefix="entry-line" />
+                    <ExtraFieldInputs
+                      variant={pickedVariant}
+                      side={side}
+                      answers={lineAnswers}
+                      onChange={setLineAnswers}
+                      onEnter={addLine}
+                    />
+                    {/* Placed in row 1, column 6, but last in the page: Tab reaches it after the extra fields. */}
+                    <div className="col-start-6 row-start-1">
+                      <Button type="button" onClick={addLine}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Item
+                      </Button>
+                    </div>
                   </div>
                   {/* Gives way on a short screen. */}
                   <p className="text-xs text-muted-foreground [@media(max-height:760px)]:hidden">
                     Prices are not filled in - type them as written on the bill.
                   </p>
-                  <InvoiceItemsTable columns={columns} rows={[]} headerOnly />
+                  <InvoiceItemsTable showDiscount={anyLineDiscount} columns={columns} rows={[]} headerOnly />
                 </>
               }
             >
-              <InvoiceItemsTable
+              <InvoiceItemsTable showDiscount={anyLineDiscount}
                 rowsOnly
                 columns={columns}
                 emptyText="No items yet. Pick a product above to add the first one."
                 rows={lines.map((line) => ({
                   key: line.key,
-                  cells: [line.label, line.quantity, money(line.price), `PKR ${money(line.quantity * line.price)}`],
+                  cells: [
+                    <span title={lineLabel(line)}>{lineLabel(line)}</span>,
+                    line.quantity,
+                    money(line.price),
+                    formatLineDiscount(line.discount),
+                    `PKR ${money(lineAmount(line))}`,
+                  ],
                   actions: (
                     <RowAction label="Delete item" onClick={() => removeLine(line.key)}>
                       <Trash2 className="h-5 w-5" />
