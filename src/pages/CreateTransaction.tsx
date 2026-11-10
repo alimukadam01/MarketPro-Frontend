@@ -20,7 +20,10 @@ import {
     moneyAccountsAPIPackage,
     salesInvoicesAPIPackage,
     purchaseInvoicesAPIPackage,
-    getOpeningBalances,
+    suppliersAPIPackage,
+    getCustomersList,
+    getReceivables,
+    getPayables,
 } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
@@ -34,12 +37,14 @@ import {
     ExpenseCategoryMap,
     formatAccountOption,
     formatInvoiceOption,
-    formatPartyBalanceOption,
+    formatPartyKhaataOption,
+    buildKhaataPositions,
+    isNoteType,
     pendingInvoicesOnly,
     todayForInput,
 } from "../../services/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
 import { Combobox } from "@/components/ui/combobox";
 
 // Dropdown rows keyed by id, as createIdMap returns them. Typed loosely
@@ -52,15 +57,18 @@ const CreateTransaction = () => {
   const { pending, run } = usePending();
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
     const [accounts, setAccounts] = useState({});
-    const [customers, setCustomers] = useState({});
-    const [suppliers, setSuppliers] = useState({});
     const [salesInvoices, setSalesInvoices] = useState({});
     const [purchaseInvoices, setPurchaseInvoices] = useState({});
     const [accountsLoading, setAccountsLoading] = useState(true);
-    const [customersLoading, setCustomersLoading] = useState(true);
-    const [suppliersLoading, setSuppliersLoading] = useState(true);
     const [salesInvoicesLoading, setSalesInvoicesLoading] = useState(true);
     const [purchaseInvoicesLoading, setPurchaseInvoicesLoading] = useState(true);
+    // A note can be for ANY party - a debit note to someone at zero, a credit
+    // note that puts them in credit - so it cannot use the pickers above,
+    // which list only unsettled opening balances.
+    const [allCustomers, setAllCustomers] = useState({});
+    const [allSuppliers, setAllSuppliers] = useState({});
+    const [khaataPositions, setKhaataPositions] = useState({});
+    const [notePartiesLoading, setNotePartiesLoading] = useState(true);
     const [imageFile, setImageFile] = useState(null);
     const { token } = useAuth();
     const navigate = useNavigate();
@@ -94,7 +102,9 @@ const CreateTransaction = () => {
     // Types absent from the map refer to nothing, and Type spans the row.
     const referenceKind = ReferenceForType[selectedType] || null;
     const isTransfer = referenceKind === "transfer_account";
-    const isCheque = selectedMethod === "cheque";
+    // A note moves no money, so it has no account, method or cheque.
+    const isNote = isNoteType(selectedType);
+    const isCheque = !isNote && selectedMethod === "cheque";
 
     const selectedAccount = accounts[selectedAccountId];
     // Cash does not leave a cash account by bank transfer, and a cheque is
@@ -117,8 +127,12 @@ const CreateTransaction = () => {
             toast.error("Please select a transaction type.");
             return;
         }
-        if (!data.account) {
+        if (!isNote && !data.account) {
             toast.error("Please select the account this money moved through.");
+            return;
+        }
+        if (isNote && !data[referenceKind]) {
+            toast.error(`Please select the ${referenceKind} this note is for.`);
             return;
         }
 
@@ -127,8 +141,11 @@ const CreateTransaction = () => {
             formData.append("type", data.type);
             formData.append("amount", String(Math.round(Number(data.amount))));
             formData.append("date", data.date);
-            formData.append("account", data.account);
-            formData.append("payment_method", data.payment_method);
+            // The server rejects an account or method on a note.
+            if (!isNote) {
+                formData.append("account", data.account);
+                formData.append("payment_method", data.payment_method);
+            }
 
             // Only the reference this type actually has. Sending a stale key
             // from a previously chosen type would link the wrong record.
@@ -198,41 +215,6 @@ const CreateTransaction = () => {
             }
         };
 
-        const fetchCustomers = async () => {
-            try {
-                // Unsettled OPENING balances, same rule as suppliers. A
-                // customer payment settles the khaata balance carried across
-                // at onboarding; money owed on a sales invoice is settled by
-                // paying that invoice.
-                const res = await getOpeningBalances(token, "customer");
-                if (res?.parties) {
-                    setCustomers(createIdMap(res.parties));
-                }
-            } catch (error) {
-                console.log("Error fetching customers:", error);
-            } finally {
-                setCustomersLoading(false);
-            }
-        };
-
-        const fetchSuppliers = async () => {
-            try {
-                // Unsettled OPENING balances, not payables. A supplier payment
-                // settles the khaata balance carried across at onboarding;
-                // money owed against a purchase invoice is settled by paying
-                // that invoice. Payables mixes the two, so it listed suppliers
-                // with nothing for this payment to settle.
-                const res = await getOpeningBalances(token, "supplier");
-                if (res?.parties) {
-                    setSuppliers(createIdMap(res.parties));
-                }
-            } catch (error) {
-                console.log("Error fetching suppliers:", error);
-            } finally {
-                setSuppliersLoading(false);
-            }
-        };
-
         // Only invoices that still owe something: a fully paid invoice cannot
         // take another payment, and offering it only invites the 400.
         const fetchSalesInvoices = async () => {
@@ -257,11 +239,29 @@ const CreateTransaction = () => {
             }
         };
 
+        const fetchNoteParties = async () => {
+            try {
+                const [customerList, supplierList, receivables, payables] =
+                    await Promise.all([
+                        getCustomersList(token),
+                        suppliersAPIPackage.list(token),
+                        getReceivables(token),
+                        getPayables(token),
+                    ]);
+                if (customerList) setAllCustomers(createIdMap(customerList));
+                if (supplierList) setAllSuppliers(createIdMap(supplierList));
+                setKhaataPositions(buildKhaataPositions(receivables, payables));
+            } catch (error) {
+                console.log("Error fetching parties for notes:", error);
+            } finally {
+                setNotePartiesLoading(false);
+            }
+        };
+
         fetchAccounts();
-        fetchCustomers();
-        fetchSuppliers();
         fetchSalesInvoices();
         fetchPurchaseInvoices();
+        fetchNoteParties();
     }, [token]);
 
     /**
@@ -310,26 +310,33 @@ const CreateTransaction = () => {
             );
         }
 
-        // Every picker here is filtered to rows that still need settling, so
-        // an empty one is normal rather than broken - and has to say why.
+        // The party types (on-account payments, refunds, notes) list EVERY
+        // customer or supplier, with which way their khaata stands. Money on
+        // account now settles the opening balance and then pending invoices,
+        // so it is no longer limited to parties with an opening balance - and
+        // a note can be for someone at zero. The invoice pickers below are
+        // still filtered to what can be settled, so an empty one is normal
+        // rather than broken - and has to say why.
         const config = {
             customer: {
                 name: "customer" as const,
                 label: "Customer",
                 placeholder: "Select customer",
-                empty: "No customers with pending balances",
-                options: customers as PickerOptions,
-                loading: customersLoading,
-                render: formatPartyBalanceOption,
+                empty: "No customers on this business yet",
+                options: allCustomers as PickerOptions,
+                loading: notePartiesLoading,
+                render: (party) =>
+                    formatPartyKhaataOption(party, khaataPositions[`customer:${party.id}`]),
             },
             supplier: {
                 name: "supplier" as const,
                 label: "Supplier",
                 placeholder: "Select supplier",
-                empty: "No suppliers with pending balances",
-                options: suppliers as PickerOptions,
-                loading: suppliersLoading,
-                render: formatPartyBalanceOption,
+                empty: "No suppliers on this business yet",
+                options: allSuppliers as PickerOptions,
+                loading: notePartiesLoading,
+                render: (party) =>
+                    formatPartyKhaataOption(party, khaataPositions[`supplier:${party.id}`]),
             },
             sales_invoice: {
                 name: "sales_invoice" as const,
@@ -414,8 +421,9 @@ const CreateTransaction = () => {
 
                     <div className="bg-card rounded-lg p-4 border">
                         <p className="text-sm text-muted-foreground">
-                            Record this only if the money actually moved. Goods given on credit
-                            are recorded as an invoice, not here.
+                            {isNote
+                                ? "A note changes what a party owes. No money moves, so no account is used. It settles the opening balance first, then the oldest pending invoices."
+                                : "Record this only if the money actually moved. Goods given on credit are recorded as an invoice, not here."}
                         </p>
                     </div>
 
@@ -468,7 +476,8 @@ const CreateTransaction = () => {
                                 </div>
 
                                 {/* Payment Method belongs next to the account it has to
-                                    agree with, not a column away. */}
+                                    agree with, not a column away. A note has neither. */}
+                                {!isNote && (
                                 <div className="flex gap-6 mb-6">
                                     <div className="flex-1 space-y-1">
                                         <Label htmlFor="account">Account</Label>
@@ -513,6 +522,7 @@ const CreateTransaction = () => {
                                         />
                                     </div>
                                 </div>
+                                )}
 
                                 <div className="flex gap-6 mb-6">
                                     <div className="flex-1 space-y-1">
@@ -537,7 +547,11 @@ const CreateTransaction = () => {
                                         <Input
                                             id="reference"
                                             type="text"
-                                            placeholder="Slip number, wallet transaction ID, etc."
+                                            placeholder={
+                                                isNote
+                                                    ? "The note's own number, e.g. DWP-CN-118"
+                                                    : "Slip number, wallet transaction ID, etc."
+                                            }
                                             {...register("reference")}
                                         />
                                     </div>
@@ -602,7 +616,9 @@ const CreateTransaction = () => {
                                         className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-muted-foreground file:border-0 file:bg-transparent file:text-sm file:font-medium"
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        Optional. A photo of the slip or wallet confirmation.
+                                        {isNote
+                                            ? "Optional. A photo of the note."
+                                            : "Optional. A photo of the slip or wallet confirmation."}
                                     </p>
                                 </div>
 

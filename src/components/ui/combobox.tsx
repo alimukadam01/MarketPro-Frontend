@@ -1,6 +1,6 @@
 import * as React from "react";
 import { Combobox as ComboboxPrimitive } from "@base-ui/react/combobox";
-import { Check, ChevronDown, ChevronsUpDown, ChevronUp, X } from "lucide-react";
+import { Check, ChevronDown, ChevronsUpDown, ChevronUp, Plus, X } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,20 @@ export interface ComboboxOption {
    */
   keywords?: string[];
   disabled?: boolean;
+}
+
+/**
+ * Creating what was typed, when it is not there. The button takes the
+ * chevron's place at the right of the field.
+ */
+export interface ComboboxCreateAction {
+  /** The button's tooltip and accessible name: 'Create customer "Zubair"'. */
+  label: string;
+  onCreate: () => void;
+  /** Enter creates too, unless a row is highlighted to pick (BUGS #001). */
+  onEnter?: boolean;
+  /** The button's text; "Create" unless it adds to something that exists. */
+  buttonText?: string;
 }
 
 /**
@@ -83,6 +97,65 @@ interface ComboboxProps {
   clearable?: boolean;
   id?: string;
   className?: string;
+  /**
+   * What the user is typing, for a picker whose options come from a search on
+   * the server (LookupCombobox). Called on every keystroke.
+   */
+  onInputChange?: (query: string) => void;
+  /**
+   * The options are already the server's matches for what was typed, so they
+   * are shown as they are. The server matches word by word ("white emul"
+   * finds "Weather Emulsion (Sweet White)"), which the local filter would undo.
+   */
+  serverFiltered?: boolean;
+  /**
+   * The options are still the answer to text typed before (a server search
+   * in flight): Enter then picks nothing rather than a row from the old list.
+   */
+  optionsStale?: boolean;
+  /**
+   * Highlight the first row as the user types, so Enter picks it.
+   */
+  autoHighlight?: boolean;
+  /** Offer to create what was typed: a Create button where the chevron is. */
+  createAction?: ComboboxCreateAction | null;
+}
+
+/** The list's own filter: every word of the text, in the label, id or keywords. */
+const optionMatches = (option: ComboboxOption, query: string) => {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return [option.label, option.value, ...(option.keywords ?? [])].some((text) =>
+    String(text ?? "").toLowerCase().includes(q),
+  );
+};
+
+/**
+ * The Create button for a picker whose options are all on the page (the
+ * invoice create screens): offered once the text typed is not exactly one
+ * of them. Enter creates too, even with partial matches listed - "Wajid"
+ * with "Wajid Ali" on file is a new customer unless the user arrows onto
+ * Wajid Ali (BUGS #001).
+ *
+ *   const party = useCreateAction(customerOptions, "customer", openDialog);
+ *   <Combobox ... onInputChange={party.onInputChange} createAction={party.createAction} />
+ */
+export function useCreateAction(
+  options: ComboboxOption[],
+  noun: string,
+  onCreate: (text: string) => void,
+) {
+  const [query, setQuery] = React.useState("");
+  const typed = query.trim();
+  const createAction = React.useMemo<ComboboxCreateAction | null>(() => {
+    if (!typed) return null;
+    const q = typed.toLowerCase();
+    const texts = (option: ComboboxOption) => [option.label, ...(option.keywords ?? [])]
+      .map((text) => String(text ?? "").trim().toLowerCase());
+    if (options.some((option) => texts(option).some((text) => text === q))) return null;
+    return { label: `Create ${noun} "${typed}"`, onCreate: () => onCreate(typed), onEnter: true };
+  }, [options, typed, noun, onCreate]);
+  return { onInputChange: setQuery, createAction };
 }
 
 /**
@@ -123,6 +196,11 @@ export function Combobox({
   clearable = false,
   id,
   className,
+  onInputChange,
+  serverFiltered = false,
+  optionsStale = false,
+  autoHighlight = false,
+  createAction = null,
 }: ComboboxProps) {
   // Compared as strings on both sides. Object.entries always yields string keys,
   // while the form's value comes back from the API as a number, so a strict ===
@@ -134,6 +212,51 @@ export function Combobox({
     const key = String(value);
     return options.find((o) => String(o.value) === key) ?? null;
   }, [options, value]);
+
+  // Mirrors Base UI's own open state, so it behaves exactly as uncontrolled;
+  // held here only so Enter (below) can close the list after picking.
+  const [open, setOpen] = React.useState(false);
+  // The row the keyboard or the pointer is on, if any.
+  const highlighted = React.useRef<ComboboxOption | undefined>(undefined);
+  // What is typed in the field, for Enter to match against.
+  const [typed, setTyped] = React.useState("");
+
+  // Enter, the same on every picker:
+  //   a row arrowed onto      Base UI picks it, as always;
+  //   a Create / Add variants it runs - even with partial matches listed:
+  //                           a match is picked by arrowing onto it, so
+  //                           "Wajid" never silently becomes "Wajid Ali";
+  //   otherwise               (a picker that creates nothing) the first
+  //                           enabled match is picked.
+  // Nothing is highlighted on its own (no autoHighlight): a server list's
+  // rows arrive after the keystroke, so a highlight set while typing could
+  // sit on a row from the text before - Enter then picked the wrong one.
+  const handleEnter = (event: React.KeyboardEvent<HTMLInputElement> & { preventBaseUIHandler?: () => void }) => {
+    // A highlighted row: Base UI picks it, as always.
+    if (event.key !== "Enter" || (open && highlighted.current)) return;
+    // Otherwise Enter picks nothing from the list - and must not fall through
+    // to the form around the picker: on an invoice screen that submitted the
+    // whole invoice from the customer or product field.
+    event.preventDefault();
+    // Nor does Base UI act on it: with nothing highlighted it would only
+    // reset the field, losing what was typed.
+    event.preventBaseUIHandler?.();
+    if (createAction?.onEnter) {
+      createAction.onCreate();
+      return;
+    }
+    const text = typed.trim();
+    if (!open || !text || optionsStale || (selected && text === selected.label.trim())) return;
+    const current = value === undefined || value === null ? "" : String(value);
+    // A server's list is already the matches; one held here is filtered as
+    // the list shows it.
+    const candidates = serverFiltered ? options : options.filter((option) => optionMatches(option, text));
+    const first = candidates.find((option) => !option.disabled && String(option.value) !== current);
+    if (first) {
+      onChange(first.value);
+      setOpen(false);
+    }
+  };
 
   // A set value with no matching option means the options have not arrived yet:
   // Update pages reset() the form from one request and load the list in another.
@@ -217,27 +340,53 @@ export function Combobox({
       value={selected}
       onValueChange={(option: ComboboxOption | null) => onChange(option ? option.value : "")}
       itemToStringLabel={(option: ComboboxOption) => option.label}
-      filter={(option: ComboboxOption, query: string) => {
-        const q = query.trim().toLowerCase();
-        if (!q) return true;
-        return [option.label, option.value, ...(option.keywords ?? [])].some((text) =>
-          String(text ?? "").toLowerCase().includes(q),
-        );
+      onInputValueChange={(query: string) => {
+        setTyped(query);
+        onInputChange?.(query);
       }}
+      filter={(option: ComboboxOption, query: string) => serverFiltered || optionMatches(option, query)}
       disabled={disabled}
+      autoHighlight={autoHighlight}
+      open={open}
+      onOpenChange={(next: boolean) => {
+        setOpen(next);
+        // A closed list has nothing highlighted, whatever was last.
+        if (!next) highlighted.current = undefined;
+      }}
+      onItemHighlighted={(option: ComboboxOption | undefined) => { highlighted.current = option; }}
       openOnInputClick
     >
       <div className={cn("relative", className)}>
         <ComboboxPrimitive.Input
           id={id}
           placeholder={placeholder}
-          // the project's Input, verbatim, plus room for the chevron
-          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 pr-9 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+          // the project's Input, verbatim, plus room for the chevron - or
+          // for the wider Create button in its place
+          className={cn(
+            "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm",
+            createAction ? "pr-24" : "pr-9",
+          )}
+          onKeyDown={handleEnter}
         />
         {/* One control in the slot, never two: with a selection to clear, the X
             replaces the chevron rather than crowding beside it, so the input's
             pr-9 stays right. Clicking the field opens the list anyway. */}
-        {clearable && selected && !awaitingLabel ? (
+        {createAction ? (
+          // mousedown kept off the input, so pressing the button does not
+          // blur the field and close the list before the click lands
+          <button
+            type="button"
+            title={createAction.label}
+            aria-label={createAction.label}
+            disabled={disabled}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={createAction.onCreate}
+            className="absolute right-1 top-1 inline-flex h-8 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground shadow-sm hover:bg-primary/90 disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {createAction.buttonText || "Create"}
+          </button>
+        ) : clearable && selected && !awaitingLabel ? (
           <ComboboxPrimitive.Clear
             aria-label="Clear selection"
             disabled={disabled}
@@ -265,7 +414,21 @@ export function Combobox({
       </div>
 
       <ComboboxPrimitive.Portal>
-        <ComboboxPrimitive.Positioner sideOffset={4} align="start" className="z-50">
+        {/* pointer-events-auto is not decoration. This popup is portalled to
+            the body, and a Radix dialog - which is what CustomFilter, the
+            walk-in capture and the payment dialog all are - disables pointer
+            events on the body for as long as it is open
+            (react-dismissable-layer sets `pointerEvents = "none"` there) and
+            hands them back only to its own layers, inline, in JS. This popup
+            is a sibling of that content rather than a descendant, so it
+            inherits `none`: the list renders in the right place, highlights
+            on hover, and ignores every click. Base UI has no idea a Radix
+            dialog is above it, so the grant has to be made here. */}
+        <ComboboxPrimitive.Positioner
+          sideOffset={4}
+          align="start"
+          className="z-50 pointer-events-auto"
+        >
           <ComboboxPrimitive.Popup
             className={cn(
               // select.tsx's SelectContent, so the panel is the one already in the
@@ -299,7 +462,9 @@ export function Combobox({
                     the list is empty - so padding on the element itself became a
                     permanent blank strip above the first option. */}
                 <ComboboxPrimitive.Empty>
-                  <div className="px-3 py-4 text-sm text-muted-foreground">{notFoundText}</div>
+                  <div className="px-3 py-4 text-sm text-muted-foreground">
+                    {createAction ? "Not in MarketPro yet." : notFoundText}
+                  </div>
                 </ComboboxPrimitive.Empty>
                 {canScrollUp && (
                   <ScrollArrow direction="up" onHoverStart={startScroll} onHoverEnd={stopScroll} />
@@ -335,6 +500,13 @@ export function Combobox({
                 </ComboboxPrimitive.List>
                 {canScrollDown && (
                   <ScrollArrow direction="down" onHoverStart={startScroll} onHoverEnd={stopScroll} />
+                )}
+                {/* Enter creates what was typed even with matches listed, so
+                    say so, and how to pick a match instead. */}
+                {createAction && (
+                  <div className="shrink-0 border-t px-3 py-1.5 text-xs text-muted-foreground">
+                    Enter: {createAction.label}. To pick from the list, use ↑ ↓ first.
+                  </div>
                 )}
               </>
             )}

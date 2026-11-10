@@ -43,8 +43,9 @@ const Login = () => {
         const config = formatConfig(business.config, userData.role)
         
         authLogIn(accessToken, userData, business.id, config, business.name)
-        
-        navigate('/')
+
+        // A data entry account has one place to go: its queue.
+        navigate(userData.role === "backlog" ? '/backlog/work' : '/')
       }else{
         toast.error("Please provide correct credentials.")
       }

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input"
 import { SearchField } from "@/components/ui/search-field"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Dialog,
   DialogContent,
@@ -56,9 +57,12 @@ const cols = [
   {
     key: "modules",
     label: "Modules with access",
-    render: (value) => (
+    render: (value, row) => (
       <div className="flex flex-wrap gap-1">
-        {value.length === 0 ? (
+        {/* A data entry account has no modules: only the entry screens. */}
+        {row.role === "backlog" ? (
+          <Badge variant="outline" className="text-xs">Data entry · backlog screens only</Badge>
+        ) : value.length === 0 ? (
           <span className="text-muted-foreground text-xs">No access</span>
         ) : (
           value.map(({ key, label }) => (
@@ -80,7 +84,16 @@ const emptyPermissions = () =>
     ALL_MODULES.map(({ key }) => [key, { view: false, create: false, edit: false, delete: false }])
   )
 
+// What the account is for. A data entry account signs in straight to the
+// backlog entry screens and can reach nothing else, so it takes no module
+// permissions.
+const ACCOUNT_TYPES = [
+  { value: "employee", label: "Employee", hint: "Works in the modules ticked below." },
+  { value: "backlog", label: "Data entry", hint: "Enters the shop's old books from photos. Sees only the backlog entry screens - no stock, prices or balances." },
+]
+
 interface EmployeeForm {
+  role: string
   first_name: string
   last_name: string
   email: string
@@ -90,6 +103,7 @@ interface EmployeeForm {
 }
 
 const defaultForm = (): EmployeeForm => ({
+  role: "employee",
   first_name: "",
   last_name: "",
   email: "",
@@ -137,6 +151,7 @@ const Employees = () => {
         id: emp.id,
         name: `${emp.user.first_name} ${emp.user.last_name}`,
         email: emp.user.email,
+        role: emp.user.role,
         modules: ALL_MODULES.filter(({ key }) => permissions[key]?.view),
       }
     })
@@ -183,6 +198,7 @@ const Employees = () => {
 
     setEditingId(emp.id)
     setForm({
+      role: emp.user.role === "backlog" ? "backlog" : "employee",
       first_name: emp.user.first_name,
       last_name: emp.user.last_name,
       email: emp.user.email,
@@ -244,7 +260,8 @@ const Employees = () => {
           email: form.email,
           password: form.password,
           re_password: form.password,
-          permissions: form.permissions,
+          role: form.role,
+          permissions: form.role === "backlog" ? {} : form.permissions,
         })
 
         if (success) {
@@ -377,6 +394,25 @@ const Employees = () => {
           </DialogHeader>
 
           <div className="space-y-5 py-2">
+            {!editingId && (
+              <div className="space-y-1">
+                <Label htmlFor="account_type">Account type</Label>
+                <Select value={form.role} onValueChange={(value) => setForm((p) => ({ ...p, role: value }))}>
+                  <SelectTrigger id="account_type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACCOUNT_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {ACCOUNT_TYPES.find((type) => type.value === form.role)?.hint}
+                </p>
+              </div>
+            )}
+
             {/* User fields — shown only on create */}
             {!editingId && (
               <div className="grid grid-cols-2 gap-4">
@@ -417,7 +453,12 @@ const Employees = () => {
               </div>
             )}
 
-            {/* Permissions table */}
+            {/* Permissions table - not for a data entry account */}
+            {form.role === "backlog" ? (
+              <p className="text-sm text-muted-foreground">
+                A data entry account has no module permissions. It works only on the backlog entry screens.
+              </p>
+            ) : (
             <div>
               <p className="text-sm font-medium mb-2">Module Permissions</p>
               <div className="border rounded-lg overflow-hidden">
@@ -465,6 +506,7 @@ const Employees = () => {
                 </table>
               </div>
             </div>
+            )}
           </div>
 
           <DialogFooter>

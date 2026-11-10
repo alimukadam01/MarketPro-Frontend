@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { PeriodSwitch } from "@/components/ui/period-switch";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import {
   getStatusColor,
@@ -12,13 +13,13 @@ import {
   SalesInvoiceStatusMap,
   PaymentStatusMap,
   listCountLabel,
+  formatCurrency,
 } from "../../services/utils";
+import { PAGE_PERIODS, periodHint } from "../../services/periods";
 import { useAuth } from "../../services/AuthProvider"
 import {
   getSalesInvoiceList,
-  getTotalSalesDaily,
-  getTotalItemsSoldDaily,
-  getTotalSalesInvoicesDaily,
+  getSalesSummary,
   bulkDeleteSalesInvoice,
   deleteSalesInvoice,
 } from "../../services/api";
@@ -39,12 +40,46 @@ import { useInvoiceActions } from "@/hooks/use-invoice-actions";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useListPeriod, useOnChange } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each customer.
+
+/**
+ * The grid the table is laid out on.
+ *
+ * Interpolated into `grid-cols-${colsConfig}` by DataTable, so Tailwind cannot
+ * see it in the source and it has to be safelisted in tailwind.config.ts.
+ * Without that entry the class is purged silently - no build error, the table
+ * just loses its grid.
+ *
+ * 13 tracks: S.no, which DataTable renders itself, then the 12 columns below.
+ * Fixed widths wherever the content has a known size, so the five money
+ * columns get what is left and "PKR 1,234,567" does not start scrolling
+ * inside its cell:
+ *
+ *   48px   S.no            - as specified
+ *   120px  Invoice No.     - as specified
+ *   240px  Customer        - as specified; names here run long, e.g.
+ *                            "Mr Mohd C/O Hasnain Kanpur"
+ *   1fr    Status          - a pill, and "Partially Completed" is long
+ *   1fr    Payment Status  - a pill, "Partially Paid"
+ *   88px   Date Issued     - DD/MM/YYYY never varies
+ *   88px   Date Due        - same
+ *   72px   Tax             - "0%" or "none"
+ *   88px   Discount        - "PKR 6,000" or "none"
+ *   72px   Total Items     - a small integer
+ *   1fr    Total           - money
+ *   1fr    Amount Paid     - money
+ *   1fr    Pending Balance - money
+ */
+const COLS_CONFIG =
+  "[48px_120px_240px_1fr_1fr_88px_88px_72px_88px_84px_1fr_1fr_1fr]";
 
 const cols = [
   { key: "id", label: "ID" },
   { key: "invoice_no", label: "Invoice No." },
+  { key: "customer", label: "Customer" },
   {
     key: "status",
     label: "Status",
@@ -54,7 +89,7 @@ const cols = [
           value
         )}`}
       >
-        {SalesInvoiceStatusMap[value]}
+        {SalesInvoiceStatusMap[value] ?? value}
       </span>
     ),
   },
@@ -76,65 +111,46 @@ const cols = [
   { key: "tax", label: "Tax" },
   { key: "discount", label: "Discount" },
   { key: "total_items", label: "Total Items" },
-  { key: "sub_total", label: "Subtotal" },
   { key: "total", label: "Total" },
+  { key: "amount_paid", label: "Amount Paid" },
+  { key: "pending_balance", label: "Pending Balance" },
 ];
 
 const filter_fields_template = {
-  customer__name: "",
+  customer: "",
   status: "",
   payment_status: "",
-  sub_total: "",
-  total: "",
-  is_deducted: false,
-  is_partially_deducted: false,
+  // No invoice-date range here: the page's period switch is that filter, and
+  // two of them could disagree. Ranges, not single dates, for the due date.
+  date_due_from: "",
+  date_due_to: "",
+  total_min: "",
+  total_max: "",
+  created_by: "",
+  project: "",
 };
 
-const filter_fields_mapper = {
-  customer__name: {
-    label: "Customer Name",
-    type: "text",
-    placeholder: "Enter customer name",
-  },
-  status: {
-    label: "Order Status",
-    type: "text",
-    placeholder: "e.g. pending, completed, cancelled",
-  },
-  payment_status: {
-    label: "Payment Status",
-    type: "text",
-    placeholder: "e.g. paid, unpaid, partial",
-  },
-  sub_total: {
-    label: "Subtotal",
-    type: "number",
-    placeholder: "Enter subtotal",
-  },
-  total: {
-    label: "Total",
-    type: "number",
-    placeholder: "Enter total",
-  },
-  discount: {
-    label: "Discount",
-    type: "number",
-    placeholder: "Enter Discount (PKR)",
-  },
-  tax: {
-    label: "Tax",
-    type: "number",
-    placeholder: "Enter Tax (%)",
-  },
-  is_deducted: {
-    label: "Is Deducted",
-    type: "checkbox",
-  },
-  is_partially_deducted: {
-    label: "Is Partially Deducted",
-    type: "checkbox",
-  },
-};
+// Order status. The free-text box this replaces suggested "pending,
+// completed, cancelled", none of which are values the backend holds - it keeps
+// single-letter codes and matches them exactly, so the field could not match
+// anything a user typed.
+//
+// Overdue is in this list even though no row stores it: the column holds only
+// D, C or X, and SalesInvoiceFilter.filter_status works Overdue out from what
+// is still owed past the due date.
+const status_options = Object.entries(SalesInvoiceStatusMap).map(
+  ([value, label]) => ({ value, label })
+);
+
+// Only the three a sales invoice can actually report. payment_status is
+// derived from its receipts, and SalesInvoice.payment_status returns P, PP or
+// PEN and nothing else - PaymentStatusMap also carries Cancelled and
+// Refunded, which no invoice can ever be, so offering them would be a choice
+// that always comes back empty.
+const payment_status_options = ["P", "PP", "PEN"].map((value) => ({
+  value,
+  label: PaymentStatusMap[value],
+}));
 
 const Sales = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -144,17 +160,22 @@ const Sales = () => {
   // "no records" before it has asked. Cleared in a finally, never on
   // the success path alone, or a failed load shimmers for ever.
   const [loading, setLoading] = useState(true);
-  const [totalSalesDaily, setTotalSalesDaily] = useState(null);
-  const [totalSalesDailyLoading, setTotalSalesDailyLoading] = useState(true);
-  const [totalItemsSoldDaily, setTotalItemsSoldDaily] = useState(null);
-  const [totalItemsSoldDailyLoading, setTotalItemsSoldDailyLoading] = useState(true);
-  const [totalInvoicesDaily, setTotalInvoicesDaily] = useState(null);
-  const [totalInvoicesDailyLoading, setTotalInvoicesDailyLoading] = useState(true);
   const { token } = useAuth() || null;
-  const { getPermissions } = useAuth()
+  // The page switch, and the cards worked out from the rows the table shows.
+  const list = useListPeriod(
+    (query) => getSalesSummary(token, query),
+    "Failed to fetch the sales figures.",
+  );
+  const summary = list.summary;
+  const { getPermissions, user } = useAuth()
   const permissions = getPermissions("sales")
   const [isDeleted, setIsDeleted] = useState(false);
   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
+  // Only the filter's customer picker needs these. Loaded alongside the page
+  // rather than when the dialog opens, so the picker is never empty on the
+  // first open.
+  // How many filters are on, for the Filter button.
+  const [filterCount, setFilterCount] = useState(0);
   const navigate = useNavigate();
   // Download never prompts. Sending prompts only for a counter sale, which has
   // no number to send to until the buyer is named.
@@ -215,11 +236,13 @@ const Sales = () => {
     });
   };
 
-  const fetchSalesInvoices = async (searchQuery = null) => {
+  // `query` is the search or the filter that produced it; left out, the
+  // current one is kept (a refetch after a delete or a period change).
+  const fetchSalesInvoices = async (query?: string | null) => {
     if (!token) return;
 
     try {
-      const res = await getSalesInvoiceList(token, searchQuery);
+      const res = await getSalesInvoiceList(token, list.track(query));
       if (res) {
         setSalesData(res);
       } else {
@@ -242,65 +265,60 @@ const Sales = () => {
 
   useEffect(() => {
 
-    const fetchTotalSalesDaily = async ()=>{
-      if (!token) return;
-
-      try {
-        const res = await getTotalSalesDaily(token);
-        if (res != null) {
-          setTotalSalesDaily(res);
-        } else {
-          toast.error("Failed to fetch total sales data.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total sales data.");
-        console.error("Error fetching total sales data:", error);
-      } finally {
-        setTotalSalesDailyLoading(false);
-      }
-    }
-
-    const fetchTotalItemsSoldDaily = async ()=>{
-      if (!token) return;
-
-      try {
-        const res = await getTotalItemsSoldDaily(token);
-        if (res !== null) {
-          setTotalItemsSoldDaily(res);
-        } else {
-          toast.error("Failed to fetch total items sold data.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total items sold data.");
-        console.error("Error fetching total items sold data:", error);
-      } finally {
-        setTotalItemsSoldDailyLoading(false);
-      }
-    }
-
-    const fetchTotalInvoicesDaily = async ()=>{
-      if (!token) return;
-
-      try {
-        const res = await getTotalSalesInvoicesDaily(token);
-        if (res !== null) {
-          setTotalInvoicesDaily(res);
-        } else {
-          toast.error("Failed to fetch total invoices data.");
-        }
-      } catch (error) {
-        toast.error("Failed to fetch total invoices data.");
-        console.error("Error fetching total invoices data:", error);
-      } finally {
-        setTotalInvoicesDailyLoading(false);
-      }
-    }
-
-    fetchTotalInvoicesDaily()
-    fetchTotalItemsSoldDaily()
-    fetchTotalSalesDaily()
     fetchSalesInvoices();
   }, [token, isDeleted])
+
+  // A new period refetches the rows, and with them the cards.
+  useOnChange(list.period, () => fetchSalesInvoices());
+
+  // The filter's dropdowns, loaded with the page. Customers and projects are
+  // filtered by id, so two customers sharing a name stay apart.
+  const options = useFilterOptions(token, user, ["customers", "projects", "staff"]);
+
+  const filter_fields_mapper = {
+    customer: {
+      label: "Customer",
+      type: "combobox",
+      // Spans the row: it is the field most often used, and a customer name
+      // is far longer than a status or a date.
+      fullWidth: true,
+      options: options.customers,
+      loading: options.loading.customers,
+      placeholder: "Any customer",
+      emptyText: "No customers yet.",
+      notFoundText: "No customer matches that.",
+    },
+    status: {
+      label: "Order Status",
+      type: "select",
+      options: status_options,
+      anyLabel: "Any status",
+    },
+    payment_status: {
+      label: "Payment Status",
+      type: "select",
+      options: payment_status_options,
+      anyLabel: "Any payment status",
+    },
+    date_due: { label: "Due date", type: "range", input: "date", keys: ["date_due_from", "date_due_to"], fullWidth: true },
+    total: { label: "Total (PKR)", type: "range", input: "number", keys: ["total_min", "total_max"] },
+    created_by: {
+      label: "Entered by",
+      type: "select",
+      options: options.staff,
+      anyLabel: "Anyone",
+    },
+    project: {
+      label: "Project",
+      type: "combobox",
+      fullWidth: true,
+      options: options.projects,
+      loading: options.loading.projects,
+      placeholder: "Any project",
+      emptyText: "No projects yet.",
+      notFoundText: "No project matches that.",
+    },
+  };
 
 
   return (
@@ -319,7 +337,7 @@ const Sales = () => {
           <div className="space-y-1">
             <DynamicBreadCrumb />
 
-            <div className="flex-1  justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center space-x-3">
                 <ArrowLeft
                   className="w-5 h-5 text-muted-foreground cursor-pointer hover:text-primary"
@@ -332,29 +350,53 @@ const Sales = () => {
                   </p>
                 </div>
               </div>
+
+              {/* Narrows the cards and the table together. */}
+              <PeriodSwitch
+                label="Period for the cards and the table"
+                options={PAGE_PERIODS}
+                value={list.period}
+                onChange={list.setPeriod}
+                allowCustom
+              />
             </div>
           </div>
 
-          {/* Key Metrics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* Key Metrics Cards - from the same rows the table shows. Invoiced
+              is what was billed; received is the money that came in. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             <MetricCard
-              title="Total Sales Today"
-              value={`PKR ${totalSalesDaily}`}
-              loading={totalSalesDailyLoading}
+              title="Sales Invoiced"
+              value={formatCurrency(summary?.sales_invoiced)}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              error={list.summaryError}
+              valueLoading={list.summaryRefreshing}
             />
-            
             <MetricCard
-              title="Total Invoices Today"
-              value={totalInvoicesDaily}
-              loading={totalInvoicesDailyLoading}
+              title="Payments Received"
+              value={formatCurrency(summary?.payments_received)}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              error={list.summaryError}
+              valueLoading={list.summaryRefreshing}
             />
-            
             <MetricCard
-              title="Total Items Sold Today"
-              value={totalItemsSoldDaily}
-              loading={totalItemsSoldDailyLoading}
+              title="Invoices Raised"
+              value={summary?.invoices_raised}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              error={list.summaryError}
+              valueLoading={list.summaryRefreshing}
             />
-            
+            <MetricCard
+              title="Items Sold"
+              value={summary?.items_sold}
+              hint={periodHint(summary?.period, summary?.filtered)}
+              loading={list.summaryLoading}
+              error={list.summaryError}
+              valueLoading={list.summaryRefreshing}
+            />
           </div>
 
           {/* Sales Records Section.
@@ -387,7 +429,7 @@ const Sales = () => {
                   type="button"
                 >
                   <Filter className="w-4 h-4" />
-                  <span>Filter</span>
+                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
                 </Button>
               </div>
 
@@ -448,13 +490,16 @@ const Sales = () => {
             </div>
 
             {loading || (salesData && salesData.length > 0) ? (
-              <DataTable columns={cols} headerOnly />
+              <DataTable columns={cols} colsConfig={COLS_CONFIG} headerOnly />
             ) : null}
           </div>
 
           {loading || (salesData && salesData.length > 0) ? (
             <DataTable
               columns={cols}
+              // Must match the header's, or the two grids drift apart and
+              // every cell sits under the wrong label.
+              colsConfig={COLS_CONFIG}
               data={permissions["view"] ? salesData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
@@ -473,6 +518,7 @@ const Sales = () => {
             dataFetcher={fetchSalesInvoices}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
+            onActiveChange={setFilterCount}
           />
         </main>
       </div>

@@ -10,6 +10,7 @@ import {
   transformProductVariant,
   formatConfig,
 } from "./utils";
+import { withPeriod } from "./periods";
 
 const DEBUG = true;
 
@@ -395,10 +396,12 @@ export const getProductsList = async (
   }
 };
 
-export const getAvailableProductsList = async (token, businessId) => {
+// includeOutOfStock: every active product, in stock or not (0 on hand), so a
+// sale can show what has run out instead of leaving it looking missing.
+export const getAvailableProductsList = async (token, businessId, includeOutOfStock = false) => {
   try {
     const res = await apiClient.get(
-      `/inventory/${businessId}/items/get_available_items/`,
+      `/inventory/${businessId}/items/get_available_items/${includeOutOfStock ? "?include_out_of_stock=1" : ""}`,
       {
         headers: {
           Authorization: token,
@@ -564,6 +567,28 @@ export const getProductVariantsList = async (token, searchQuery = null) => {
     return [];
   } catch (error) {
     console.log("There was an error fetching the product list: ", error);
+    return [];
+  }
+};
+
+/**
+ * The business's extra fields (made in Django admin), for the product form's
+ * "Asked on invoices" section. [] when there are none or the call fails: the
+ * section then simply does not show.
+ */
+export const getProductFields = async (token) => {
+  try {
+    const res = await apiClient.get("/product-fields/", {
+      headers: {
+        Authorization: token,
+      },
+    });
+    if (res.status === 200) {
+      return res.data;
+    }
+    return [];
+  } catch (error) {
+    console.log("There was an error fetching the product fields: ", error);
     return [];
   }
 };
@@ -826,8 +851,11 @@ export const postSalesInvoiceAndItems = async (token, invoiceData) => {
         },
       },
     );
+    // The created invoice rather than `true`: still truthy for the callers
+    // that only test it, and it carries the id a create screen needs to attach
+    // the images and payments held on screen until now.
     if (res.status === 201) {
-      return true;
+      return res.data;
     }
     console.log(res.data.detail);
     return false;
@@ -866,6 +894,58 @@ export const updateSalesInvoiceAndItems = async (
     const res = await apiClient.post(
       `/sales-invoices/${invoiceId}/update-with-items/`,
       invoiceData,
+      {
+        headers: {
+          Authorization: token,
+        },
+      },
+    );
+
+    if (res.status === 200) {
+      return true;
+    }
+
+    console.log(res.data.detail);
+    return false;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+// Cancelling is the one status transition a person makes - every other value
+// is derived from the invoice's lines and what is still owed - so it is an
+// action rather than a field on the form. The backend returns the goods to
+// stock on cancel and takes them out again on uncancel.
+export const cancelSalesInvoice = async (token, invoiceId) => {
+  try {
+    const res = await apiClient.post(
+      `/sales-invoices/${invoiceId}/cancel/`,
+      {},
+      {
+        headers: {
+          Authorization: token,
+        },
+      },
+    );
+
+    if (res.status === 200) {
+      return true;
+    }
+
+    console.log(res.data.detail);
+    return false;
+  } catch (error) {
+    console.log(error);
+    return false;
+  }
+};
+
+export const uncancelSalesInvoice = async (token, invoiceId) => {
+  try {
+    const res = await apiClient.post(
+      `/sales-invoices/${invoiceId}/uncancel/`,
+      {},
       {
         headers: {
           Authorization: token,
@@ -1033,8 +1113,11 @@ export const postPurchaseInvoiceAndItems = async (token, invoiceData) => {
         },
       },
     );
+    // The created invoice rather than `true`: still truthy for the callers
+    // that only test it, and it carries the id a create screen needs to attach
+    // the images and payments held on screen until now.
     if (res.status === 201) {
-      return true;
+      return res.data;
     }
     console.log(res.data.detail);
     return false;
@@ -1523,9 +1606,13 @@ export const DeleteTask = async (token, projectId, taskId) => {
 
 // General Endpoints
 
-export const globalSearch = async (token, searchQuery) => {
+// The header's search: { query, groups: [{ type, label, total, hits, breakdown? }] },
+// only the groups that matched and only the types this user may see.
+// Null on failure, so the box can say so rather than claim "no results".
+export const globalSearch = async (token, query) => {
   try {
-    const res = await apiClient.get(`search/${searchQuery}`, {
+    const res = await apiClient.get("global-search/", {
+      params: { q: query },
       headers: {
         Authorization: token,
       },
@@ -1533,12 +1620,10 @@ export const globalSearch = async (token, searchQuery) => {
     if (res.status == 200) {
       return res.data;
     }
-
-    console.log("error performing search: ", res.data.detail);
-    return [];
+    return null;
   } catch (error) {
     console.log("error performing search", error);
-    return [];
+    return null;
   }
 };
 
@@ -1555,9 +1640,12 @@ export const getTotalInventoryValue = async (token) => {
     if (res.status == 200) {
       return res.data.total_inventory_value;
     }
+
+    return null;
   } catch (error) {
     console.log(error);
-    return [];
+    // null, not [], which every card read as a figure and showed as PKR 0.
+    return null;
   }
 };
 
@@ -2105,6 +2193,25 @@ export const deleteEmployee = async (token, businessId, employeeId) => {
   }
 };
 
+/**
+ * What the khaata settles onto one invoice, and the totals the payments dialog
+ * works from: paid (own payments + khaata), still owed, the room one more
+ * payment may take, and the khaata lines (credit notes, on-account money).
+ * Returns null on failure.
+ */
+export const getInvoiceSettlement = async (token, invoiceId, is_sales_payment) => {
+  try {
+    const res = await apiClient.get(
+      `${is_sales_payment ? 'sales' : 'purchase'}-invoices/${invoiceId}/settlement/`,
+      { headers: { Authorization: token } },
+    );
+    return res.status === 200 ? res.data : null;
+  } catch (error) {
+    console.log("Error fetching invoice settlement:", error);
+    return null;
+  }
+};
+
 export const getPaymentsList = async (token, invoiceId, is_sales_payment) => {
   try {
     const res = await apiClient.get(`${is_sales_payment? 'sales': 'purchase'}-invoices/${invoiceId}/payments/`, {
@@ -2123,10 +2230,143 @@ export const getPaymentsList = async (token, invoiceId, is_sales_payment) => {
   }
 }
 
+// The request body for one payment. A plain object, or FormData when a photo
+// of the slip or cheque comes with it - a file only travels as multipart. Used
+// by the payments dialog and by attachStagedToInvoice, so a payment recorded
+// straight away and one held until its invoice exists are sent identically.
+export const paymentRequestBody = (fields, imageFile) => {
+  if (!imageFile) return fields;
+  const body = new FormData();
+  Object.entries(fields).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      body.append(key, value);
+    }
+  });
+  body.append("image", imageFile);
+  return body;
+};
+
+// Sends what a create screen held on screen while the invoice did not exist:
+// its payments, then its images, all against the new invoice's id.
+//
+// One at a time, not in parallel: the server checks each payment against what
+// is still owed, and that figure depends on the payments before it.
+//
+// Never throws. The invoice is already created by the time this runs, so a
+// failure here is reported as a count, and the caller says "created, but".
+export const attachStagedToInvoice = async (
+  token,
+  invoiceId,
+  is_sales_invoice,
+  { payments = [], images = [] },
+) => {
+  let paymentFailures = 0;
+  let imageFailures = 0;
+
+  for (const payment of payments) {
+    try {
+      const ok = await createPayment(
+        token,
+        invoiceId,
+        is_sales_invoice,
+        paymentRequestBody(payment.fields, payment.imageFile),
+      );
+      if (!ok) paymentFailures += 1;
+    } catch (error) {
+      console.log("Error attaching a payment:", error);
+      paymentFailures += 1;
+    }
+  }
+
+  for (const image of images) {
+    try {
+      const formData = new FormData();
+      formData.append("image", image.file);
+      if (image.caption) formData.append("caption", image.caption);
+      const ok = await uploadInvoiceImage(token, invoiceId, is_sales_invoice, formData);
+      if (!ok) imageFailures += 1;
+    } catch (error) {
+      console.log("Error attaching an image:", error);
+      imageFailures += 1;
+    }
+  }
+
+  return { paymentFailures, imageFailures };
+};
+
+// An invoice carries several photos - the signed delivery note, the goods as
+// they arrived, the supplier's own bill. Nested under the invoice, so which
+// one an image belongs to never travels in the payload.
+export const getInvoiceImages = async (token, invoiceId, is_sales_invoice) => {
+  try {
+    const res = await apiClient.get(
+      `${is_sales_invoice ? "sales" : "purchase"}-invoices/${invoiceId}/images/`,
+      { headers: { Authorization: token } },
+    );
+
+    if (res.status !== 200) {
+      console.log("Error fetching invoice images");
+      return null;
+    }
+
+    return res.data;
+  } catch (error) {
+    console.log("Error fetching invoice images:", error);
+    return null;
+  }
+};
+
+export const uploadInvoiceImage = async (token, invoiceId, is_sales_invoice, formData) => {
+  try {
+    const res = await apiClient.post(
+      `${is_sales_invoice ? "sales" : "purchase"}-invoices/${invoiceId}/images/`,
+      formData,
+      {
+        headers: {
+          Authorization: token,
+          "Content-Type": "multipart/form-data",
+        },
+      },
+    );
+
+    if (res.status === 201) return true;
+
+    console.log("Error uploading invoice image.");
+    return false;
+  } catch (error) {
+    console.log("Error uploading invoice image:", error);
+    return false;
+  }
+};
+
+export const deleteInvoiceImage = async (token, invoiceId, is_sales_invoice, imageId) => {
+  try {
+    const res = await apiClient.delete(
+      `${is_sales_invoice ? "sales" : "purchase"}-invoices/${invoiceId}/images/${imageId}/`,
+      { headers: { Authorization: token } },
+    );
+
+    if (res.status === 204) return true;
+
+    console.log("Error deleting invoice image.");
+    return false;
+  } catch (error) {
+    console.log("Error deleting invoice image:", error);
+    return false;
+  }
+};
+
+// `data` may be a plain object or a FormData. A payment can carry a photo of
+// the slip or the cheque, and a file only reaches the server as multipart -
+// but the dialog sends a plain object when there is no photo, which keeps the
+// numbers typed rather than stringified.
 export const createPayment = async (token, invoiceId, is_sales_payment, data) => {
   try {
+    const isMultipart = typeof FormData !== "undefined" && data instanceof FormData;
     const res = await apiClient.post(`${is_sales_payment? 'sales': 'purchase'}-invoices/${invoiceId}/payments/`, data, {
-      headers: { Authorization: token },
+      headers: isMultipart
+        ? { Authorization: token, "Content-Type": "multipart/form-data" }
+        : { Authorization: token },
     });
     if (res.status === 201) return true;
     console.log("Error creating payment.");
@@ -2165,53 +2405,309 @@ export const deletePayment = async (token, invoiceId, is_sales_payment, paymentI
   }
 };
 
+// Deletes one of an invoice's automatic refunds (recorded when an update left
+// it paid for more than it bills). The excess then stays with the party, as
+// credit on their khaata.
+export const deleteInvoiceRefund = async (token, invoiceId, is_sales_invoice, transactionId) => {
+  try {
+    const res = await apiClient.post(
+      `${is_sales_invoice ? "sales" : "purchase"}-invoices/${invoiceId}/delete-refund/`,
+      { transaction_id: transactionId },
+      { headers: { Authorization: token } },
+    );
+    if (res.status === 200) return true;
+    console.log("Error deleting refund.");
+    return false;
+  } catch (error) {
+    console.log("Error deleting refund:", error);
+    return false;
+  }
+};
+
+// Runs what an update screen held until Update Invoice, around the invoice's
+// own update: deletions BEFORE it and new payments AFTER it. The order is the
+// server's refund rule - a payment deleted first is not counted as paid when
+// the update works out whether the invoice is now overpaid, and a new payment
+// is checked against the updated total.
+//
+// `update` is the invoice update call; this returns { updated, failures },
+// where failures counts the held actions that did not go through. Never
+// throws.
+export const applyHeldPayments = async (
+  token,
+  invoiceId,
+  is_sales_invoice,
+  held,
+  update,
+) => {
+  let failures = 0;
+
+  for (const payment of held.deletes || []) {
+    if (!(await deletePayment(token, invoiceId, is_sales_invoice, payment.id))) failures += 1;
+  }
+  for (const refundId of held.refundDeletes || []) {
+    if (!(await deleteInvoiceRefund(token, invoiceId, is_sales_invoice, refundId))) failures += 1;
+  }
+
+  let updated = false;
+  try {
+    updated = await update();
+  } catch (error) {
+    console.log("Error updating invoice:", error);
+  }
+  // Without the update, a new payment would be checked against the old
+  // total, so none is sent.
+  if (!updated) return { updated: false, failures };
+
+  const { paymentFailures } = await attachStagedToInvoice(
+    token, invoiceId, is_sales_invoice, { payments: held.adds || [], images: [] });
+
+  return { updated: true, failures: failures + paymentFailures };
+};
+
 // ---------------------------------------------------------------------------
 // Backlog
 // ---------------------------------------------------------------------------
+//
+// Two sides. The owner's pages use /backlog-entries/, /backlog-batches/ and
+// the glossary endpoints. The entry screens use /backlog-work/ only - the one
+// API a data entry account can reach - and the owner uses the same screens to
+// review a page, so the record calls below serve both.
 
 export const backlogEntriesAPIPackage = new APIPackage("backlog-entries");
 
-export const createBacklogEntry = async (token, formData) => {
+// { ok, status, data, error }: the entry screens act on the reason a call
+// failed - a page someone else took (409), a field the server refused - so a
+// bare true/false is not enough here.
+const backlogCall = async (method, url, token, data = undefined, headers = {}, config = {}) => {
   try {
-    const res = await apiClient.post("/backlog-entries/", formData, {
-      headers: {
-        Authorization: token,
-        "Content-Type": "multipart/form-data",
-      },
+    const res = await apiClient.request({
+      method,
+      url,
+      data,
+      headers: { Authorization: token, ...headers },
+      ...config,
     });
-    return res.status === 201;
+    return { ok: true, status: res.status, data: res.data, error: null };
   } catch (error) {
-    console.log("Error creating backlog entry:", error);
-    return false;
+    console.log(`Error calling ${url}:`, error);
+    return {
+      ok: false,
+      status: error?.response?.status ?? null,
+      data: error?.response?.data ?? null,
+      error: firstFieldError(error, "Something went wrong. Please try again."),
+    };
   }
 };
 
-export const updateBacklogEntry = async (token, id, formData) => {
-  try {
-    const res = await apiClient.put(`/backlog-entries/${id}/`, formData, {
-      headers: {
-        Authorization: token,
-        "Content-Type": "multipart/form-data",
-      },
-    });
-    return res.status === 200;
-  } catch (error) {
-    console.log("Error updating backlog entry:", error);
-    return false;
+const MULTIPART = { "Content-Type": "multipart/form-data" };
+
+// -- The owner ---------------------------------------------------------------
+
+// No timeout: a book's worth of photos, or its zip, takes as long as the
+// connection needs - the client's 30 seconds would abandon it half sent.
+// onProgress gets { loaded, total } in bytes; `signal` cancels the upload.
+//
+// The failures an upload meets have no useful body, so they get words of
+// their own. With no answer at all, the browser reports no status: the
+// request never got through, or nginx answered it itself - its 413, 502 and
+// 504 carry no CORS header, so the browser cannot read them either. The hook
+// tells those apart by how much was sent (useBacklogUpload); this message is
+// for nothing sent at all. A gateway error Django's side did answer comes
+// after the photos arrived, so some pages may already be in the queue.
+export const uploadBacklogBatch = async (token, formData, onProgress = null, signal = undefined) => {
+  const res = await backlogCall("post", "/backlog-batches/", token, formData, MULTIPART, {
+    timeout: 0,
+    signal,
+    onUploadProgress: onProgress
+      ? (event) => onProgress({ loaded: event.loaded, total: event.total ?? null })
+      : undefined,
+  });
+  if (res.ok) return res;
+  if (signal?.aborted) return { ...res, cancelled: true, error: null };
+  if (res.status === null) {
+    return { ...res, error: "Nothing was sent: the photos could not be read, or the server could not be reached. Check the connection, pick the photos again and retry." };
   }
+  if (res.status === 413) {
+    return { ...res, error: "The server refused the upload as too large. Send fewer photos at a time." };
+  }
+  if ([502, 503, 504].includes(res.status)) {
+    return { ...res, error: "The server stopped answering while it saved the pages. Some may already be in the queue - check the backlog before uploading them again." };
+  }
+  return res;
 };
 
-export const toggleBacklogEntryStatus = async (token, id) => {
-  try {
-    const res = await apiClient.post(`/backlog-entries/${id}/toggle-status/`, {}, {
-      headers: { Authorization: token },
-    });
-    return res.status === 200;
-  } catch (error) {
-    console.log("Error toggling backlog entry status:", error);
-    return false;
-  }
+export const getBacklogMetrics = async (token) => {
+  const res = await backlogCall("get", "/backlog-entries/metrics/", token);
+  return res.ok ? res.data : null;
 };
+
+export const getBacklogReviewQueue = async (token) => {
+  const res = await backlogCall("get", "/backlog-entries/review-queue/", token);
+  return res.ok ? res.data : null;
+};
+
+export const approveBacklogEntry = (token, id) =>
+  backlogCall("post", `/backlog-entries/${id}/approve/`, token, {});
+
+export const sendBackBacklogEntry = (token, id, reason) =>
+  backlogCall("post", `/backlog-entries/${id}/send-back/`, token, { reason });
+
+// A page nobody could read goes back to the pool, with a better photo when
+// one is given.
+export const requeueBacklogEntry = (token, id, imageFile = null) => {
+  if (!imageFile) return backlogCall("post", `/backlog-entries/${id}/requeue/`, token, {});
+  const body = new FormData();
+  body.append("image", imageFile);
+  return backlogCall("post", `/backlog-entries/${id}/requeue/`, token, body, MULTIPART);
+};
+
+// Takes a page off whoever has it open.
+export const releaseBacklogEntry = (token, id) =>
+  backlogCall("post", `/backlog-entries/${id}/release/`, token, {});
+
+export const getBacklogGlossary = async (token) => {
+  const res = await backlogCall("get", "/backlog-glossary/", token);
+  return res.ok ? res.data : null;
+};
+
+export const createGlossaryTerm = (token, data) =>
+  backlogCall("post", "/backlog-glossary/", token, data);
+
+export const updateGlossaryTerm = (token, id, data) =>
+  backlogCall("put", `/backlog-glossary/${id}/`, token, data);
+
+export const deleteGlossaryTerm = (token, id) =>
+  backlogCall("delete", `/backlog-glossary/${id}/`, token);
+
+export const getGlossarySuggestions = async (token) => {
+  const res = await backlogCall("get", "/backlog-glossary-suggestions/", token);
+  return res.ok ? res.data : null;
+};
+
+export const approveGlossarySuggestion = (token, id, overrides = {}) =>
+  backlogCall("post", `/backlog-glossary-suggestions/${id}/approve/`, token, overrides);
+
+export const rejectGlossarySuggestion = (token, id) =>
+  backlogCall("post", `/backlog-glossary-suggestions/${id}/reject/`, token, {});
+
+// -- The entry screens -------------------------------------------------------
+
+// `type` narrows the pool to one kind of page (the person's own open page
+// still comes first); null is every kind, in the queue's order.
+export const getWorkQueue = async (token, type = null) => {
+  const res = await backlogCall("get", `/backlog-work/queue/${type ? `?type=${type}` : ""}`, token);
+  return res.ok ? res.data : null;
+};
+
+export const getWorkEntry = (token, id) =>
+  backlogCall("get", `/backlog-work/${id}/`, token);
+
+// 409 when someone else took the page first, or this user already has one
+// open - the queue then tries the next page.
+export const claimWorkEntry = (token, id) =>
+  backlogCall("post", `/backlog-work/${id}/claim/`, token, {});
+
+export const releaseWorkEntry = (token, id) =>
+  backlogCall("post", `/backlog-work/${id}/release/`, token, {});
+
+export const cantReadWorkEntry = (token, id, note, secondsSpent) =>
+  backlogCall("post", `/backlog-work/${id}/cant-read/`, token, { note, seconds_spent: secondsSpent });
+
+// An invoice across several pages (BUGS #003). Adding without a pageId joins
+// the page uploaded after this invoice's last; each answers with the page as
+// the entry screen shows it, its `pages` included.
+export const addWorkPage = (token, id, pageId = null) =>
+  backlogCall("post", `/backlog-work/${id}/pages/`, token, pageId ? { page_id: pageId } : {});
+
+export const getJoinablePages = (token, id) =>
+  backlogCall("get", `/backlog-work/${id}/pages/`, token);
+
+export const detachWorkPage = (token, id, pageId) =>
+  backlogCall("delete", `/backlog-work/${id}/pages/${pageId}/`, token);
+
+export const submitWorkEntry = (token, id, secondsSpent) =>
+  backlogCall("post", `/backlog-work/${id}/submit/`, token, { seconds_spent: secondsSpent });
+
+// kind: "sales-invoice" or "purchase-invoice". The body is exactly what the
+// invoice create screens post.
+export const postWorkInvoice = (token, id, kind, data) =>
+  backlogCall("post", `/backlog-work/${id}/${kind}/`, token, data);
+
+export const postWorkStockLine = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/inventory/`, token, data);
+
+export const getWorkOutput = (token, id, outputId) =>
+  backlogCall("get", `/backlog-work/${id}/outputs/${outputId}/`, token);
+
+export const updateWorkOutput = (token, id, outputId, data) =>
+  backlogCall("put", `/backlog-work/${id}/outputs/${outputId}/`, token, data);
+
+export const deleteWorkOutput = (token, id, outputId) =>
+  backlogCall("delete", `/backlog-work/${id}/outputs/${outputId}/`, token);
+
+// A payment written on the bill. The body is paymentRequestBody's: a plain
+// object, or FormData with a photo.
+export const postWorkPayment = (token, id, outputId, body) =>
+  backlogCall("post", `/backlog-work/${id}/outputs/${outputId}/payments/`, token, body,
+    body instanceof FormData ? MULTIPART : {});
+
+// What the khaata settles onto this invoice and how much one more payment may
+// be - the standard dialog's figures, without the party's balance.
+export const getWorkSettlement = async (token, id, outputId) => {
+  const res = await backlogCall("get", `/backlog-work/${id}/outputs/${outputId}/settlement/`, token);
+  return res.ok ? res.data : null;
+};
+
+export const deleteWorkPayment = (token, id, outputId, paymentId) =>
+  backlogCall("delete", `/backlog-work/${id}/outputs/${outputId}/payments/${paymentId}/`, token);
+
+// A customer or supplier the page names that MarketPro lacks, created from
+// the open page (BUGS.md #006). Each answers with the new record's id and
+// name. No opening balance from a page: the server ignores one.
+export const createWorkCustomer = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/new-customer/`, token, data);
+
+export const createWorkSupplier = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/new-supplier/`, token, data);
+
+// A product a stock page counts that MarketPro lacks - or new variants of
+// one it has - created without stock: the stock line entered next is the
+// count. A stock page only; an invoice never creates a product. Each
+// answers with the product and the new variants' ids and names.
+export const createWorkProduct = (token, id, data) =>
+  backlogCall("post", `/backlog-work/${id}/new-product/`, token, data);
+
+export const getWorkProductVariants = (token, id, productId) =>
+  backlogCall("get", `/backlog-work/${id}/products/${productId}/variants/`, token);
+
+export const addWorkProductVariants = (token, id, productId, data) =>
+  backlogCall("post", `/backlog-work/${id}/products/${productId}/variants/`, token, data);
+
+// The same, from the invoice create screens: no backlog page involved.
+export const createCustomerWithBalance = (token, data) =>
+  backlogCall("post", "/customers/create-with-balance/", token, data);
+
+export const createSupplierWithBalance = (token, data) =>
+  backlogCall("post", "/suppliers/create-with-balance/", token, data);
+
+// Names only - variants, customers, suppliers, accounts, units, locations,
+// attributes, projects - never a figure. Rate limited on the server.
+// withStock (variants): each row also says whether it is in stock - yes or
+// no, never how many - for a sales page to label what has run out.
+export const workLookup = async (token, kind, query = "", withStock = false) => {
+  const res = await backlogCall(
+    "get", `/backlog-work/lookup/${kind}/?q=${encodeURIComponent(query)}${withStock ? "&stock=1" : ""}`, token);
+  return res.ok ? res.data : [];
+};
+
+export const getWorkGlossary = async (token) => {
+  const res = await backlogCall("get", "/backlog-work/glossary/", token);
+  return res.ok ? res.data : null;
+};
+
+export const suggestGlossaryTerm = (token, data) =>
+  backlogCall("post", "/backlog-work/glossary-suggestions/", token, data);
 
 // ---------------------------------------------------------------------------
 // Accounting
@@ -2367,9 +2863,10 @@ export const getReceivables = async (token) => {
 
 /**
  * Parties still carrying an unsettled opening balance, with what is left on
- * it. Not the same as getPayables/getReceivables, which include invoice debt —
- * an on-account payment settles only the khaata balance brought across at
- * onboarding.
+ * it. Not the same as getPayables/getReceivables, which include invoice debt.
+ * The khaata's pool (on-account payments, credit notes) settles the opening
+ * balance first and then pending invoices, so "left on it" is what the pool
+ * has not reached yet.
  */
 export const getOpeningBalances = async (token, party = "supplier") => {
   try {
@@ -2485,9 +2982,10 @@ export const getPayables = async (token) => {
   }
 };
 
-export const getCustomerSummary = async (token, customerId) => {
+// `period` narrows Total Business only; the balance is always everything.
+export const getCustomerSummary = async (token, customerId, period = null) => {
   try {
-    const res = await apiClient.get(`/customers/${customerId}/summary/`, {
+    const res = await apiClient.get(`/customers/${customerId}/summary/${withPeriod("", period)}`, {
       headers: { Authorization: token },
     });
     if (res.status === 200) {
@@ -2500,9 +2998,9 @@ export const getCustomerSummary = async (token, customerId) => {
   }
 };
 
-export const getSupplierSummary = async (token, supplierId) => {
+export const getSupplierSummary = async (token, supplierId, period = null) => {
   try {
-    const res = await apiClient.get(`/suppliers/${supplierId}/summary/`, {
+    const res = await apiClient.get(`/suppliers/${supplierId}/summary/${withPeriod("", period)}`, {
       headers: { Authorization: token },
     });
     if (res.status === 200) {
@@ -2563,9 +3061,10 @@ export const getDailySummary = async (token, date = null) => {
   }
 };
 
-export const getProfitEstimate = async (token) => {
+// With a period the response also carries `selected` - the estimate for it.
+export const getProfitEstimate = async (token, period = null) => {
   try {
-    const res = await apiClient.get("accounting-kpis/profit-estimate/", {
+    const res = await apiClient.get(`accounting-kpis/profit-estimate/${withPeriod("", period)}`, {
       headers: { Authorization: token },
     });
     if (res.status == 200) {
@@ -2573,6 +3072,23 @@ export const getProfitEstimate = async (token) => {
     }
   } catch (error) {
     console.log(error);
+    return null;
+  }
+};
+
+// Net cash movement over the Accounting page's period, custom and all time
+// included: { trend, period } - or null when it fails. All time is asked for
+// by name: withPeriod sends nothing for it, which a trend reads as this month.
+export const getCashTrend = async (token, period) => {
+  const query = period?.key === "all" ? "?period=all" : withPeriod("", period);
+  try {
+    const res = await apiClient.get(`accounting-kpis/cash-trend/${query}`, {
+      headers: { Authorization: token },
+    });
+    if (res.status === 200) return res.data;
+    return null;
+  } catch (error) {
+    console.log("Error fetching the cash trend:", error);
     return null;
   }
 };
@@ -2737,4 +3253,58 @@ export const duplicateTarget = async (token, id) => {
     console.log("Error duplicating target:", error);
     return false;
   }
+};
+
+// ── Period summaries and trends ──────────────────────────────────────────────
+// A list page sends its table's own query (search or filters) with the period
+// added (withPeriod), so its cards describe exactly the rows it shows. The
+// dashboard sends a period alone.
+
+const getSummary = async (token, path, query) => {
+  try {
+    const res = await apiClient.get(`${path}${query || ""}`, {
+      headers: { Authorization: token },
+    });
+    if (res.status === 200) {
+      return res.data;
+    }
+    return null;
+  } catch (error) {
+    console.log(error);
+    return null;
+  }
+};
+
+export const getSalesSummary = (token, query = "") =>
+  getSummary(token, "/sales-invoices/summary/", query);
+
+export const getPurchasesSummary = (token, query = "") =>
+  getSummary(token, "/purchase-invoices/summary/", query);
+
+export const getExpensesSummary = (token, query = "") =>
+  getSummary(token, "/expenses/summary/", query);
+
+export const getTransactionsSummary = (token, query = "") =>
+  getSummary(token, "/transactions/summary/", query);
+
+export const getReturnedItemsSummary = (token, query = "") =>
+  getSummary(token, "/returned-items/summary/", query);
+
+// { trend: [{ label, value, ... }], period: { key, date_from, date_to } }
+export const getSalesTrend = (token, period) =>
+  getSummary(token, "sales-kpis/sales-trend/", withPeriod("", period));
+
+export const getExpensesTrend = (token, period) =>
+  getSummary(token, "expenses-kpis/expenses-trend/", withPeriod("", period));
+
+// The Book of Business: the day book and its summary over a period or a
+// custom range. Each returns the payload with its date_from / date_to.
+export const getBook = async (token, period) => {
+  const data = await getSummary(token, "accounting-kpis/day-book/", withPeriod("", period));
+  return data ? data.day_book : null;
+};
+
+export const getBookSummary = async (token, period) => {
+  const data = await getSummary(token, "accounting-kpis/daily-summary/", withPeriod("", period));
+  return data ? data.daily_summary : null;
 };

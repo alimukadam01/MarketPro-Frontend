@@ -9,6 +9,7 @@ import {
   transformPurchaseQuotation,
   createIdMap,
   listCountLabel,
+  PQStatusMap,
 } from "../../services/utils";
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -28,6 +29,8 @@ import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
 import { useDebouncedSearch } from "@/hooks/use-debounced-search";
+import { useListQuery } from "@/hooks/use-period";
+import { useFilterOptions } from "@/hooks/use-filter-options";
 
 //v2 idea: create an endpoint that serves these 2 arrays individually for each client.
 
@@ -40,17 +43,19 @@ const cols = [
   { key: "notes", label: "Notes" }
 ];
 
-// const filter_fields_template = {
-//   customer: ""
-// };
+// A quotation's supplier is any of its items' suppliers. This page has no
+// period switch, so the created date is a range here.
+const filter_fields_template = {
+  status: "",
+  supplier: "",
+  project: "",
+  created_from: "",
+  created_to: "",
+};
 
-// const filter_fields_mapper = {
-//   customer: {
-//     label: "Customer",
-//     type: "text",
-//     placeholder: "Enter customer name",
-//   },
-// };
+const status_options = Object.entries(PQStatusMap).map(
+  ([value, label]) => ({ value, label })
+);
 
 const PurchaseQuotations = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
@@ -62,8 +67,43 @@ const PurchaseQuotations = () => {
   const [loading, setLoading] = useState(true);
   const [purchaseQuotationsIdMap, setPurchaseQuotationsIdMap] = useState([])
   const { token } = useAuth() || null
-  const { getPermissions } = useAuth()
+  const { getPermissions, user } = useAuth()
   const permissions = getPermissions("quotations")
+  // The search and the filters, kept together so one never drops the other.
+  const listQuery = useListQuery()
+  // How many filters are on, for the Filter button.
+  const [filterCount, setFilterCount] = useState(0)
+  const options = useFilterOptions(token, user, ["suppliers", "projects"])
+
+  const filter_fields_mapper = {
+    status: {
+      label: "Status",
+      type: "select",
+      options: status_options,
+      anyLabel: "Any status",
+    },
+    supplier: {
+      label: "Supplier",
+      type: "combobox",
+      fullWidth: true,
+      options: options.suppliers,
+      loading: options.loading.suppliers,
+      placeholder: "Any supplier",
+      emptyText: "No suppliers yet.",
+      notFoundText: "No supplier matches that.",
+    },
+    project: {
+      label: "Project",
+      type: "combobox",
+      fullWidth: true,
+      options: options.projects,
+      loading: options.loading.projects,
+      placeholder: "Any project",
+      emptyText: "No projects yet.",
+      notFoundText: "No project matches that.",
+    },
+    created: { label: "Created", type: "range", input: "date", keys: ["created_from", "created_to"], fullWidth: true },
+  }
   const [isDeleted, setIsDeleted] = useState(false)
   const [filterWindowOpen, setFilterWindowOpen] = useState(false)
   const navigate = useNavigate()
@@ -120,11 +160,13 @@ const PurchaseQuotations = () => {
     });
   };
 
-  const fetchPurchaseQuotations = async (searchQuery = null) => {
+  // `query` is the search or the filter that produced it; left out, the
+  // current one is kept (a refetch after a delete).
+  const fetchPurchaseQuotations = async (query?: string | null) => {
     if (!token) return;
 
     try {
-      const res = await purchaseQuotationsAPIPackage.list(token, searchQuery);
+      const res = await purchaseQuotationsAPIPackage.list(token, listQuery.track(query));
       if (res) {
         setPurchaseQuotationsData(res.map(transformPurchaseQuotation))
         setPurchaseQuotationsIdMap(createIdMap(res))
@@ -206,15 +248,15 @@ const PurchaseQuotations = () => {
                   onChange={setSearchTerm}
                   pending={searching}
                 />
-                {/* <Button
+                <Button
                   variant="outline"
                   className="flex items-center space-x-2"
                   onClick={handleFilterClick}
                   type="button"
                 >
                   <Filter className="w-4 h-4" />
-                  <span>Filter</span>
-                </Button> */}
+                  <span>{filterCount ? `Filter · ${filterCount}` : "Filter"}</span>
+                </Button>
               </div>
 
               {/* Action Icons */}
@@ -272,14 +314,15 @@ const PurchaseQuotations = () => {
           ) : null}
           </div>
 
-          {/* <CustomFilter
+          <CustomFilter
             title="Filter Purchase Quotations"
             template={filter_fields_template}
             templateMapper={filter_fields_mapper}
             dataFetcher={fetchPurchaseQuotations}
             open={filterWindowOpen}
             setOpen={setFilterWindowOpen}
-          /> */}
+            onActiveChange={setFilterCount}
+          />
         </main>
       </div>
     </div>

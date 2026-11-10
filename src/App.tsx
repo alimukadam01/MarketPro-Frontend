@@ -2,10 +2,13 @@ import { ToastContainer } from "react-toastify";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from '../services/AuthProvider'
 import ProtectedRoute from './components/ProtectedRoute'
 import Index from "./pages/Index";
+import PhoneDashboard from "./pages/phone/PhoneDashboard";
+import PhoneUpload from "./pages/phone/PhoneUpload";
+import { PhoneOr } from "./components/phone/PhoneOr";
 import Employees from "./pages/Employees";
 
 import Sales from "./pages/Sales";
@@ -54,12 +57,14 @@ import ViewProject from "./pages/ViewProject";
 import CreateProjectTask from "./pages/CreateProjectTask";
 import UpdateProjectTask from "./pages/UpdateProjectTask";
 import Backlog from "./pages/Backlog";
-import CreateBacklogEntry from "./pages/CreateBacklogEntry";
-import UpdateBacklogEntry from "./pages/UpdateBacklogEntry";
+import BacklogWorkQueue from "./pages/backlog/BacklogWorkQueue";
+import { BacklogReviewRoute, BacklogWorkRoute } from "./pages/backlog/BacklogEntryPage";
+import BacklogUpload from "./pages/backlog/BacklogUpload";
+import BacklogGlossary from "./pages/backlog/BacklogGlossary";
 import Accounting from "./pages/Accounting";
 import CreateTransaction from "./pages/CreateTransaction";
 import UpdateTransaction from "./pages/UpdateTransaction";
-import DailyBook from "./pages/DailyBook";
+import BookOfBusiness from "./pages/BookOfBusiness";
 import Ledgers from "./pages/Ledgers";
 import MoneyAccounts from "./pages/MoneyAccounts";
 import Cheques from "./pages/Cheques";
@@ -80,7 +85,8 @@ const App = () => {
       <AuthProvider>
         <Routes>
           {/* Dashboard — token-only guard, no module check */}
-          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+          {/* A phone opens these two pages and no others (ProtectedRoute's phone). */}
+          <Route path="/" element={<ProtectedRoute phone><PhoneOr phone={<PhoneDashboard />}><Index /></PhoneOr></ProtectedRoute>} />
 
           {/* Sales */}
           <Route path="/sales" element={<ProtectedRoute module="sales"><Sales /></ProtectedRoute>} />
@@ -140,14 +146,22 @@ const App = () => {
 
           {/* Backlog */}
           <Route path="/backlog" element={<ProtectedRoute><Backlog /></ProtectedRoute>} />
-          <Route path="/backlog/create-entry" element={<ProtectedRoute><CreateBacklogEntry /></ProtectedRoute>} />
-          <Route path="/backlog/update-entry" element={<ProtectedRoute><UpdateBacklogEntry /></ProtectedRoute>} />
+          <Route path="/backlog/upload" element={<ProtectedRoute phone><PhoneOr phone={<PhoneUpload />}><BacklogUpload /></PhoneOr></ProtectedRoute>} />
+          <Route path="/backlog/glossary" element={<ProtectedRoute><BacklogGlossary /></ProtectedRoute>} />
+          {/* The breadcrumb links "review" on its own; there is no list there. */}
+          <Route path="/backlog/review" element={<Navigate to="/backlog" replace />} />
+          <Route path="/backlog/review/:id" element={<ProtectedRoute><BacklogReviewRoute /></ProtectedRoute>} />
+          {/* The entry screens: the only routes a data entry account can reach. */}
+          <Route path="/backlog/work" element={<ProtectedRoute entry><BacklogWorkQueue /></ProtectedRoute>} />
+          <Route path="/backlog/work/:id" element={<ProtectedRoute entry><BacklogWorkRoute /></ProtectedRoute>} />
 
           {/* Accounting */}
           <Route path="/accounting" element={<ProtectedRoute module="accounting"><Accounting /></ProtectedRoute>} />
           <Route path="/accounting/create-transaction" element={<ProtectedRoute module="accounting" action="create"><CreateTransaction /></ProtectedRoute>} />
           <Route path="/accounting/update-transaction" element={<ProtectedRoute module="accounting" action="edit"><UpdateTransaction /></ProtectedRoute>} />
-          <Route path="/accounting/daily-book" element={<ProtectedRoute module="accounting"><DailyBook /></ProtectedRoute>} />
+          <Route path="/accounting/book-of-business" element={<ProtectedRoute module="accounting"><BookOfBusiness /></ProtectedRoute>} />
+          {/* The Daily Book became the Book of Business; old links still land. */}
+          <Route path="/accounting/daily-book" element={<Navigate to="/accounting/book-of-business" replace />} />
           <Route path="/accounting/ledgers" element={<ProtectedRoute module="accounting"><Ledgers /></ProtectedRoute>} />
           {/* The same screen as /customers/view-customer, addressed from the
               accounting side. Two routes rather than one plus remembered state:

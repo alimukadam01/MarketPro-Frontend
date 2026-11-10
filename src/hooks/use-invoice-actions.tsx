@@ -7,6 +7,7 @@ import {
   captureInvoiceCustomer,
   getInvoicePDFData,
   getInvoiceWhatsAppMessage,
+  updateCustomer,
 } from "../../services/api";
 import { isWalkInCustomer } from "../../services/utils";
 
@@ -124,15 +125,27 @@ export const useInvoiceActions = ({
       const pdfData = await loadInvoice(invoiceId, knownPdfData);
       if (!pdfData) return;
 
-      // No phone to send to yet — name the buyer first.
+      // Nobody named yet: a counter sale is against the placeholder customer,
+      // so the buyer has to be created before there is anywhere to send it.
       if (isWalkInCustomer(pdfData.customer)) {
-        setCaptureFor({ invoiceId, pdfData });
+        setCaptureFor({ invoiceId, pdfData, mode: "create" });
+        return;
+      }
+
+      // Named, but unreachable. Checked here rather than left to fail at
+      // whatsapp-message, because that only reports "no phone number saved" -
+      // which told the user what was wrong and then offered no way to fix it.
+      // The same form opens instead, on this customer's details.
+      if (!String(pdfData.customer?.phone || "").trim()) {
+        setCaptureFor({ invoiceId, pdfData, mode: "update" });
         return;
       }
 
       const whatsapp = await getInvoiceWhatsAppMessage(token, invoiceId);
       if (!whatsapp) {
-        toast.error("Could not prepare the message. Check the customer's phone number.");
+        // A phone is saved and it still failed, so this is no longer a
+        // guess at the cause.
+        toast.error("Could not prepare the message. Please try again.");
         return;
       }
 
@@ -147,13 +160,53 @@ export const useInvoiceActions = ({
     }
   };
 
+  /**
+   * Adds the phone number to the customer the invoice already points at.
+   *
+   * An update, not a capture: that customer exists and the invoice is already
+   * theirs, so creating a second one and moving the invoice across would leave
+   * the business with the same buyer twice - once without a number and once
+   * with. Nothing about the invoice changes here, only the customer.
+   *
+   * Returns the same { invoice, whatsapp } shape capture-customer does, so the
+   * caller below does not care which of the two ran.
+   */
+  const updateCustomerPhone = async (invoiceId, knownInvoice, form) => {
+    const saved = await updateCustomer(token, knownInvoice.customer.id, form);
+    // Only a failed write returns null, so the caller can say "nothing was
+    // changed" and mean it.
+    if (!saved) return null;
+
+    // Re-read rather than patching the copy in hand: the PDF prints the
+    // customer's details, and the message is built server-side from the
+    // number that was just saved.
+    const invoice = await getInvoicePDFData(token, invoiceId);
+    if (!invoice?.id) {
+      // The customer HAS been updated, so everything from here is a delivery
+      // problem and must not be reported as a save failure. The copy in hand
+      // with the new details merged keeps the caller on its "saved, but
+      // WhatsApp could not be opened" path.
+      return {
+        invoice: {
+          ...knownInvoice,
+          customer: { ...knownInvoice.customer, ...form },
+        },
+        whatsapp: null,
+      };
+    }
+
+    return { invoice, whatsapp: await getInvoiceWhatsAppMessage(token, invoiceId) };
+  };
+
   const captureCustomer = async (form) => {
     if (!captureFor) return;
-    const { invoiceId } = captureFor;
+    const { invoiceId, pdfData, mode } = captureFor;
 
     let res = null;
     try {
-      res = await captureInvoiceCustomer(token, invoiceId, form);
+      res = mode === "update"
+        ? await updateCustomerPhone(invoiceId, pdfData, form)
+        : await captureInvoiceCustomer(token, invoiceId, form);
     } catch (error) {
       console.log("Error saving the customer:", error);
     }
@@ -200,6 +253,10 @@ export const useInvoiceActions = ({
       // The placeholder's own city preselects the dropdown; it rides along in
       // the print payload via SimpleCustomerSerializer.
       defaultCityId: captureFor?.pdfData?.customer?.city?.id,
+      // Only passed when the buyer is already known, which is what puts the
+      // dialog into its prefilled, update-the-customer mode. Left null for a
+      // counter sale so the form opens blank.
+      customer: captureFor?.mode === "update" ? captureFor.pdfData.customer : null,
       onSubmit: captureCustomer,
     },
   };

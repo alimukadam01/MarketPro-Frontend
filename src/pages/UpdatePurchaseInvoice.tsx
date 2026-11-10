@@ -1,48 +1,127 @@
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner"
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2 } from "lucide-react";
+import { ImageIcon, Plus, Trash2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
+  addOrMergeInvoiceItem,
   formatPartyLabel,
-  PaymentStatusMap,
-  PurchaseInvoiceStatusMap,
   createIdMap,
   transformProductVariant,
-  derivePaymentStatus,
-  getPaymentStatusColor
+  dateInputToDateTime,
+  nullIfBlank,
+  formatLineDiscount,
+  formatLineExtras,
+  lineTotal,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
+  applyHeldPayments,
+  createSupplierWithBalance,
   getProductVariantsList,
   suppliersAPIPackage,
   updatePurchaseInvoiceAndItems,
   getPurchaseInvoiceDetail,
   projectsAPIPackage
 } from "../../services/api"
-import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
-import Payments from "@/components/ui/payments";
+import Payments, { EMPTY_PENDING_PAYMENTS } from "@/components/ui/payments";
+import InvoiceImages from "@/components/ui/invoice-images";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
-import { Combobox } from "@/components/ui/combobox";
-import { Spinner } from "@/components/ui/spinner";
+import { usePending } from "@/hooks/use-pending";
+import { Combobox, useCreateAction } from "@/components/ui/combobox";
+import { NewPartyDialog } from "@/components/backlog/NewRecordDialogs";
+import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
+import { InvoiceItemsTable, RowAction } from "@/components/invoice/InvoiceItemsTable";
+import {
+  EMPTY_LINE_DISCOUNT, ExtraFieldInputs, LineDiscountInput, answersForSave, discountForSave,
+  missingRequiredField, type LineDiscountDraft,
+} from "@/components/invoice/LineExtrasInputs";
+import {
+  AmountToggleInput,
+  InvoiceSummaryCard,
+  PaymentButton,
+  PurchaseStatusSelect,
+} from "@/components/invoice/InvoiceRail";
+
+type PurchaseInvoiceFormItem = {
+  // Absent on a row added in this session; the API assigns it on save.
+  id?: number
+  // Either shape, which is why the row renders it defensively. A row loaded
+  // from the record goes through transformProductVariant and is flat, with
+  // name already "Base (Variant)"; a row added here keeps the raw variant
+  // off the products list, which still has its nested base.
+  product: { id: number, name: string, base?: { name: string } }
+  quantity: number
+  unit_cost: number
+  total: number
+  // plans/product-extra-fields.md: set when a line is added, kept after.
+  extra_fields?: Record<string, string | number>
+  extra_fields_display?: { label: string, value: string | number }[]
+  discount?: { type?: string, value?: number }
+}
+
+/**
+ * Everything the form holds, which is the whole invoice.
+ *
+ * Stated explicitly because react-hook-form otherwise infers the shape from
+ * defaultValues, and that inference collapses once items is in there - paths
+ * resolve to `never` and setValue stops typechecking on valid fields.
+ *
+ * The `string | number` members are not laziness: an <Input> reads back as a
+ * string while the API sends a number, and these fields genuinely hold either
+ * depending on whether the user has touched them since the record loaded.
+ */
+type PurchaseInvoiceFormValues = {
+  invoice_number: string
+  supplier: string | number
+  notes: string
+  date_issued: string
+  delivery: string
+  date_due: string
+  tax: string | number
+  tax_type: string
+  status: string
+  project: string | null
+  items: PurchaseInvoiceFormItem[]
+  amount_paid: number
+  newItemProduct: string
+  newItemQuantity: string | number
+  newItemCost: string | number
+}
+
+const ITEM_COLUMNS = ["Product", "Quantity", "Unit Cost", "Disc.", "Total"]
+
+/** "Base (Variant) · 12": the answers after the product, values only. */
+const withExtras = (label: string, item) => {
+  const extras = formatLineExtras(item)
+  return extras ? `${label} · ${extras}` : label
+}
+
+
+const productLabel = (product) =>
+  // base.name, not base: a row loaded from the record is flat but keeps a
+  // base for the extra fields its product asks (transformProductVariant).
+  product?.base?.name ? `${product.base.name} (${product.name})` : product?.name
 
 const UpdatePurchaseInvoice = () => {
   const { pending, run } = usePending();
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   // True until the record arrives, which the spinner beside the title
   // reports. A failure is the only thing that toasts.
   const [detailLoading, setDetailLoading] = useState(true);
   const [paymentsOpen, setPaymentsOpen] = useState(false)
-  const [invoiceItems, setInvoiceItems] = useState([])
+  // What the payments dialog holds until Update Invoice: payments to add,
+  // payments and refunds to delete. Nothing in the dialog reaches the server
+  // before then, so it always works against the total this page shows.
+  const [heldPayments, setHeldPayments] = useState(EMPTY_PENDING_PAYMENTS)
+  const [imagesOpen, setImagesOpen] = useState(false)
+  // Not form data: it labels the Images button. Seeded from the record and
+  // kept current by the dialog, which never refetches the invoice.
+  const [imageCount, setImageCount] = useState(0)
   const [products, setProducts] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [projects, setProjects] = useState([])
@@ -51,14 +130,19 @@ const UpdatePurchaseInvoice = () => {
   const [productsLoading, setProductsLoading] = useState(true)
   const [suppliersLoading, setSuppliersLoading] = useState(true)
   const [projectsLoading, setProjectsLoading] = useState(true)
-  const [amountPaid, setAmountPaid] = useState(0)
   const { token } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const invoice_id = location.state?.invoice_id || null
 
-  // react-hook-form setup
-  const { register, handleSubmit, control, watch, reset, setValue } = useForm({
+  // react-hook-form setup.
+  //
+  // The whole invoice lives here, including the line items, the
+  // percentage/amount toggle and the paid figure. Nothing about the record is
+  // kept in a useState beside it, so populateInvoiceFields is a single reset()
+  // and there is only one place a field can come from. See UpdateSalesInvoice,
+  // where a second home for the same value is what made it arrive undefined.
+  const { register, handleSubmit, control, watch, reset, setValue } = useForm<PurchaseInvoiceFormValues>({
     defaultValues: {
       invoice_number: "",
       supplier: "",
@@ -67,116 +151,209 @@ const UpdatePurchaseInvoice = () => {
       delivery: "",
       date_due: "",
       tax: "0.0",
+      // Whether tax is a percentage or a flat amount. Part of the record, so
+      // it belongs in the form rather than in useState.
+      tax_type: "percentage",
       status: "",
       project: null,
+      items: [],
+      // Derived server-side from the payments recorded against the invoice.
+      // Shown, never typed into, and never submitted.
+      amount_paid: 0,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemCost: 0
     },
   })
 
-  const tax = parseFloat(watch("tax") || 0)
+  const tax = parseFloat(String(watch("tax") || 0))
+  const taxType = watch("tax_type")
+  const invoiceItems = watch("items") || []
+  const amountPaid = watch("amount_paid") || 0
+  // The add-line row's extra-field answers and discount (plans/product-extra-fields.md).
+  const [lineAnswers, setLineAnswers] = useState<Record<string, string>>({})
+  const [lineDiscount, setLineDiscount] = useState<LineDiscountDraft>(EMPTY_LINE_DISCOUNT)
 
   const subtotal = invoiceItems.reduce((sum, item) => sum + item.total, 0)
-  const [taxType, setTaxType] = useState("percentage")
+  // Each line is already after its own discount; the gross beside it gives
+  // the Line discounts row.
+  const lineDiscounts = invoiceItems.reduce(
+    (sum, item) => sum + Number(item.quantity) * Number(item.unit_cost), 0) - subtotal
+  // The variant picked in the add-line row: its fields are asked for.
+  const pickedProductId = watch("newItemProduct")
+  const pickedVariant = products[pickedProductId]
+  useEffect(() => { setLineAnswers({}) }, [pickedProductId])
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
   const totalAmount = subtotal + taxAmount
-  const selectedProduct = products[watch("newItemProduct")]
-  const paymentStatus = derivePaymentStatus(amountPaid, totalAmount)
+
+  // Paid, as it will stand after Update: the saved figure, less the cleared
+  // payments held for deletion, plus the cleared ones held to add.
+  const clearedOf = (rows) => rows
+    .filter((p) => !p.status || p.status === "C")
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0)
+  const livePaid = Number(amountPaid || 0)
+    - clearedOf(heldPayments.deletes)
+    + clearedOf(heldPayments.adds)
+  const status = watch("status")
 
   const onSubmit = async (data) => {
 
-    const { newItemCost, newItemProduct, newItemQuantity, ...rest } = data
-
-    const tax = {
-      "value": parseFloat(data.tax),
-      "type": taxType
+    // Named field by field rather than spread from the form. The form now
+    // holds everything about the invoice, including the toggle and the paid
+    // figure, and a spread would post all of it - so listing the payload is
+    // what keeps a new form field from silently becoming a new API field.
+    const payload = {
+      invoice_number: data.invoice_number,
+      supplier: data.supplier,
+      notes: data.notes,
+      // date_issued is a DateTimeField; date_due and delivery are both
+      // nullable, and an empty date input posts "" which the API rejects.
+      date_issued: dateInputToDateTime(data.date_issued),
+      delivery: nullIfBlank(data.delivery),
+      date_due: nullIfBlank(data.date_due),
+      status: data.status,
+      project: data.project,
+      // The type comes from the record through the form and is never
+      // defaulted here: an absent one is dropped by JSON.stringify and then
+      // raises KeyError('type') in adjust_totals on the server.
+      tax: {
+        "value": parseFloat(String(data.tax)) || 0,
+        "type": data.tax_type
+      },
+      items: (data.items || []).map(item => ({
+        id: item.id ? item.id : null,
+        product_id: item.product.id,
+        quantity: item.quantity,
+        unit_cost: item.unit_cost,
+        extra_fields: item.extra_fields || {},
+        discount: item.discount || { type: "percentage", value: 0 },
+      })),
     }
 
-    const items = invoiceItems.map(item => ({
-      id: item.id ? item.id : null,
-      product_id: item.product.id,
-      quantity: item.quantity,
-      unit_cost: item.unit_cost,
-    }))
-
-    console.log({
-      ...rest,
-      tax: tax,
-      items: items
-    })
-
     try {
-      const success = await updatePurchaseInvoiceAndItems(token, invoice_id, {
-        ...rest,
-        tax: tax,
-        items: items
-      })
+      // The dialog's held deletions go first and its new payments last, with
+      // the invoice update between - the order the server's refund rule needs.
+      const { updated, failures } = await applyHeldPayments(
+        token, invoice_id, false, heldPayments,
+        () => updatePurchaseInvoiceAndItems(token, invoice_id, payload))
 
-      if (success) {
-        toast.success("Purchase invoice updated successfully!")
-        navigate(-1);
-      } else {
+      if (!updated) {
         toast.error("Failed to update purchase invoice.")
+        // A held deletion may already have gone through; show what is saved.
+        if (heldPayments.deletes.length || heldPayments.refundDeletes.length) {
+          setHeldPayments(EMPTY_PENDING_PAYMENTS)
+          fetchPurchaseInvoice()
+        }
+        return
       }
+
+      setHeldPayments(EMPTY_PENDING_PAYMENTS)
+      if (failures) {
+        toast.warning(`Invoice updated, but ${failures} payment change${failures > 1 ? "s" : ""} could not be saved. Check the payments and try again.`)
+        fetchPurchaseInvoice()
+        return
+      }
+
+      toast.success("Purchase invoice updated successfully!")
+      navigate(-1);
     } catch (error) {
-      console.log("Error creating purchase invoice:", error)
+      console.log("Error updating purchase invoice:", error)
     }
   }
 
   const addItem = (product, quantity, unit_cost) => {
     if (product && quantity > 0) {
       const selectedProduct = products[product]
+      const missing = missingRequiredField(selectedProduct, "purchase", lineAnswers)
+      if (missing) {
+        toast.error(`Enter the ${missing.label.toLowerCase()}.`)
+        document.getElementById(`line-field-${missing.id}`)?.focus()
+        return
+      }
       const newInvoiceItem = {
         product: selectedProduct,
         quantity,
         unit_cost,
-        total: quantity * unit_cost,
+        extra_fields: answersForSave(selectedProduct, "purchase", lineAnswers),
+        discount: discountForSave(lineDiscount),
+        total: 0,
       }
-      setInvoiceItems([...invoiceItems, newInvoiceItem])
-      reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true })
+      newInvoiceItem.total = lineTotal(newInvoiceItem, "unit_cost")
+      // Same product at a different price is its own line; at the same
+      // price it joins the line already there (addOrMergeInvoiceItem).
+      const merged = addOrMergeInvoiceItem(invoiceItems, newInvoiceItem, "unit_cost")
+      if (merged.length === invoiceItems.length) {
+        toast.success(`Added ${quantity} to the existing line for this product at this cost.`)
+      }
+      setValue("items", merged)
+      // The row is cleared for the next item: product, quantity, price, its
+      // extra fields and discount.
+      setValue("newItemProduct", "")
+      setValue("newItemQuantity", 0)
+      setValue("newItemCost", 0)
+      setLineAnswers({})
+      setLineDiscount(EMPTY_LINE_DISCOUNT)
     }
   }
 
-  const updateItem = (id, product, quantity, unit_cost) => {
-    return
+  const handleDeleteItem = (target) => {
+    // Matched by identity rather than id, because a row added in this session
+    // has no id yet.
+    setValue("items", invoiceItems.filter(item => item !== target));
   }
 
-  const handleDeleteItem = (e, target) => {
-    e.preventDefault();
-    setInvoiceItems(invoiceItems.filter(item => item !== target));
-  }
-
+  // The whole record in, the whole form out, in one write.
+  //
+  // Every key of defaultValues appears below. That is the point: the form is
+  // the only store, so anything missing here would be left over from the
+  // previous invoice rather than quietly defaulted, and reset() replaces the
+  // lot atomically. There is deliberately no setX() beside it.
   const populateInvoiceFields = (data) => {
-    // fill the main form fields
+    const {
+      invoice_number,
+      supplier,
+      notes,
+      date_issued,
+      delivery,
+      date_due,
+      tax,
+      status,
+      projects,
+      amount_paid,
+      invoice_items,
+    } = data
+
     reset({
-      invoice_number: data.invoice_number || "",
-      supplier: data.supplier,
-      notes: data.notes || "",
+      invoice_number: invoice_number || "",
+      supplier: supplier,
+      notes: notes || "",
       // A DateTimeField, and an <Input type="date"> rejects a full ISO datetime.
-      date_issued: data.date_issued?.split("T")[0] || "",
-      delivery: data.delivery?.split("T")[0] || "",
-      date_due: data.date_due || "",
-      tax: data.tax?.value ?? "0.0",
-      status: data.status,
-      project: data.projects?.length > 0 ? String(data.projects[0].project) : null,
+      date_issued: date_issued?.split("T")[0] || "",
+      delivery: delivery?.split("T")[0] || "",
+      date_due: date_due || "",
+      tax: tax?.value ?? "0.0",
+      // Falling back rather than taking the stored value as-is: an undefined
+      // type is dropped by JSON.stringify, and the API rejects a tax with no
+      // type at all.
+      tax_type: tax?.type || "percentage",
+      status: status,
+      project: projects?.length > 0 ? String(projects[0].project) : null,
+      items: (invoice_items || []).map((item) => ({
+        id: item.id,
+        product: transformProductVariant(item.product),
+        quantity: item.quantity,
+        unit_cost: item.unit_cost,
+        // After the line's discount, as the server worked it out.
+        total: item.line_total ?? (item.quantity * item.unit_cost),
+        extra_fields: item.extra_fields || {},
+        extra_fields_display: item.extra_fields_display || [],
+        discount: item.discount || { type: "percentage", value: 0 },
+      })),
+      amount_paid: amount_paid || 0,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemCost: 0,
     })
-
-    setAmountPaid(data.amount_paid || 0)
-
-    // build your items array for state
-    const items = (data.invoice_items || []).map((item) => ({
-      id: item.id,
-      product: transformProductVariant(item.product),
-      quantity: item.quantity,
-      unit_cost: item.unit_cost,
-      total: (item.quantity * item.unit_cost),
-    }))
-    setInvoiceItems(items)
-    setTaxType(data.tax?.type)
   }
 
   const supplierOptions = useMemo(
@@ -194,6 +371,14 @@ const UpdatePurchaseInvoice = () => {
     })),
     [products])
 
+  // A supplier typed here that MarketPro does not have: the Create button
+  // in the picker opens its dialog with the name filled in. Products are
+  // not created from an invoice - they and their stock come from the
+  // Products and Inventory screens (docs/INVOICE-WORKFLOWS.md).
+  const [creating, setCreating] = useState<{ kind: "supplier"; text: string } | null>(null)
+  const partyCreate = useCreateAction(supplierOptions, "supplier",
+    (text) => setCreating({ kind: "supplier", text }))
+
   const projectOptions = useMemo(
     () => Object.entries(projects).map(([value, project]) => ({
       value,
@@ -207,6 +392,7 @@ const UpdatePurchaseInvoice = () => {
       const purchaseInvoice = await getPurchaseInvoiceDetail(token, invoice_id)
       if (purchaseInvoice) {
         populateInvoiceFields(purchaseInvoice)
+        setImageCount(purchaseInvoice.images?.length || 0)
       } else {
         toast.error("Failed to fetch purchase invoice")
       }
@@ -216,43 +402,45 @@ const UpdatePurchaseInvoice = () => {
     }
   }
 
-  useEffect(() => {
+  // Outside the effect so a supplier or product created from the pickers
+  // can reload its list and be picked straight away.
+  const fetchProducts = async () => {
+    if (!token) return;
 
-    const fetchProducts = async () => {
-      if (!token) return;
-
-      try {
-        const products = await getProductVariantsList(token)
-        if (products) {
-          const productMap = createIdMap(products)
-          setProducts(productMap)
-        } else {
-          toast.error("Failed to fetch products")
-        }
-      } catch (error) {
-        console.log("Error fetching products:", error)
+    try {
+      const products = await getProductVariantsList(token)
+      if (products) {
+        const productMap = createIdMap(products)
+        setProducts(productMap)
+      } else {
         toast.error("Failed to fetch products")
-      } finally {
-        setProductsLoading(false)
       }
+    } catch (error) {
+      console.log("Error fetching products:", error)
+      toast.error("Failed to fetch products")
+    } finally {
+      setProductsLoading(false)
     }
+  }
 
-    const fetchSuppliers = async () => {
-      try {
-        const suppliers = await suppliersAPIPackage.list(token)
-        if (suppliers) {
-          const supplierMap = createIdMap(suppliers)
-          setSuppliers(supplierMap)
-        } else {
-          toast.error("Failed to fetch suppliers")
-        }
-      } catch (error) {
-        console.log("Error fetching suppliers:", error)
+  const fetchSuppliers = async () => {
+    try {
+      const suppliers = await suppliersAPIPackage.list(token)
+      if (suppliers) {
+        const supplierMap = createIdMap(suppliers)
+        setSuppliers(supplierMap)
+      } else {
         toast.error("Failed to fetch suppliers")
-      } finally {
-        setSuppliersLoading(false)
       }
+    } catch (error) {
+      console.log("Error fetching suppliers:", error)
+      toast.error("Failed to fetch suppliers")
+    } finally {
+      setSuppliersLoading(false)
     }
+  }
+
+  useEffect(() => {
 
     const fetchProjects = async () => {
       try {
@@ -283,277 +471,261 @@ const UpdatePurchaseInvoice = () => {
     init()
   }, [token, invoice_id])
 
-  useEffect(() => {
-    if (selectedProduct) {
-      setValue("newItemCost", selectedProduct.unit_Cost, { shouldDirty: false });
-    }
-  }, [selectedProduct])
+  // There used to be an effect here pre-filling Unit Cost from
+  // selectedProduct.unit_Cost. A variant carries no cost field at all, so it
+  // only ever blanked whatever cost had been typed; it is gone.
+
+  // The Disc. column only shows once some line has a discount.
+  const anyLineDiscount = invoiceItems.some((item) => !!formatLineDiscount(item.discount))
+
+  const summaryLines = [
+    ...(lineDiscounts > 0.005 ? [{ label: "Line discounts", value: lineDiscounts, sign: "−" as const }] : []),
+    { label: "Subtotal", value: subtotal },
+    ...(taxAmount ? [{
+      label: taxType === "percentage" ? `Tax (${tax}%)` : "Tax",
+      value: taxAmount,
+      sign: "+" as const,
+    }] : []),
+  ]
+
+  const unitCount = invoiceItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0)
 
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar onCollapseChange={setSidebarCollapsed} />
-      <div className={`${sidebarCollapsed ? "ml-16" : "ml-64"} transition-all duration-300 flex flex-col`}>
-        <Header />
-
-        <main className="flex-1 p-6 space-y-6">
-          {/* Breadcrumb */}
-          <DynamicBreadCrumb />
-
-          <form onSubmit={handleSubmit(run(onSubmit))} className="flex flex-row gap-12">
-            {/* First Column */}
-            <div className="flex flex-col flex-wrap flex-1">
-              <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Invoice Details{detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="invoice_number">Invoice no. (optional)</Label>
-                  <Input id="invoice_number" {...register("invoice_number")} placeholder="Enter invoice number" />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="supplier">Supplier</Label>
-                  <Controller
-                    name="supplier"
-                    control={control}
-                    render={({ field }) => (
-                      <Combobox
-                        id="supplier"
-                        options={supplierOptions}
-                        value={field.value}
-                        onChange={field.onChange}
-                        loading={suppliersLoading}
-                        placeholder="Select supplier"
-                        emptyText="No suppliers yet. Add one first."
-                        notFoundText="No supplier matches that."
-                      />
-                    )}
-                  />
-                </div>
+    <InvoiceScreen
+      title="Purchase Invoice"
+      // Purchase status is chosen, not derived - it decides whether the goods
+      // are restocked - so the pill beside the title is the picker. Cancelling
+      // is one of its options, which is why there is no Cancel button here.
+      status={
+        <Controller
+          name="status"
+          control={control}
+          render={({ field }) => (
+            <PurchaseStatusSelect value={field.value} onChange={field.onChange} />
+          )}
+        />
+      }
+      loading={detailLoading}
+      onSubmit={handleSubmit(run(onSubmit))}
+      titleActions={
+        <Button type="button" variant="outline" onClick={() => setImagesOpen(true)}>
+          <ImageIcon className="h-4 w-4 mr-2" />
+          Images
+          {imageCount > 0 && (
+            <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
+              {imageCount}
+            </span>
+          )}
+        </Button>
+      }
+      fields={
+        <div className="grid grid-cols-5 gap-6">
+          <div className="space-y-1">
+            <Label htmlFor="supplier">Supplier</Label>
+            <Controller
+              name="supplier"
+              control={control}
+              render={({ field }) => (
+                <Combobox
+                  id="supplier"
+                  options={supplierOptions}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onInputChange={partyCreate.onInputChange}
+                  createAction={partyCreate.createAction}
+                  loading={suppliersLoading}
+                  placeholder="Select supplier"
+                  emptyText="No suppliers yet. Add one first."
+                  notFoundText="No supplier matches that."
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="invoice_number">Invoice no. (optional)</Label>
+            <Input id="invoice_number" {...register("invoice_number")} placeholder="Enter invoice number" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="date_issued">Invoice Date</Label>
+            <Input id="date_issued" type="date" {...register("date_issued")} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="date_due">Date Due</Label>
+            <Input id="date_due" type="date" {...register("date_due")} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="delivery">Delivery Date</Label>
+            <Input id="delivery" type="date" {...register("delivery")} />
+          </div>
+        </div>
+      }
+      rail={
+        <>
+          <InvoiceSummaryCard lines={summaryLines} total={totalAmount} />
+          {/* A purchase has tax and no discount. */}
+          <div className="space-y-1">
+            <Label htmlFor="tax">Tax</Label>
+            <AmountToggleInput
+              id="tax"
+              type={taxType}
+              onToggle={() => setValue("tax_type", taxType === "percentage" ? "amount" : "percentage")}
+              inputProps={register("tax")}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              {...register("notes")}
+              placeholder="Add any additional notes here..."
+              rows={2}
+              className="[@media(max-height:820px)]:min-h-[60px]"
+            />
+          </div>
+          <PaymentButton total={totalAmount} paid={livePaid} onClick={() => setPaymentsOpen(true)} />
+          <Controller
+            name="project"
+            control={control}
+            render={({ field }) => (
+              <Combobox
+                id="project"
+                className="w-full"
+                options={projectOptions}
+                value={field.value ?? ""}
+                onChange={(val) => field.onChange(val || null)}
+                loading={projectsLoading}
+                placeholder="Add to project"
+                emptyText="No projects yet."
+                notFoundText="No project matches that."
+                clearable
+              />
+            )}
+          />
+          <SubmitButton type="submit" className="w-full" pending={pending} pendingLabel="Updating…">Update Invoice</SubmitButton>
+        </>
+      }
+      dialogs={
+        <>
+          <Payments
+            invoiceId={invoice_id}
+            invoiceTotal={totalAmount}
+            isSalesPayment={false}
+            open={paymentsOpen}
+            setOpen={setPaymentsOpen}
+            pending={heldPayments}
+            onPendingChange={setHeldPayments}
+            // A purchase in Draft or Cancelled - the status picked above -
+            // bills nothing.
+            billsTotal={!["D", "C"].includes(status)}
+          />
+          <NewPartyDialog
+            open={creating?.kind === "supplier"}
+            setOpen={(open) => { if (!open) setCreating(null) }}
+            kind="supplier"
+            initialName={creating?.text || ""}
+            create={(data) => createSupplierWithBalance(token, data)}
+            asOf={watch("date_issued")}
+            onCreated={async (item) => {
+              await fetchSuppliers()
+              setValue("supplier", String(item.id))
+            }}
+          />
+          <InvoiceImages
+            invoiceId={invoice_id}
+            isSalesInvoice={false}
+            open={imagesOpen}
+            setOpen={setImagesOpen}
+            onCountChange={setImageCount}
+          />
+        </>
+      }
+    >
+      <InvoiceSection
+        title="Invoice Items"
+        first
+        aside={invoiceItems.length > 0 ? `${invoiceItems.length} items · ${unitCount} units` : undefined}
+        pinned={
+          <>
+            {/* Row 1: product (two parts), quantity, price, discount. Row 2: the
+                product's extra fields, one part each. Add Item has a column of its own
+                and comes last in the page, so Tab goes discount -> extra fields -> Add Item. */}
+            <div className="grid grid-cols-[repeat(5,minmax(0,1fr))_auto] gap-x-4 gap-y-3 items-end">
+              <div className="col-span-2 min-w-0 space-y-1">
+                <Label htmlFor="newItemProduct">Product</Label>
+                <Controller
+                  name="newItemProduct"
+                  control={control}
+                  render={({ field }) => (
+                    <Combobox
+                      id="newItemProduct"
+                      options={productOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                      loading={productsLoading}
+                      placeholder="Select product"
+                      emptyText="No products yet."
+                      notFoundText="No product matches that."
+                    />
+                  )}
+                />
               </div>
-
-              <div className="mb-6 space-y-1">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea id="notes" {...register("notes")} placeholder="Add any additional notes here..." rows={4} />
+              <div className="min-w-0 space-y-1">
+                <Label htmlFor="newItemQuantity">Quantity</Label>
+                <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
               </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="date_issued">Invoice Date</Label>
-                  <Input id="date_issued" type="date" {...register("date_issued")} />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="delivery">Delivery</Label>
-                  <Input id="delivery" type="date" {...register("delivery")} />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="date_due">Date Due</Label>
-                  <Input id="date_due" type="date" {...register("date_due")} />
-                </div>
+              <div className="min-w-0 space-y-1">
+                <Label htmlFor="newItemCost">Unit Cost</Label>
+                <Input id="newItemCost" type="number" {...register("newItemCost")} />
               </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="tax">Tax</Label>
-                  <div className="relative">
-                    <Input id="tax" {...register("tax")} placeholder="0.0" />
-                    <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {taxType === "percentage" ? <Button type="button" variant="outline" onClick={() => setTaxType("amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setTaxType("percentage")}>PKR</Button>}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="status">Status</Label>
-                  <Controller
-                    name="status"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(PurchaseInvoiceStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Second Column */}
-            <div className="flex flex-col flex-wrap flex-1">
-              <h2 className="text-lg font-semibold mb-6">Add Invoice Item</h2>
-
-              <div className="flex gap-6 mb-6">
-                <div className="w-[60%] space-y-1">
-                  <Label htmlFor="newItemProduct">Select Product</Label>
-                  <Controller
-                    name="newItemProduct"
-                    control={control}
-                    render={({ field }) => (
-                      <Combobox
-                        id="newItemProduct"
-                        options={productOptions}
-                        value={field.value}
-                        onChange={field.onChange}
-                        loading={productsLoading}
-                        placeholder="Select product"
-                        emptyText="No products yet."
-                        notFoundText="No product matches that."
-                      />
-                    )}
-                  />
-                </div>
-                <div className="w-[20%] space-y-1">
-                  <Label htmlFor="newItemQuantity">Quantity</Label>
-                  <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
-                </div>
-                <div className="w-[20%] space-y-1">
-                  <Label htmlFor="newItemCost">Unit Cost</Label>
-                  <Input id="newItemCost" type="number" {...register("newItemCost")} />
-                </div>
-                <div className="w-[20%] flex items-end">
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      addItem(watch("newItemProduct"), parseInt(watch("newItemQuantity") || 0), parseFloat(watch("newItemCost") || 0.0))
-                    }
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Item
-                  </Button>
-                </div>
-              </div>
-
-              {/* Invoice Items Header */}
-              <div className="flex justify-between items-center mb-0.5">
-                <h3 className="text-lg font-semibold">Invoice Items</h3>
-              </div>
-
-              {/* Invoice Items */}
-              {/* Measured in-browser: 188px puts this row exactly level with Discount/Tax
-                  in the left column. */}
-              <div className="mb-6">
-                <div className="space-y-[10px] h-[188px] overflow-y-auto">
-                  {/* Sticky rather than lifted out of the scroll box, so the
-                      header can never drift out of step with the rows when a
-                      scrollbar appears. */}
-                  <div className="sticky top-0 z-10 bg-background flex items-center gap-2">
-                    <div className="bg-card rounded-lg border h-[35px] flex flex-1 items-center px-4">
-                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
-                        <div>#</div>
-                        <div>product</div>
-                        <div>quantity</div>
-                        <div>unit cost</div>
-                        <div>total</div>
-                      </div>
-                    </div>
-                    {/* Matches the 16px delete button sitting outside each row. */}
-                    <div className="w-4" />
-                  </div>
-
-                  {invoiceItems.map((item, idx) => (
-                    <div key={`${item.id}-${idx}`} className="flex items-center gap-2">
-                      <div className="bg-card rounded-lg h-[35px] flex flex-1 items-center px-4 border border-border">
-                        <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
-                          <div>{idx + 1}</div>
-                          <div className="font-medium">{
-                            item.product.base ?
-                              `${item.product.base.name} (${item.product.name})` :
-                              item.product.name
-                          }</div>
-                          <div>{item.quantity}</div>
-                          <div>{item.unit_cost}</div>
-                          <div className="font-semibold">{item.total}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center h-7">
-                        <Button
-                          type="button"
-                          variant="unstyled"
-                          className="p-0 hover:text-red-500"
-                          title="Delete item"
-                          onClick={(e) => handleDeleteItem(e, item)}
-                        >
-                          <Trash2 cursor={'pointer'} />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="subtotal">Subtotal</Label>
-                  <Input id="subtotal" value={subtotal.toLocaleString()} readOnly />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="totalAmount">Total</Label>
-                  <Input id="totalAmount" value={totalAmount.toLocaleString()} readOnly className="font-semibold" />
-                </div>
-              </div>
-
-              <div className="flex gap-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="amount_paid">Amount Paid</Label>
-                  {/* Driven by the payments dialog, never typed into, so it is
-                      disabled rather than readOnly - readOnly still takes focus
-                      and reads as an editable field. */}
-                  <Input
-                    id="amount_paid"
-                    className="disabled:opacity-100 disabled:cursor-default"
-                    value={`PKR ${Number(amountPaid).toLocaleString()}`}
-                    disabled
-                  />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label>Payment Status</Label>
-                  <div className="flex h-10 items-center">
-                    <span
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap ${getPaymentStatusColor(paymentStatus)}`}
-                    >
-                      {PaymentStatusMap[paymentStatus]}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 mt-6">
-                <div className="flex justify-end gap-3">
-                  <Controller
-                    name="project"
-                    control={control}
-                    render={({ field }) => (
-                      <Combobox
-                        id="project"
-                        className="w-36"
-                        options={projectOptions}
-                        value={field.value ?? ""}
-                        onChange={(val) => field.onChange(val || null)}
-                        loading={projectsLoading}
-                        placeholder="Add to project"
-                        emptyText="No projects yet."
-                        notFoundText="No project matches that."
-                        clearable
-                      />
-                    )}
-                  />
-                  <Button type="button" variant="outline" className="w-36" onClick={() => setPaymentsOpen(true)}>Add Payment</Button>
-                </div>
-                <div className="flex justify-end gap-3">
-                  <SubmitButton type="submit" className="w-36" pending={pending} pendingLabel="Updating…">Update Invoice</SubmitButton>
-                </div>
+              <LineDiscountInput value={lineDiscount} onChange={setLineDiscount} />
+              <ExtraFieldInputs
+                variant={pickedVariant}
+                side="purchase"
+                answers={lineAnswers}
+                onChange={setLineAnswers}
+                onEnter={() => addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemCost") || 0.0)))}
+              />
+              {/* Placed in row 1, column 6, but last in the page: Tab reaches it after the extra fields. */}
+              <div className="col-start-6 row-start-1">
+                <Button
+                  type="button"
+                  onClick={() =>
+                    addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemCost") || 0.0)))
+                  }
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
               </div>
             </div>
-          </form>
-          <Payments invoiceId={invoice_id} invoiceTotal={totalAmount} open={paymentsOpen} setOpen={setPaymentsOpen} isSalesPayment={false} onPaymentsChanged={fetchPurchaseInvoice} />
-        </main>
-      </div>
-    </div>
+            <InvoiceItemsTable showDiscount={anyLineDiscount} columns={ITEM_COLUMNS} rows={[]} headerOnly />
+          </>
+        }
+      >
+        <InvoiceItemsTable showDiscount={anyLineDiscount}
+          rowsOnly
+          columns={ITEM_COLUMNS}
+          emptyText="No items on this invoice."
+          rows={invoiceItems.map((item, idx) => ({
+            key: `${item.id}-${idx}`,
+            cells: [
+              <span title={withExtras(productLabel(item.product), item)}>
+                {withExtras(productLabel(item.product), item)}
+              </span>,
+              item.quantity,
+              Number(item.unit_cost).toLocaleString(),
+              formatLineDiscount(item.discount),
+              Number(item.total).toLocaleString(),
+            ],
+            actions: (
+              <RowAction label="Delete item" onClick={() => handleDeleteItem(item)}>
+                <Trash2 className="h-5 w-5" />
+              </RowAction>
+            ),
+          }))}
+        />
+      </InvoiceSection>
+    </InvoiceScreen>
   );
 }
 

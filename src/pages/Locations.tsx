@@ -1,6 +1,5 @@
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
-import CustomFilter from "@/components/layout/CustomFilter";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import DataTable from "@/components/ui/data-table";
@@ -36,18 +35,6 @@ const cols = [
   { key: "address", label: "Address" },
 ];
 
-// const filter_fields_template = {
-//   city__name: ""
-// };
-
-// const filter_fields_mapper = {
-//   city__name: {
-//     label: "City",
-//     type: "text",
-//     placeholder: "Enter city name",
-//   },
-// };
-
 const Locations = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [selectedRows, setSelectedRows] = useState([]);
@@ -64,7 +51,6 @@ const Locations = () => {
   const { getPermissions } = useAuth()
   const permissions = getPermissions("locations")
   const [isDeleted, setIsDeleted] = useState(false);
-  //   const [filterWindowOpen, setFilterWindowOpen] = useState(false);
   const navigate = useNavigate();
 
   const toggleRowSelection = (id: string) => {
@@ -140,11 +126,6 @@ const Locations = () => {
     }
   }
 
-  //   const handleFilterClick = (e) => {
-  //     e.preventDefault();
-  //     setFilterWindowOpen(!filterWindowOpen);
-  //   };
-
   const { searchTerm, setSearchTerm, searching } = useDebouncedSearch(fetchLocations);
 
   useEffect(() => {
@@ -209,6 +190,7 @@ const Locations = () => {
               title="Total Locations"
               value={totalLocations}
               loading={totalLocationsLoading}
+              error={!totalLocationsLoading && totalLocations == null}
             />
           </div>
 
@@ -225,7 +207,7 @@ const Locations = () => {
               Location Listing ({listCountLabel(locationsData, selectedRows)})
             </h2>
 
-            {/* Search and Filter */}
+            {/* Search */}
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <SearchField
@@ -234,15 +216,6 @@ const Locations = () => {
                   onChange={setSearchTerm}
                   pending={searching}
                 />
-                {/* <Button
-                  variant="outline"
-                  className="flex items-center space-x-2"
-                  onClick={handleFilterClick}
-                  type="button"
-                >
-                  <Filter className="w-4 h-4" />
-                  <span>Filter</span>
-                </Button> */}
               </div>
 
               {/* Action Icons */}
@@ -297,15 +270,6 @@ const Locations = () => {
             />
           ) : null}
           </div>
-
-          {/* <CustomFilter
-            title="Filter Locations"
-            template={filter_fields_template}
-            templateMapper={filter_fields_mapper}
-            dataFetcher={fetchLocations}
-            open={filterWindowOpen}
-            setOpen={setFilterWindowOpen}
-          /> */}
         </main>
       </div>
     </div>

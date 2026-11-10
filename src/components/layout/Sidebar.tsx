@@ -1,45 +1,11 @@
 import { cn } from "@/lib/utils";
-import {
-  ShoppingCart,
-  Package,
-  PackageOpen,
-  FolderOpen,
-  Wallet2,
-  Users,
-  Archive,
-  Menu,
-  Truck,
-  MapPin,
-  Undo2,
-  LogOut,
-  FileText,
-  UserCog,
-  Lock,
-  ClipboardList,
-  Landmark,
-  Target,
-} from "lucide-react";
+import { Menu, LogOut, Lock, Package } from "lucide-react";
+import { MODULE_ICONS } from "./module-icons";
+import { sidebarItems } from "./sidebar-items";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { useAuth } from "../../../services/AuthProvider";
 import { useNavigate, useLocation } from "react-router-dom";
-
-const sidebarItems = [
-  { name: "Sales",               icon: ShoppingCart, href: "/sales",               module: "sales" },
-  { name: "Purchases",           icon: Package,      href: "/purchases",            module: "purchases" },
-  { name: "Inventory",           icon: Archive,      href: "/inventory",            module: "inventory" },
-  { name: "Expenses",            icon: Wallet2,      href: "/expenses",             module: "expenses" },
-  { name: "Projects",            icon: FolderOpen,   href: "/projects",             module: "projects" },
-  { name: "Purchase Quotations", icon: FileText,     href: "/purchase-quotations",  module: "quotations" },
-  { name: "Products",            icon: PackageOpen,  href: "/products",             module: "products" },
-  { name: "Customers",           icon: Users,        href: "/customers",            module: "customers" },
-  { name: "Suppliers",           icon: Truck,        href: "/suppliers",            module: "suppliers" },
-  { name: "Locations",           icon: MapPin,       href: "/locations",            module: "locations" },
-  { name: "Returned Items",      icon: Undo2,        href: "/returned-items",       module: "returned_items" },
-  { name: "Backlog",             icon: ClipboardList, href: "/backlog",              module: "backlog" },
-  { name: "Accounting",          icon: Landmark,     href: "/accounting",           module: "accounting" },
-  { name: "Targets",             icon: Target,       href: "/targets",              module: "targets" },
-];
 
 interface SidebarProps {
   onCollapseChange?: (collapsed: boolean) => void;
@@ -137,7 +103,7 @@ export function Sidebar({ onCollapseChange }: SidebarProps) {
               location.pathname === "/employees" && "bg-primary-foreground/20"
             )}
           >
-            <UserCog className={cn("w-5 h-5", !isCollapsed && "mr-3")} />
+            <MODULE_ICONS.employees className={cn("w-5 h-5", !isCollapsed && "mr-3")} />
             {!isCollapsed && <span>Employees</span>}
           </Button>
         )}

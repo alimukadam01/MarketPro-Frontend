@@ -20,6 +20,8 @@ import {
     updateTransaction,
     moneyAccountsAPIPackage,
     suppliersAPIPackage,
+    salesInvoicesAPIPackage,
+    purchaseInvoicesAPIPackage,
     getCustomersList,
 } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider";
@@ -36,7 +38,10 @@ import {
     SourceKindMap,
     methodsForAccount,
     formatAccountOption,
-} from "../../services/utils";
+    formatInvoiceOption,
+    formatDate,
+    isNoteType,
+} from "../../services/utils";
 import { Combobox } from "@/components/ui/combobox";
 import { Spinner } from "@/components/ui/spinner";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -59,6 +64,14 @@ const UpdateTransaction = () => {
     const [existingImageUrl, setExistingImageUrl] = useState(null);
     const [isSourceLinked, setIsSourceLinked] = useState(false);
     const [source, setSource] = useState(null);
+    // What a note or an on-account payment settled on the party's khaata,
+    // oldest first. Worked out by the server on every read.
+    const [settles, setSettles] = useState([]);
+    // The invoice a sale or purchase payment was recorded against. `source`
+    // only carries its number; the field beside Type reads the same as on the
+    // create screen, which also needs the party, total and amount paid.
+    const [sourceInvoice, setSourceInvoice] = useState(null);
+    const [sourceInvoiceLoading, setSourceInvoiceLoading] = useState(false);
     const { token } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
@@ -85,11 +98,13 @@ const UpdateTransaction = () => {
     const selectedType = watch("type");
     const selectedMethod = watch("payment_method");
     const selectedAccountId = watch("account");
-    const isCheque = selectedMethod === "cheque";
+    // A note moves no money: no account, method, status or cheque to edit.
+    const isNote = isNoteType(selectedType);
+    const isCheque = !isNote && selectedMethod === "cheque";
 
     // Same single rule as the create screen: the cell beside Type is whatever
-    // this type refers to. Only the three party/transfer kinds are editable
-    // here - an invoice-backed or expense-backed row is locked anyway.
+    // this type refers to. Only the party and transfer kinds are editable here;
+    // an invoice-backed row is locked, so its invoice is shown but not chosen.
     const referenceKind = ReferenceForType[selectedType] || null;
     const isTransfer = referenceKind === "transfer_account";
 
@@ -115,9 +130,12 @@ const UpdateTransaction = () => {
             formData.append("type", data.type);
             formData.append("amount", String(Math.round(Number(data.amount))));
             formData.append("date", data.date);
-            formData.append("account", data.account);
-            formData.append("payment_method", data.payment_method);
-            formData.append("status", data.status);
+            // The server rejects an account, method or status on a note.
+            if (!isNote) {
+                formData.append("account", data.account);
+                formData.append("payment_method", data.payment_method);
+                formData.append("status", data.status);
+            }
 
             if (referenceKind === "transfer_account" && data.transfer_account) {
                 formData.append("transfer_account", data.transfer_account);
@@ -175,6 +193,7 @@ const UpdateTransaction = () => {
                 if (transaction) {
                     setIsSourceLinked(transaction.is_source_linked);
                     setSource(transaction.source || null);
+                    setSettles(transaction.settles || []);
                     setExistingImageUrl(getImageUrl(transaction.image) || null);
                     // party_payment has always been in this payload; the screen
                     // simply never read it, which is why the supplier or
@@ -242,6 +261,32 @@ const UpdateTransaction = () => {
         init();
     }, [token, transaction_id]);
 
+    useEffect(() => {
+        const invoicesAPI = {
+            sales_invoice: salesInvoicesAPIPackage,
+            purchase_invoice: purchaseInvoicesAPIPackage,
+        }[source?.kind];
+        if (!token || !invoicesAPI) return;
+
+        const fetchSourceInvoice = async () => {
+            setSourceInvoiceLoading(true);
+            try {
+                const res = await invoicesAPI.detail(token, source.id);
+                if (res) {
+                    setSourceInvoice(res);
+                } else {
+                    toast.error("Failed to fetch the linked invoice.");
+                }
+            } catch (error) {
+                console.log("Error fetching linked invoice:", error);
+                toast.error("Failed to fetch the linked invoice.");
+            } finally {
+                setSourceInvoiceLoading(false);
+            }
+        };
+        fetchSourceInvoice();
+    }, [token, source?.kind, source?.id]);
+
     /**
      * The cell beside Type, mirroring the create screen.
      */
@@ -273,6 +318,42 @@ const UpdateTransaction = () => {
                                 </SelectContent>
                             </Select>
                         )}
+                    />
+                </div>
+            );
+        }
+
+        // A sale or purchase payment always came from an invoice, so the field
+        // is locked and offers the one invoice it belongs to. Labelled exactly
+        // as on the create screen.
+        if (referenceKind === "sales_invoice" || referenceKind === "purchase_invoice") {
+            const isSale = referenceKind === "sales_invoice";
+            // Purchase detail sends the supplier as a bare id, so the name
+            // comes from the supplier list this page already loads.
+            const invoice = sourceInvoice && !isSale && typeof sourceInvoice.supplier !== "object"
+                ? { ...sourceInvoice, supplier: suppliers[sourceInvoice.supplier] }
+                : sourceInvoice;
+            const invoiceOptions = source?.id
+                ? [{
+                    value: String(source.id),
+                    // The number alone until the invoice arrives, or if it
+                    // fails to - never a blank field.
+                    label: invoice ? formatInvoiceOption(invoice) : source.label,
+                }]
+                : [];
+
+            return (
+                <div className="flex-1 space-y-1">
+                    <Label htmlFor={referenceKind}>{isSale ? "Sales Invoice" : "Purchase Invoice"}</Label>
+                    <Combobox
+                        options={invoiceOptions}
+                        value={source?.id ? String(source.id) : ""}
+                        onChange={() => {}}
+                        disabled
+                        loading={sourceInvoiceLoading}
+                        placeholder={detailLoading ? "Select invoice" : "No invoice linked"}
+                        emptyText="No invoice linked"
+                        notFoundText="No match."
                     />
                 </div>
             );
@@ -315,18 +396,29 @@ const UpdateTransaction = () => {
                     name={config.name}
                     control={control}
                     render={({ field }) => (
-                        <Combobox
-                            options={referenceOptions}
-                            value={field.value}
-                            onChange={field.onChange}
-                            disabled={isSourceLinked}
-                            loading={config.loading}
-                            placeholder={
-                                config.loading || !isEmpty ? config.placeholder : config.empty
-                            }
-                            emptyText={config.empty}
-                            notFoundText="No match."
-                        />
+                        <>
+                            <Combobox
+                                options={referenceOptions}
+                                value={field.value}
+                                onChange={field.onChange}
+                                disabled={isSourceLinked}
+                                loading={config.loading}
+                                placeholder={
+                                    config.loading || !isEmpty ? config.placeholder : config.empty
+                                }
+                                emptyText={config.empty}
+                                notFoundText="No match."
+                            />
+                            {/* The record itself has no party: a payment saved
+                                before a party was required. Nothing to prefill,
+                                so say so rather than look broken. */}
+                            {!detailLoading && !field.value && (
+                                <p className="text-xs text-amber-700 dark:text-amber-400">
+                                    Not linked to a {config.name} yet. Pick one and save, so
+                                    it counts on their khaata.
+                                </p>
+                            )}
+                        </>
                     )}
                 />
             </div>
@@ -408,6 +500,8 @@ const UpdateTransaction = () => {
                                     {renderReferenceCell()}
                                 </div>
 
+                                {/* A note moves no money, so it has no account or method. */}
+                                {!isNote && (
                                 <div className="flex gap-6 mb-6">
                                     <div className="flex-1 space-y-1">
                                         <Label htmlFor="account">Account</Label>
@@ -463,6 +557,7 @@ const UpdateTransaction = () => {
                                         />
                                     </div>
                                 </div>
+                                )}
 
                                 <div className="flex gap-6 mb-6">
                                     <div className="flex-1 space-y-1">
@@ -484,6 +579,34 @@ const UpdateTransaction = () => {
                                         />
                                     </div>
                                 </div>
+
+                                {/* What this credit settled on the khaata: the opening
+                                    balance first, then the oldest pending debts. */}
+                                {settles.length > 0 && (
+                                    <div className="mb-6 space-y-1">
+                                        <Label>Settles (worked out from the khaata, oldest first)</Label>
+                                        <div className="rounded-md border divide-y">
+                                            {settles.map((row, index) => (
+                                                <div
+                                                    key={`${row.kind}-${row.id ?? "opening"}-${index}`}
+                                                    className="flex justify-between px-3 py-1.5 text-sm"
+                                                >
+                                                    <span>
+                                                        {row.label}
+                                                        {row.date && (
+                                                            <span className="text-muted-foreground">
+                                                                {" "}· {formatDate(row.date)}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                    <span className="font-medium">
+                                                        PKR {Number(row.applied).toLocaleString()}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Second Column */}
@@ -521,6 +644,8 @@ const UpdateTransaction = () => {
                         <div className="flex gap-12">
                             {/* First Column */}
                             <div className="flex flex-col flex-1">
+                                {/* A note is always cleared: there is no cheque to wait on. */}
+                                {!isNote && (
                                 <div className="flex gap-6 mb-6">
                                     <div className="flex-1 space-y-1">
                                         <Label htmlFor="status">Status</Label>
@@ -548,6 +673,7 @@ const UpdateTransaction = () => {
                                         />
                                     </div>
                                 </div>
+                                )}
 
                                 {isCheque && (
                                     <div className="flex gap-6 mb-6">

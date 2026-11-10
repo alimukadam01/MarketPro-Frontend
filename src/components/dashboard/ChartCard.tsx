@@ -1,11 +1,17 @@
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { AreaChart, Area, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { StatCard } from "@/components/dashboard/StatCard";
-import { formatDate } from "../../../services/utils";
+import { PeriodSwitch } from "@/components/ui/period-switch";
+
+type Period = { key: string; from?: string; to?: string };
 
 interface ChartCardProps {
   title: string;
-  /** Null while loading. Never pass a zero-filled array - see `loading`. */
-  data: { day: string; value: number }[] | null;
+  /**
+   * One point per bucket - an hour, a day, a week or a month, as the period
+   * decides - labelled for the axis. Null while loading; never pass a
+   * zero-filled array (see `loading`).
+   */
+  data: { label?: string; day?: string; value: number }[] | null;
   color?: string;
   valueLabel?: string;
   /**
@@ -17,12 +23,42 @@ interface ChartCardProps {
    * state as null and pass loading instead.
    */
   loading?: boolean;
+  /**
+   * True when the trend could not be fetched. Without it a chart whose fetch
+   * failed kept `data` null and spun for ever; now a red hazard sign says it
+   * failed.
+   */
+  error?: boolean;
+  /** The period line, set beside the heading in a smaller size. */
+  hint?: string;
+  /** Give all three to put a period switch in the card's corner. */
+  period?: Period;
+  periodOptions?: { key: string; label: string }[];
+  onPeriodChange?: (period: Period) => void;
+  /** How the tooltip shows a point. Money unless told otherwise. */
+  formatValue?: (value: number) => string;
+  /**
+   * Labels the first, middle and last points under the chart. A phone has no
+   * pointer to hover for the tooltip, and no room for the period line beside
+   * the heading.
+   */
+  axisLabels?: boolean;
 }
 
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// Older trends (the Accounting cash chart) send { day: "YYYY-MM-DD" } rather
+// than a ready label; they get "20 Oct".
+const withLabels = (data) => data && data.map((point) => {
+  if (point.label || !point.day) return point;
+  const [, month, day] = point.day.split("-").map(Number);
+  return { ...point, label: `${day} ${MONTHS[month - 1]}` };
+});
+
 /**
- * A trend line on a card.
+ * A trend on a card: a line with the area under it shaded in its colour.
  *
  * Shares StatCard with MetricCard, so the chrome, the title and the whole-card
  * placeholder are defined once. They stay separate components because this one
@@ -30,7 +66,29 @@ const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`
  * on twenty - merging them would drag the charting library into every list
  * page's chunk.
  */
-export function ChartCard({ title, data, color = "#8b5cf6", valueLabel = "Amount", loading = false }: ChartCardProps) {
+export function ChartCard({
+  title, data, color = "#8b5cf6", valueLabel = "Amount", loading = false,
+  error = false, hint, period, periodOptions, onPeriodChange, formatValue = formatCurrency,
+  axisLabels = false,
+}: ChartCardProps) {
+  // Unique per chart: two charts sharing a gradient id would both paint with
+  // whichever was defined first.
+  const gradientId = `chart-fill-${title.replace(/\W+/g, "-").toLowerCase()}`;
+  const points = withLabels(data) || [];
+  const ends = points.length > 2
+    ? [points[0], points[Math.floor((points.length - 1) / 2)], points[points.length - 1]]
+    : points;
+
+  const action = period && periodOptions && onPeriodChange ? (
+    <PeriodSwitch
+      size="card"
+      label={`${title} period`}
+      options={periodOptions}
+      value={period}
+      onChange={onPeriodChange}
+    />
+  ) : null;
+
   return (
     // overflow-hidden is the backstop: ResponsiveContainer measures its parent
     // and writes a fixed pixel width onto the chart, so if it ever lags behind
@@ -39,24 +97,32 @@ export function ChartCard({ title, data, color = "#8b5cf6", valueLabel = "Amount
     // a grid/flex parent.
     <StatCard
       title={title}
-      loading={loading || !data}
+      // The chart frame stays on screen while it loads; the spinner beside
+      // the title says so, and the line draws in when the data lands.
+      loading={loading || (!data && !error)}
+      error={error}
       className="overflow-hidden min-w-0"
+      titleClassName="text-foreground whitespace-nowrap"
+      titleAside={hint ? (
+        <span className="truncate text-base text-muted-foreground">{hint}</span>
+      ) : null}
+      action={action}
     >
       <div className="h-48 w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data}>
-            <XAxis
-              dataKey="day"
-              tick={false}
-              axisLine={false}
-              allowDataOverflow={false}
-            />
+          <AreaChart data={points} margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={color} stopOpacity={0.25} />
+                <stop offset="100%" stopColor={color} stopOpacity={0.02} />
+              </linearGradient>
+            </defs>
             <YAxis hide />
-            {/* The x axis has no visible ticks, so the tooltip is where the
-                date and amount for a point are read. */}
+            {/* No x axis: the period line beside the heading says what the
+                chart covers, and the tooltip names each point. */}
             <Tooltip
-              labelFormatter={(day) => formatDate(day)}
-              formatter={(value) => [formatCurrency(value), valueLabel]}
+              labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ""}
+              formatter={(value) => [formatValue(Number(value)), valueLabel]}
               contentStyle={{
                 backgroundColor: "hsl(var(--card))",
                 border: "1px solid hsl(var(--border))",
@@ -67,17 +133,24 @@ export function ChartCard({ title, data, color = "#8b5cf6", valueLabel = "Amount
               itemStyle={{ color: "hsl(var(--foreground))" }}
               cursor={{ stroke: "hsl(var(--border))" }}
             />
-            <Line
+            <Area
               type="monotone"
               dataKey="value"
               stroke={color}
               strokeWidth={2}
-              dot={true}
-              activeDot={true}
+              fill={`url(#${gradientId})`}
+              // Every point always shown, not only the one under the cursor.
+              dot={{ r: 3, fill: color, stroke: color, strokeWidth: 1 }}
+              activeDot={{ r: 5 }}
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
+      {axisLabels && ends.length > 0 && (
+        <div className="mt-1 flex justify-between px-2 text-xs text-muted-foreground">
+          {ends.map((point, index) => <span key={index}>{point.label}</span>)}
+        </div>
+      )}
     </StatCard>
   );
 }

@@ -14,19 +14,38 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "../../../services/AuthProvider";
 import { getCitiesList } from "../../../services/api";
-import { createIdMap } from "../../../services/utils";
+import { createIdMap } from "../../../services/utils";
 import { Combobox } from "@/components/ui/combobox";
 
 const emptyForm = () => ({ name: "", phone: "", city: "", email: "" });
 
+/** The same form, filled in from a customer the invoice already points at. */
+const formFor = (customer, defaultCityId) => ({
+  name: customer?.name || "",
+  // Normally the one thing missing - it is why the dialog opened.
+  phone: customer?.phone || "",
+  city: String(customer?.city?.id || defaultCityId || ""),
+  email: customer?.email || "",
+});
+
 /**
- * Captures the buyer on a counter sale, at the moment it is sent to them.
+ * Collects the details needed to send an invoice over WhatsApp, in the two
+ * situations where they are not there yet.
  *
- * Dumb on purpose: it owns the form and the city list, nothing else. Saving,
- * reassigning the invoice, generating the PDF and handing off to WhatsApp all
- * live in useInvoiceActions, so both Send buttons behave identically.
+ * With no `customer`, this is a counter sale: the invoice is against the
+ * business's placeholder, nobody knows who bought it, so the form is blank and
+ * saving creates a customer and moves the invoice onto them.
+ *
+ * With a `customer`, the buyer is known but has no phone number saved. The
+ * form opens on their details so the number can be added without retyping the
+ * rest, and saving updates that customer rather than making a second one.
+ *
+ * Dumb on purpose either way: it owns the form and the city list, nothing
+ * else. Which of the two writes happens, generating the PDF and handing off to
+ * WhatsApp all live in useInvoiceActions, so both Send buttons behave
+ * identically.
  */
-function WalkInCustomer({ open, setOpen, defaultCityId, onSubmit }) {
+function WalkInCustomer({ open, setOpen, defaultCityId, customer = null, onSubmit }) {
   const { token } = useAuth();
   const [cities, setCities] = useState({});
   const [citiesLoading, setCitiesLoading] = useState(true);
@@ -42,7 +61,11 @@ function WalkInCustomer({ open, setOpen, defaultCityId, onSubmit }) {
   useEffect(() => {
     if (!open) return;
 
-    setForm({ ...emptyForm(), city: defaultCityId ? String(defaultCityId) : "" });
+    setForm(
+      customer
+        ? formFor(customer, defaultCityId)
+        : { ...emptyForm(), city: defaultCityId ? String(defaultCityId) : "" },
+    );
 
     const fetchCities = async () => {
       // re-armed, not just initialised: this effect re-runs every time the
@@ -63,7 +86,9 @@ function WalkInCustomer({ open, setOpen, defaultCityId, onSubmit }) {
       }
     };
     fetchCities();
-  }, [open, token, defaultCityId]);
+    // customer?.id rather than customer: the object is rebuilt on every parent
+    // render, which would re-run this and wipe what the user had typed.
+  }, [open, token, defaultCityId, customer?.id]);
 
   const setField = (field) => (value) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -100,11 +125,23 @@ function WalkInCustomer({ open, setOpen, defaultCityId, onSubmit }) {
     <DialogUI.Dialog open={open} onOpenChange={setOpen}>
       <DialogUI.DialogContent className="max-w-lg">
         <DialogUI.DialogHeader>
-          <DialogUI.DialogTitle>Who is this invoice for?</DialogUI.DialogTitle>
+          <DialogUI.DialogTitle>
+            {customer ? "Add a phone number" : "Who is this invoice for?"}
+          </DialogUI.DialogTitle>
           <DialogUI.DialogDescription>
-            This sale is recorded against the counter-sale customer, so there is
-            no number to send it to. Add the buyer's details to put them on the
-            invoice and send it over WhatsApp.
+            {customer ? (
+              <>
+                {customer.name} has no phone number saved, so there is nothing
+                to send the invoice to. Add one below — their other details are
+                already filled in and can be corrected if anything has changed.
+              </>
+            ) : (
+              <>
+                This sale is recorded against the counter-sale customer, so
+                there is no number to send it to. Add the buyer's details to
+                put them on the invoice and send it over WhatsApp.
+              </>
+            )}
           </DialogUI.DialogDescription>
         </DialogUI.DialogHeader>
 
@@ -123,7 +160,14 @@ function WalkInCustomer({ open, setOpen, defaultCityId, onSubmit }) {
             <Input
               value={form.phone}
               onChange={(e) => setField("phone")(e.target.value)}
-              placeholder="03001234567"
+              // "e.g." rather than a bare number, which is how the rest of the
+              // app writes example placeholders. It matters more here than
+              // elsewhere: every other field in this dialog is genuinely
+              // prefilled when an existing customer is being edited, so a grey
+              // 03001234567 read as the number already on file rather than as
+              // an empty field. Spaced, because whatsapp_number() strips
+              // non-digits anyway and a local number is what people type.
+              placeholder="e.g. 0300 1234567"
             />
             <p className="text-xs text-muted-foreground">
               The invoice is sent to this number on WhatsApp.

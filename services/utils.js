@@ -1,21 +1,28 @@
 import { BASE_URL } from './api'
 
+// Derived on the backend from the invoice itself: no lines -> Draft, lines
+// -> Completed, a balance past the due date -> Overdue. Cancelled is the only
+// value a person sets. "Sent" and "Partially Completed" no longer exist - the
+// latter was never a document state, just a record of how much stock had left.
 export const SalesInvoiceStatusMap = {
   D: "Draft",
-  S: "Sent",
   O: "Overdue",
   X: "Cancelled",
   C: "Completed",
-  PC: "Partially Completed",
 };
 
+// Exactly PurchaseInvoice.PURCHASE_INVOICE_STATUS_CHOICES, in that order. This
+// used to offer "S" (Sent) and "X" (Cancelled), neither of which the backend
+// accepts - it rejected both - and it has no Sent at all.
+//
+// Note that "C" is CANCELLED here but COMPLETED on a sales invoice: colour a
+// purchase status with getPurchaseStatusColor, never getStatusColor.
 export const PurchaseInvoiceStatusMap = {
   D: "Draft",
-  S: "Sent",
-  O: "Overdue",
-  X: "Cancelled",
   R: "Received",
   PR: "Partially Received",
+  C: "Cancelled",
+  O: "Overdue",
 };
 
 export const PaymentStatusMap = {
@@ -62,15 +69,30 @@ const ConfigKeys = [
   "targets",
 ];
 
-export const getStatusColor = (status) => {
-  console.log(status);
+// The purchase-side twin of getStatusColor below. Separate because the two
+// models disagree on "C": shared, a cancelled purchase was painted green.
+export const getPurchaseStatusColor = (status) => {
+  switch (status) {
+    case "R":
+      return "bg-green-100 text-green-700";
+    case "D":
+    case "PR":
+      return "bg-yellow-100 text-yellow-700";
+    case "C":
+    case "O":
+      return "bg-red-100 text-red-700";
+    default:
+      return "bg-gray-100 text-gray-700";
+  }
+};
 
+export const getStatusColor = (status) => {
   switch (status) {
     case "C":
     case "R":
       return "bg-green-100 text-green-700";
     case "D":
-    case "PC":
+    // Still reached: PQStatusMap uses S for a sent quotation.
     case "S":
       return "bg-yellow-100 text-yellow-700";
     case "X":
@@ -79,6 +101,48 @@ export const getStatusColor = (status) => {
     default:
       return "bg-gray-100 text-gray-700";
   }
+};
+
+// Extra charges in the shape the API accepts: labels trimmed, amounts turned
+// into numbers, and the empty rows a form inevitably leaves behind dropped.
+//
+// <Input> yields strings, so an untouched amount is "" and Number("") is 0
+// while float("") on the server raises - the rows have to be cleaned here
+// either way.
+//
+// Returns { error } instead of a list for a row that is half filled. An amount
+// with no label is refused by the server, and naming the row is a good deal
+// better than the generic failure toast the caller would otherwise show.
+export const normaliseExtraCharges = (rows) => {
+  const charges = [];
+
+  for (let index = 0; index < (rows || []).length; index += 1) {
+    const row = rows[index];
+    const label = String(row?.label ?? "").trim();
+    const amount = parseFloat(row?.amount);
+    const hasAmount = Number.isFinite(amount) && amount !== 0;
+
+    // Wholly untouched: not an error, just a row nobody filled in.
+    if (!label && !hasAmount) continue;
+
+    if (!label) {
+      return { error: `Extra charge ${index + 1} needs a label.` };
+    }
+    if (row?.amount !== "" && !Number.isFinite(amount)) {
+      return { error: `The amount on "${label}" is not a number.` };
+    }
+    if (amount < 0) {
+      return { error: `The amount on "${label}" cannot be negative.` };
+    }
+
+    // A label with no amount is dropped rather than refused, matching the
+    // server: it is a row someone started and abandoned.
+    if (!hasAmount) continue;
+
+    charges.push({ label, amount: Math.round(amount * 100) / 100 });
+  }
+
+  return { charges };
 };
 
 // Mirrors the payment_status property on the invoice models.
@@ -132,14 +196,160 @@ export const todayForInput = () => {
   return parts; // en-CA already yields YYYY-MM-DD
 };
 
+/**
+ * A cleared date input for a field the API allows to be null.
+ *
+ * An empty `<input type="date">` reads back as "", and DRF accepts null on a
+ * nullable date but rejects "" with "Date has wrong format. Use one of these
+ * formats instead: YYYY-MM-DD." Reading a record that has no due date and
+ * saving it unchanged is enough to trigger that, so every nullable date has
+ * to go through here on the way out.
+ */
+/**
+ * Adds a line to an invoice's items, merging it when it is the same line twice.
+ *
+ * The same product may legitimately appear more than once at DIFFERENT prices
+ * - four paint colours billed off one base product, an old price beside a new
+ * one - so those stay separate lines. At the SAME price it is one line entered
+ * twice, so the quantity joins the row already there instead of making a
+ * duplicate the server refuses.
+ *
+ * `priceKey` is "unit_price" on sales and "unit_cost" on purchases.
+ * Returns a new array and never mutates the one passed in; the caller can
+ * compare lengths to see whether a merge happened.
+ */
+export const addOrMergeInvoiceItem = (items, newItem, priceKey = "unit_price") => {
+  const list = items || [];
+  const samePrice = (a, b) => Number(a[priceKey]) === Number(b[priceKey]);
+  // The same line also means the same extra-field answers (the colour code)
+  // and the same discount: a gallon in 1453 and one in 5674 are two lines, as
+  // the server's UNIQUE key says (plans/product-extra-fields.md).
+  const index = list.findIndex(
+    (item) =>
+      String(item.product?.id) === String(newItem.product?.id) &&
+      samePrice(item, newItem) &&
+      sameLineExtras(item, newItem)
+  );
+
+  if (index === -1) return [...list, newItem];
+
+  return list.map((item, position) => {
+    if (position !== index) return item;
+    const quantity = Number(item.quantity) + Number(newItem.quantity);
+    const merged = { ...item, quantity };
+    return { ...merged, total: lineTotal(merged, priceKey) };
+  });
+};
+
+// -- Invoice line extras: extra-field answers and a line discount ------------
+// The server writes one canonical form (sales/lines.py); these mirror it so a
+// screen merges, adds up and shows a line exactly as the backend will.
+
+const canonicalNumber = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.round(number * 100) / 100;
+};
+
+/** {"<field id>": answer} with blanks dropped and keys in order. */
+export const canonicalExtraFields = (answers) => {
+  const out = {};
+  Object.keys(answers || {})
+    .sort((a, b) => Number(a) - Number(b))
+    .forEach((key) => {
+      const value = answers[key];
+      if (value === null || value === undefined || String(value).trim() === "") return;
+      out[key] = typeof value === "number" ? value : String(value).trim();
+    });
+  return out;
+};
+
+/** {} for no discount (or 0), else {type, value}. */
+export const canonicalLineDiscount = (discount) => {
+  const value = canonicalNumber(discount?.value);
+  if (!discount || !["percentage", "amount"].includes(discount.type) || !value || value <= 0) return {};
+  return { type: discount.type, value };
+};
+
+export const sameLineExtras = (a, b) =>
+  JSON.stringify(canonicalExtraFields(a?.extra_fields)) === JSON.stringify(canonicalExtraFields(b?.extra_fields)) &&
+  JSON.stringify(canonicalLineDiscount(a?.discount)) === JSON.stringify(canonicalLineDiscount(b?.discount));
+
+/**
+ * What a line bills after its discount - the one sum, kept equal to
+ * sales/lines.py: line_total. A percentage is off the line; an amount is off
+ * the whole line, shrinking with a return (`returned_quantity`, sales only).
+ */
+export const lineTotal = (item, priceKey = "unit_price") => {
+  const quantity = Number(item?.quantity) || 0;
+  const gross = quantity * (Number(item?.[priceKey]) || 0);
+  const discount = canonicalLineDiscount(item?.discount);
+  if (!discount.type) return gross;
+  if (discount.type === "percentage") return gross - (gross * discount.value) / 100;
+  const returned = Number(item?.returned_quantity) || 0;
+  const whole = quantity + returned;
+  return gross - (whole ? (discount.value * quantity) / whole : 0);
+};
+
+/** The extra fields a product's lines ask for on this side ("sale" or "purchase"). */
+export const askedFields = (variant, side) =>
+  (variant?.base?.extra_fields || []).filter(
+    (field) => field.applies_to === side || field.applies_to === "both");
+
+/** "5674 · 12": a line's answers for the line tables - the values only, in
+ *  field order, without the field names. A saved line has them as display
+ *  rows; a new one has its raw answers, already in the same order. */
+export const formatLineExtras = (item) => {
+  if (item?.extra_fields_display?.length) {
+    return item.extra_fields_display.map((row) => row.value).join(" · ");
+  }
+  return Object.values(canonicalExtraFields(item?.extra_fields)).join(" · ");
+};
+
+/** "10%", "500" or "" for a line's Disc. column. */
+export const formatLineDiscount = (discount) => {
+  const d = canonicalLineDiscount(discount);
+  if (!d.type) return "";
+  return d.type === "percentage" ? `${d.value}%` : Number(d.value).toLocaleString();
+};
+
+/** A line's product cell: "Base (Variant)", then its answers. */
+export const lineProductLabel = (item) => {
+  const name = `${item?.product?.base?.name ?? ""} (${item?.product?.name ?? ""})`;
+  const extras = formatLineExtras(item);
+  return extras ? `${name} · ${extras}` : name;
+};
+
+export const nullIfBlank = (value) =>
+  value === "" || value === undefined || value === null ? null : value;
+
+/**
+ * A date input's value as a datetime, for the fields the backend stores as
+ * DateTimeField (date_issued on both invoice types).
+ *
+ * Posting the bare YYYY-MM-DD parses as midnight, and midnight in
+ * Asia/Karachi is 19:00 UTC the day before — so anything reading the raw UTC
+ * date lands a day early, which is the trap local_date() exists to work
+ * around. Midday is clear of both ends of the day.
+ *
+ * Deliberately sent without an offset: the backend applies its own TIME_ZONE,
+ * so this keeps working if that ever changes, and there is no +05:00 hardcoded
+ * in the client.
+ */
+export const dateInputToDateTime = (value) =>
+  value ? `${value}T12:00:00` : null;
+
 export function transformExpense(data) {
   return {
     id: data.id,
     name: data.name,
-    category: ExpenseCategoryMap[data.category] || "-",
+    category: ExpenseCategoryLabels[data.category] || "-",
     desc: data.desc,
     amount: data.amount,
-    created_at: formatDate(data.created_at)
+    paid_from: data.paid_from_name || "-",
+    // The day the money went out - the date its transaction carries, as the
+    // transactions list shows it - not the day the row was typed in.
+    expense_date: formatDate(data.expense_date || data.created_at)
   }
 }
 
@@ -160,7 +370,24 @@ export const TransactionTypeMap = {
   other_payment: "Other Payment",
   transfer: "Account Transfer",
   cash_adjustment: "Cash Adjustment",
+  customer_credit_note: "Customer Credit Note",
+  customer_debit_note: "Customer Debit Note",
+  supplier_credit_note: "Supplier Credit Note",
+  supplier_debit_note: "Supplier Debit Note",
 };
+
+/**
+ * Notes move no money: no account, no payment method, no cheque, always
+ * cleared. A credit note lowers the party's khaata, a debit note raises it,
+ * and the khaata settles either against the opening balance first and then
+ * the oldest pending debts. They never name an invoice.
+ */
+export const NoteTransactionTypes = [
+  "customer_credit_note", "customer_debit_note",
+  "supplier_credit_note", "supplier_debit_note",
+];
+
+export const isNoteType = (type) => NoteTransactionTypes.includes(type);
 
 /**
  * Grouped for the type picker, mirroring the BRD's catalogue.
@@ -182,12 +409,15 @@ export const TransactionTypeGroups = {
     "loan_repayment", "other_payment",
   ],
   "Neither": ["transfer", "cash_adjustment"],
+  "Notes": NoteTransactionTypes,
 };
 
-// Types that name a customer or supplier when paid on account.
+// Types that name a customer or supplier when recorded on account. Notes
+// always name one: it is the only thing they settle against.
 export const PartyTransactionTypes = [
   "customer_receipt", "supplier_payment",
   "sales_return_refund", "purchase_return_refund",
+  ...NoteTransactionTypes,
 ];
 
 export const TransactionStatusMap = {
@@ -381,6 +611,40 @@ export const ReferenceForType = {
   purchase_payment: "purchase_invoice",
   expense: "expense",
   transfer: "transfer_account",
+  customer_credit_note: "customer",
+  customer_debit_note: "customer",
+  supplier_credit_note: "supplier",
+  supplier_debit_note: "supplier",
+};
+
+/**
+ * Who owes whom, keyed "customer:12" / "supplier:7", built from the
+ * receivables and payables lists. Those lists hold every party with a
+ * non-zero khaata - a supplier holding the business's money is under
+ * receivables - so together they cover everyone a note could be for.
+ */
+export const buildKhaataPositions = (receivables, payables) => {
+  const positions = {};
+  for (const row of receivables?.parties || []) {
+    positions[`${row.party_kind}:${row.id}`] = { side: "receivable", amount: row.balance };
+  }
+  for (const row of payables?.parties || []) {
+    positions[`${row.party_kind}:${row.id}`] = { side: "payable", amount: row.balance };
+  }
+  return positions;
+};
+
+/**
+ * How a party reads in the note picker, e.g. "Jotun · you owe PKR 9,172,894".
+ * Says which way the khaata stands, because a note can push it either way.
+ */
+export const formatPartyKhaataOption = (party, position) => {
+  const label = formatPartyLabel(party);
+  if (!position || !position.amount) return `${label} · settled`;
+  const amount = `PKR ${Number(position.amount).toLocaleString()}`;
+  return position.side === "receivable"
+    ? `${label} · owes you ${amount}`
+    : `${label} · you owe ${amount}`;
 };
 
 // How a locked transaction names where it came from. The detail payload sends
@@ -395,12 +659,21 @@ export const SourceKindMap = {
 // table placeholder and the route guard all say the same thing.
 export const ACCESS_DENIED_MESSAGE = "Access not granted. Please contact Admin.";
 
+// The categories a person can pick for an expense.
 export const ExpenseCategoryMap = {
   kiraya: "Rent",
   bijli: "Electricity",
   tankhwa: "Salaries",
   transport: "Transport",
   mutafarriq: "Miscellaneous",
+};
+
+// Every category an expense can carry, for showing one. Adds the
+// invoice-extra-charge category, which the system records from a sales
+// invoice's charges and nobody picks by hand - the API refuses it.
+export const ExpenseCategoryLabels = {
+  ...ExpenseCategoryMap,
+  invoice_extra_charge: "Invoice Extra Charge",
 };
 
 export const getTransactionStatusColor = (status) => {
@@ -432,9 +705,10 @@ export function transformTransaction(data) {
     id: data.id,
     date: formatDate(data.date),
     type: data.type,
-    account: data.account_name,
+    // A note has neither: no money moved.
+    account: data.account_name || "—",
     amount: data.amount,
-    payment_method: PaymentMethodMap[data.payment_method] || data.payment_method,
+    payment_method: PaymentMethodMap[data.payment_method] || data.payment_method || "—",
     status: data.status,
   }
 }
@@ -453,55 +727,92 @@ export function transformMoneyAccount(data) {
 export function transformSalesInvoice(data) {
   // Helper to format currency as "PKR X,XXX"
   const formatCurrency = (amount) => {
-    return `PKR ${Number(amount).toLocaleString()}`;
+    return `PKR ${Number(amount || 0).toLocaleString()}`;
   };
+
+  // formatDate(null) is "01/01/1970" - new Date(null) is the epoch, not an
+  // invalid date - and date_due is null on any invoice with no terms, which is
+  // most of them. Every row read 01/01/1970 until this guard.
+  const formatDateOrDash = (value) => (value ? formatDate(value) : "—");
+
+  // A money JSON is {value, type}: a percentage prints as one, a flat amount
+  // as currency. Guarded because tax can be absent on an older invoice, and
+  // `formatCurrency(data.tax.value)` threw on it rather than printing a dash.
+  const formatMoneyJson = (payload, whenMissing) => {
+    if (!payload || Object.keys(payload).length === 0) return whenMissing;
+    return payload.type === "percentage"
+      ? `${payload.value}%`
+      : formatCurrency(payload.value);
+  };
+
+  // What is left to collect. Negative when more has been taken than the
+  // invoice came to, which is a credit rather than an error, so it is shown
+  // as it stands rather than floored at zero.
+  const pending = Number(data.total || 0) - Number(data.amount_paid || 0);
 
   return {
     id: data.id,
     invoice_no: data.invoice_number ? data.invoice_number : "N/A",
+    customer: data.customer?.name || "—",
     status: data.status,
-    date_issued: formatDate(data.date_issued),
-    date_due: formatDate(data.date_due),
     payment_status: data.payment_status,
-    tax:
-      data.tax?.type === "percentage"
-        ? `${data.tax.value}%`
-        : formatCurrency(data.tax.value),
-    discount:
-      data.discount && Object.keys(data.discount).length > 0
-        ? data.discount?.type === "percentage"
-          ? `${data.discount.value}%`
-          : formatCurrency(data.discount.value)
-        : "none",
-    total_items: String(data.total_items),
-    sub_total: formatCurrency(data.sub_total),
+    date_issued: formatDateOrDash(data.date_issued),
+    date_due: formatDateOrDash(data.date_due),
+    tax: formatMoneyJson(data.tax, "none"),
+    discount: formatMoneyJson(data.discount, "none"),
+    // The quantities on the invoice, not the number of product lines - the
+    // serializer sums them now.
+    total_items: String(data.total_items ?? 0),
     total: formatCurrency(data.total),
+    amount_paid: formatCurrency(data.amount_paid),
+    pending_balance: formatCurrency(pending),
   };
 }
 
 export function transformPurchaseInvoice(data) {
   // Helper to format currency as "PKR X,XXX"
   const formatCurrency = (amount) => {
-    return `PKR ${Number(amount).toLocaleString()}`;
+    return `PKR ${Number(amount || 0).toLocaleString()}`;
   };
+
+  // formatDate(null) is "01/01/1970" - new Date(null) is the epoch, not an
+  // invalid date - and delivery and date_due are both null on a purchase with
+  // no terms recorded, which is most of them. Both columns read 01/01/1970 on
+  // every row until this guard.
+  const formatDateOrDash = (value) => (value ? formatDate(value) : "—");
+
+  const formatMoneyJson = (payload, whenMissing) => {
+    if (!payload || Object.keys(payload).length === 0) return whenMissing;
+    return payload.type === "percentage"
+      ? `${payload.value}%`
+      : formatCurrency(payload.value);
+  };
+
+  // What is still owed to the supplier. Negative when more has been paid than
+  // the invoice came to, which is a credit rather than an error, so it is
+  // shown as it stands rather than floored at zero.
+  const pending = Number(data.total || 0) - Number(data.amount_paid || 0);
 
   return {
     id: data.id,
     invoice_no: data.invoice_number ? data.invoice_number : "N/A",
+    supplier: data.supplier?.name || "—",
+    // The date on the invoice, not created_at - which the serializer also
+    // sends, and which is when the row was typed in rather than when the
+    // purchase happened. For the migrated invoices the two are five months
+    // apart.
+    date_issued: formatDateOrDash(data.date_issued),
     status: data.status,
-    supplier: data.supplier.name,
-    date_issued: formatDate(data.date_issued),
-    delivery: formatDate(data.delivery),
-    date_due: formatDate(data.date_due),
     payment_status: data.payment_status,
-    tax:
-      data.tax?.type === "percentage"
-        ? `${data.tax.value}%`
-        : formatCurrency(data.tax.value),
-    total_items: String(data.total_items),
-    sub_total: formatCurrency(data.sub_total),
+    delivery: formatDateOrDash(data.delivery),
+    date_due: formatDateOrDash(data.date_due),
+    tax: formatMoneyJson(data.tax, "none"),
+    // The quantities on the invoice, not the number of product lines - the
+    // serializer sums them now.
+    total_items: String(data.total_items ?? 0),
     total: formatCurrency(data.total),
-    amount_paid: data.amount_paid,
+    amount_paid: formatCurrency(data.amount_paid),
+    pending_balance: formatCurrency(pending),
   };
 }
 
@@ -521,6 +832,9 @@ export function transformInventoryItem(data) {
     unit_price: formatCurrency(data.unit_price),
     reorder_level: data.reorder_level,
     last_updated: formatDate(data.updated_at),
+    // The day the quantity was last counted: sales and purchases dated on or
+    // before it no longer move this stock (sales/stock_rule.py).
+    counted_at: data.stock_counted_at ? formatDate(data.stock_counted_at) : "-",
   };
 }
 
@@ -551,6 +865,10 @@ export function transformProductVariant(data) {
     name: `${data.base.name} (${data.name})`,
     unit: `${data.base.unit.name} (${data.base.unit.abv})`,
     desc: data.base.desc || "",
+    // The extra fields the product's invoice lines ask for - the colour code
+    // (plans/product-extra-fields.md). Kept under base, where the invoice
+    // screens' field inputs read them.
+    base: { extra_fields: data.base.extra_fields || [] },
   };
 }
 

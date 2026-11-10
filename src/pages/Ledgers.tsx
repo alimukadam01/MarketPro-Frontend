@@ -3,6 +3,7 @@ import { Header } from "@/components/layout/Header";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import DataTable from "@/components/ui/data-table";
 import { MetricCard } from "@/components/dashboard/MetricCard";
+import { PeriodMetricCard } from "@/components/dashboard/PeriodMetricCard";
 import { toast } from "sonner";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -17,9 +18,23 @@ import {
 
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
 
+// Both tables mix customers and suppliers: a supplier holding the business's
+// money is under Receivables, a customer it owes under Payables. The tag says
+// which, because the same name can be on both sides of a shop's books.
+const renderPartyName = (value, row) => (
+    <span className="flex items-center gap-2">
+        {value}
+        {row.tag && (
+            <span className="px-2 py-0.25 rounded-full text-xs font-medium whitespace-nowrap bg-muted text-muted-foreground">
+                {row.tag}
+            </span>
+        )}
+    </span>
+);
+
 const customerCols = [
     { key: "id", label: "ID" },
-    { key: "name", label: "Customer" },
+    { key: "name", label: "Name", render: renderPartyName },
     { key: "phone", label: "Phone" },
     {
         key: "balance",
@@ -47,7 +62,7 @@ const customerCols = [
 
 const supplierCols = [
     { key: "id", label: "ID" },
-    { key: "name", label: "Supplier" },
+    { key: "name", label: "Name", render: renderPartyName },
     { key: "business_name", label: "Business" },
     { key: "phone", label: "Phone" },
     {
@@ -66,14 +81,15 @@ const Ledgers = () => {
     // two fetches that feed them rather than the arrays themselves.
     const [loading, setLoading] = useState(true);
     const [payables, setPayables] = useState(null);
-    const [profit, setProfit] = useState(null);
-    const [profitLoading, setProfitLoading] = useState(true);
     const { token, getPermissions } = useAuth();
     const permissions = getPermissions("accounting");
     const navigate = useNavigate();
 
+    // A customer and a supplier can share an id, so a row's id carries its
+    // kind too; openLedger splits it back apart.
     const customerRows = (receivables?.parties || []).map((party) => ({
-        id: party.id,
+        id: `${party.party_kind}-${party.id}`,
+        tag: party.party_kind === "supplier" ? "Supplier" : null,
         name: party.name,
         phone: party.phone || "-",
         balance: party.balance,
@@ -83,7 +99,8 @@ const Ledgers = () => {
     }));
 
     const supplierRows = (payables?.parties || []).map((party) => ({
-        id: party.id,
+        id: `${party.party_kind}-${party.id}`,
+        tag: party.party_kind === "customer" ? "Customer" : null,
         name: party.name,
         business_name: party.business_name || "-",
         phone: party.phone || "-",
@@ -94,16 +111,18 @@ const Ledgers = () => {
     // khaata plus the balance, the opening balance and the payment dialog. Under
     // this path rather than /customers, so the URL and the breadcrumb both say
     // the user came through accounting.
-    const openCustomerLedger = (id) => {
-        navigate("/accounting/ledgers/view-customer", {
-            state: { customer_id: id },
-        });
-    };
-
-    const openSupplierLedger = (id) => {
-        navigate("/accounting/ledgers/view-supplier", {
-            state: { supplier_id: id },
-        });
+    const openLedger = (rowId) => {
+        const [kind, id] = String(rowId).split("-");
+        const partyId = Number(id);
+        if (kind === "supplier") {
+            navigate("/accounting/ledgers/view-supplier", {
+                state: { supplier_id: partyId },
+            });
+        } else {
+            navigate("/accounting/ledgers/view-customer", {
+                state: { customer_id: partyId },
+            });
+        }
     };
 
     useEffect(() => {
@@ -149,25 +168,8 @@ const Ledgers = () => {
             }
         };
 
-        const fetchProfit = async () => {
-            try {
-                const res = await getProfitEstimate(token);
-                if (res) {
-                    setProfit(res);
-                } else {
-                    toast.error("Failed to fetch profit estimate.");
-                }
-            } catch (error) {
-                console.log("Error fetching profit estimate:", error);
-                toast.error("Failed to fetch profit estimate.");
-            } finally {
-              setProfitLoading(false);
-            }
-        };
-
         fetchReceivables();
         fetchPayables();
-        fetchProfit();
     }, [token]);
 
     return (
@@ -210,17 +212,27 @@ const Ledgers = () => {
                                 <MetricCard
                                     title="Receivable"
                                     value={formatCurrency(receivables?.total)}
+                                    hint="As of today"
                                     loading={loading}
+                                    error={!loading && receivables == null}
                                 />
                                 <MetricCard
                                     title="Payable"
                                     value={formatCurrency(payables?.total)}
+                                    hint="As of today"
                                     loading={loading}
+                                    error={!loading && payables == null}
                                 />
-                                <MetricCard
-                                    title="Profit this month (estimated)"
-                                    value={formatCurrency(profit?.this_month?.profit)}
-                                    loading={profitLoading}
+                                {/* Its own switch: the tables on this page are
+                                    balances, so there is no page period. */}
+                                <PeriodMetricCard
+                                    title="Profit (estimated)"
+                                    storageKey="ledgers-profit"
+                                    defaultPeriod={{ key: "month" }}
+                                    fetcher={(period) => getProfitEstimate(token, period)}
+                                    pick={(data: { selected?: { profit: number } }) =>
+                                        formatCurrency(data.selected?.profit)}
+                                    errorMessage="Failed to fetch profit estimate."
                                 />
                             </div>
 
@@ -235,56 +247,61 @@ const Ledgers = () => {
                                   title="Receivable 0&ndash;30 days"
                                   value={formatCurrency(receivables?.aging?.current)}
                                   loading={loading}
+                                  error={!loading && receivables == null}
                                 />
                                 <MetricCard
                                   title="Receivable 31&ndash;60 days"
                                   value={formatCurrency(receivables?.aging?.days_31_60)}
                                   loading={loading}
+                                  error={!loading && receivables == null}
                                 />
                                 <MetricCard
                                   title="Receivable over 60 days"
                                   value={formatCurrency(receivables?.aging?.days_over_60)}
                                   loading={loading}
+                                  error={!loading && receivables == null}
                                 />
                             </div>
 
-                            {/* Customers who owe money */}
+                            {/* Everyone who owes the business: customers, and any
+                                supplier holding its money (a rebate, an advance). */}
                             <div className="space-y-4">
                                 <h2 className="text-xl font-semibold">
-                                    Customers with Outstanding Balance
+                                    Receivables · who owes you
                                 </h2>
                                 {loading || customerRows.length > 0 ? (
                                     <DataTable
                                         columns={customerCols}
                                         data={customerRows}
                                         selectedRows={[]}
-                                        onRowClick={openCustomerLedger}
+                                        onRowClick={openLedger}
                                         loading={loading}
                                     />
                                 ) : (
                                     <div className="bg-card rounded-lg p-6 border">
                                         <p className="text-sm text-muted-foreground">
-                                            No customer owes you anything right now.
+                                            Nobody owes you anything right now.
                                         </p>
                                     </div>
                                 )}
                             </div>
 
-                            {/* Suppliers we owe */}
+                            {/* Everyone the business owes: suppliers, and any
+                                customer it holds money for. */}
                             <div className="space-y-4">
-                                <h2 className="text-xl font-semibold">Suppliers Owed</h2>
+                                <h2 className="text-xl font-semibold">Payables · whom you owe</h2>
                                 {loading || supplierRows.length > 0 ? (
                                     <DataTable
                                         columns={supplierCols}
                                         data={supplierRows}
                                         selectedRows={[]}
-                                        onRowClick={openSupplierLedger}
+                                        onRowClick={openLedger}
                                         loading={loading}
                                     />
                                 ) : (
                                     <div className="bg-card rounded-lg p-6 border">
                                         <p className="text-sm text-muted-foreground">
-                                            You do not owe any supplier right now.
+                                            You do not owe anyone right now.
                                         </p>
                                     </div>
                                 )}

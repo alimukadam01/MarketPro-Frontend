@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
-    createIdMap
+    createIdMap,
+    formatDate
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
@@ -31,6 +32,7 @@ const UpdateInventoryItem = () => {
     // reports. A failure is the only thing that toasts.
     const [detailLoading, setDetailLoading] = useState(true);
     const [productName, setProductName] = useState("")
+    const [countedAt, setCountedAt] = useState<string | null>(null)
     const [locations, setLocations] = useState([])
     const { token } = useAuth()
     const businessId = localStorage.getItem("mp-business-id")
@@ -61,6 +63,7 @@ const UpdateInventoryItem = () => {
     const populateFields = (data) => {
         const product = data.product
         setProductName(`${product.base.name} (${product.name})`)
+        setCountedAt(data.stock_counted_at || null)
         reset({
             track_code: data.track_code || "",
             notes: data.notes || "",
@@ -218,6 +221,18 @@ const UpdateInventoryItem = () => {
                                         <Label htmlFor="quantity_reserved">Reserved Quantity</Label>
                                         <Input id="quantity_reserved" type="number" {...register("quantity_reserved")} />
                                     </div>
+                                </div>
+
+                                {/* Shown, not typed: changing the quantity is a count, and
+                                    the server dates it. */}
+                                <div className="mb-6 space-y-1">
+                                    <Label htmlFor="stock_counted_at">Stock counted at</Label>
+                                    <Input id="stock_counted_at" type="text" disabled
+                                        value={countedAt ? formatDate(countedAt) : "Not counted yet"}
+                                        className="bg-muted disabled:opacity-100 disabled:text-foreground" />
+                                    <p className="text-xs text-muted-foreground">
+                                        Set to today when you change the quantity. Sales and purchases dated on or before it do not move this stock.
+                                    </p>
                                 </div>
 
                                 <div className="flex gap-6 mb-6">

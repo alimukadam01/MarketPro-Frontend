@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { getInvoicePDFData } from "../../services/api";
-import { formatDate } from "../../services/utils"
+import { formatDate, formatLineDiscount } from "../../services/utils"
 
 /* MarketPro theme, resolved from the HSL tokens in index.css */
 const COLORS = {
@@ -119,6 +119,9 @@ const styles = StyleSheet.create({
   },
   colSno: { width: "6%", color: COLORS.muted },
   colItem: { width: "48%", paddingRight: 8 },
+  // Narrower when a Disc. column is printed: only when some line has one.
+  colItemWithDisc: { width: "38%", paddingRight: 8 },
+  colDisc: { width: "10%", textAlign: "right" },
   colQty: { width: "10%", textAlign: "right" },
   colRate: { width: "16%", textAlign: "right" },
   colAmount: { width: "20%", textAlign: "right" },
@@ -222,13 +225,23 @@ const Invoice = ({ token, invoice_id, invoice: invoiceProp = null }) => {
   const business = invoice.business || {}
   const customer = invoice.customer || {}
   const items = invoice.invoice_items || []
+  // A Disc. column only when some line carries a discount; the line amount is
+  // after it either way (line_total, sales/lines.py).
+  const anyLineDiscount = items.some((item) => formatLineDiscount(item.discount))
+  const itemCol = anyLineDiscount ? styles.colItemWithDisc : styles.colItem
 
   const paid = Number(invoice.amount_paid || 0)
   const balance = Number(invoice.total || 0) - paid
 
-  // Mirrors SalesInvoice.adjust_totals: both are worked out on the raw
-  // subtotal — tax is NOT charged on the discounted figure — and
-  // total = subtotal + tax - discount. Kept in step so the lines add up.
+  // Mirrors SalesInvoice.adjust_totals: both are worked out on sub_total -
+  // the lines after their own discounts - and tax is NOT charged on the
+  // figure after the invoice's discount; and
+  // total = subtotal + tax - discount + extra charges. Kept in step so the
+  // lines add up.
+  //
+  // The extra charges sit outside sub_total on purpose, which is what lets a
+  // percentage tax be recomputed here from sub_total without taxing a
+  // delivery fee.
   const modifierAmount = (entry) => {
     if (!entry || !entry.value) return 0
     return entry.type === "percentage"
@@ -241,6 +254,13 @@ const Invoice = ({ token, invoice_id, invoice: invoiceProp = null }) => {
 
   const discountAmount = modifierAmount(invoice.discount)
   const taxAmount = modifierAmount(invoice.tax)
+
+  // Printed one per line rather than as a single "Charges" figure: a customer
+  // asked to pay a delivery fee should see that is what it is. The rows are
+  // already cleaned and totalled server-side.
+  const extraCharges = (invoice.extra_charges || []).filter(
+    (charge) => charge && Number(charge.amount)
+  )
 
   return (
     <Document>
@@ -292,27 +312,35 @@ const Invoice = ({ token, invoice_id, invoice: invoiceProp = null }) => {
         {/* Items */}
         <View style={styles.tableHead} fixed>
           <Text style={[styles.headCell, styles.colSno]}>#</Text>
-          <Text style={[styles.headCell, styles.colItem]}>ITEM</Text>
+          <Text style={[styles.headCell, itemCol]}>ITEM</Text>
           <Text style={[styles.headCell, styles.colQty]}>QTY</Text>
           <Text style={[styles.headCell, styles.colRate]}>RATE</Text>
+          {anyLineDiscount ? <Text style={[styles.headCell, styles.colDisc]}>DISC.</Text> : null}
           <Text style={[styles.headCell, styles.colAmount]}>AMOUNT</Text>
         </View>
 
         {items.map((item, index) => (
           <View style={styles.row} key={index} wrap={false}>
             <Text style={styles.colSno}>{index + 1}</Text>
-            <View style={styles.colItem}>
+            <View style={itemCol}>
               <Text>{item.product?.base?.name}</Text>
               {/* "default" is the placeholder name for a variant-less
                   product — printing it under every line is just noise. */}
               {item.product?.name && item.product.name !== "default" ? (
                 <Text style={styles.variant}>{item.product.name}</Text>
               ) : null}
+              {/* The product's extra fields: "Colour code: 5674". */}
+              {(item.extra_fields_display || []).map((row, n) => (
+                <Text key={n} style={styles.variant}>{row.label}: {row.value}</Text>
+              ))}
             </View>
             <Text style={styles.colQty}>{item.net_quantity}</Text>
             <Text style={styles.colRate}>{money(item.unit_price)}</Text>
+            {anyLineDiscount ? (
+              <Text style={styles.colDisc}>{formatLineDiscount(item.discount)}</Text>
+            ) : null}
             <Text style={styles.colAmount}>
-              {money(item.unit_price * item.net_quantity)}
+              {money(item.line_total ?? item.unit_price * item.net_quantity)}
             </Text>
           </View>
         ))}
@@ -339,6 +367,13 @@ const Invoice = ({ token, invoice_id, invoice: invoiceProp = null }) => {
             <Text style={styles.totalLabel}>Subtotal</Text>
             <Text>{money(invoice.sub_total)}</Text>
           </View>
+
+          {extraCharges.map((charge, index) => (
+            <View style={styles.totalRow} key={`${charge.label}-${index}`}>
+              <Text style={styles.totalLabel}>{charge.label}</Text>
+              <Text>{money(charge.amount)}</Text>
+            </View>
+          ))}
 
           <View style={styles.netRow}>
             <Text style={styles.netLabel}>NET AMOUNT</Text>

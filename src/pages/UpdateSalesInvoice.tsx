@@ -1,53 +1,125 @@
 import { useState, useEffect, useMemo } from "react";
 import { toast } from "sonner"
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Send, Trash2, Undo2 } from "lucide-react";
+import { Ban, Download, ImageIcon, Plus, Send, Trash2, Undo2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import {
-  PaymentStatusMap,
-  SalesInvoiceStatusMap,
+  addOrMergeInvoiceItem,
   createIdMap,
   createNestedIdMap,
-  derivePaymentStatus,
-  getPaymentStatusColor
+  dateInputToDateTime,
+  normaliseExtraCharges,
+  nullIfBlank,
+  todayForInput,
+  formatLineDiscount,
+  lineProductLabel,
+  lineTotal,
 } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import {
+  applyHeldPayments,
+  createCustomerWithBalance,
   getAvailableProductsList,
   getCustomersList,
   updateSalesInvoiceAndItems,
   getSalesInvoiceDetail,
   getInvoicePDFData,
+  cancelSalesInvoice,
+  uncancelSalesInvoice,
   projectsAPIPackage
 } from "../../services/api"
-import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import ReturnItem from "@/components/ui/return-item";
-import Payments from "@/components/ui/payments";
+import Payments, { EMPTY_PENDING_PAYMENTS } from "@/components/ui/payments";
+import InvoiceImages from "@/components/ui/invoice-images";
 import WalkInCustomer from "@/components/ui/walk-in-customer";
 import { useInvoiceActions } from "@/hooks/use-invoice-actions";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
-import { Combobox } from "@/components/ui/combobox";
-import { Spinner } from "@/components/ui/spinner";
+import { usePending } from "@/hooks/use-pending";
+import { Combobox, useCreateAction } from "@/components/ui/combobox";
+import { NewPartyDialog } from "@/components/backlog/NewRecordDialogs";
+import { InvoiceScreen, InvoiceSection } from "@/components/invoice/InvoiceScreen";
+import { InvoiceItemsTable, RowAction } from "@/components/invoice/InvoiceItemsTable";
+import {
+  EMPTY_LINE_DISCOUNT, ExtraFieldInputs, LineDiscountInput, answersForSave, discountForSave,
+  missingRequiredField, type LineDiscountDraft,
+} from "@/components/invoice/LineExtrasInputs";
+import { ExtraChargesEditor } from "@/components/invoice/ExtraChargesEditor";
+import {
+  AmountToggleInput,
+  InvoiceSummaryCard,
+  PaymentButton,
+  SalesStatusPill,
+} from "@/components/invoice/InvoiceRail";
+
+type SalesInvoiceFormItem = {
+  id: number
+  product: { id: number, name: string, base: { name: string } }
+  quantity: number
+  unit_price: number
+  total: number
+  is_returned?: boolean
+  // plans/product-extra-fields.md. A saved line keeps these: it is not
+  // edited in place, so they are only set when a line is added.
+  extra_fields?: Record<string, string | number>
+  extra_fields_display?: { label: string, value: string | number }[]
+  discount?: { type?: string, value?: number }
+  returned_quantity?: number
+}
+
+/**
+ * Everything the form holds, which is the whole invoice.
+ *
+ * Stated explicitly because react-hook-form otherwise infers the shape from
+ * defaultValues, and that inference collapses once items is in there - paths
+ * resolve to `never` and setValue stops typechecking on valid fields.
+ *
+ * The `string | number` members are not laziness: an <Input> reads back as a
+ * string while the API sends a number, and these fields genuinely hold either
+ * depending on whether the user has touched them since the record loaded.
+ */
+type SalesInvoiceFormValues = {
+  invoice_number: string
+  customer: string | number
+  notes: string
+  date_issued: string
+  date_due: string
+  discount: string | number
+  discount_type: string
+  tax: string | number
+  tax_type: string
+  // Amounts arrive as numbers from the record and leave the inputs as
+  // strings, so both are allowed and normaliseExtraCharges settles it.
+  extra_charges: { label: string; amount: string | number }[]
+  status: string
+  project: string | null
+  items: SalesInvoiceFormItem[]
+  amount_paid: number
+  newItemProduct: string
+  newItemQuantity: string | number
+  newItemPrice: string | number
+}
 
 const UpdateSalesInvoice = () => {
   const { pending, run } = usePending();
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true)
   // True until the record arrives, which the spinner beside the title
   // reports. A failure is the only thing that toasts.
   const [detailLoading, setDetailLoading] = useState(true);
   const [returnItemWindowOpen, setReturnItemWindowOpen] = useState(false)
   const [paymentsOpen, setPaymentsOpen] = useState(false)
+  // What the payments dialog holds until Update Invoice: payments to add,
+  // payments and refunds to delete. Nothing in the dialog reaches the server
+  // before then, so it always works against the total this page shows.
+  const [heldPayments, setHeldPayments] = useState(EMPTY_PENDING_PAYMENTS)
+  const [imagesOpen, setImagesOpen] = useState(false)
+  // Not form data: it labels the Images button. Seeded from the record and
+  // kept current by the dialog, which never refetches the invoice.
+  const [imageCount, setImageCount] = useState(0)
   const [itemReturned, setItemReturned] = useState(false)
-  const [invoiceItems, setInvoiceItems] = useState([])
   const [returningItem, setReturningItem] = useState(null)
   const [products, setProducts] = useState([])
   const [customers, setCustomers] = useState([])
@@ -59,7 +131,6 @@ const UpdateSalesInvoice = () => {
   const [customersLoading, setCustomersLoading] = useState(true)
   const [projectsLoading, setProjectsLoading] = useState(true)
   const [pdfData, setPdfData] = useState(null)
-  const [amountPaid, setAmountPaid] = useState(0)
   const { token } = useAuth()
   const businessId = localStorage.getItem("mp-business-id")
   const navigate = useNavigate()
@@ -81,137 +152,308 @@ const UpdateSalesInvoice = () => {
     },
   })
 
-  // react-hook-form setup
-  const { register, handleSubmit, control, watch, reset, setValue } = useForm({
+  // react-hook-form setup.
+  //
+  // The whole invoice lives here, including the line items, the two
+  // percentage/amount toggles and the paid figure. Nothing about the record is
+  // kept in a useState beside it: a second home for form data is what let
+  // discount_type be written twice and end up undefined, which the API then
+  // rejected. One store means populateInvoiceFields is a single reset() and a
+  // field it forgets is impossible rather than merely unlikely.
+  const { register, handleSubmit, control, watch, reset, setValue } = useForm<SalesInvoiceFormValues>({
     defaultValues: {
       invoice_number: "",
       customer: "",
       notes: "",
-      date_issued: "2025-08-09",
-      date_due: "2025-08-09",
-      discount: "0.0",
+      // Only ever seen if the detail fetch fails. These used to be a
+      // hardcoded 2025 date, which a submit would then have saved.
+      date_issued: todayForInput(),
+      date_due: "",
+      discount: "0",
+      // Whether discount/tax are a percentage or a flat amount. Part of the
+      // record, so it belongs in the form rather than in useState.
+      discount_type: "percentage",
       tax: "0.0",
+      tax_type: "percentage",
+      extra_charges: [],
       status: "",
       project: null,
+      items: [],
+      // Derived server-side from the payments recorded against the invoice.
+      // Shown, never typed into, and never submitted.
+      amount_paid: 0,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemPrice: 0
     },
   })
 
-  const discount = parseFloat(watch("discount") || 0)
-  const tax = parseFloat(watch("tax") || 0)
+  const discount = parseFloat(String(watch("discount") || 0))
+  const tax = parseFloat(String(watch("tax") || 0))
+  const discountType = watch("discount_type")
+  const taxType = watch("tax_type")
+  const invoiceItems = watch("items") || []
+  const amountPaid = watch("amount_paid") || 0
+  // The add-line row's extra-field answers and discount (plans/product-extra-fields.md).
+  const [lineAnswers, setLineAnswers] = useState<Record<string, string>>({})
+  const [lineDiscount, setLineDiscount] = useState<LineDiscountDraft>(EMPTY_LINE_DISCOUNT)
 
+  // Each line is already after its own discount; the gross beside it gives
+  // the Line discounts row.
   const subtotal = invoiceItems
     .filter(item => !item.is_returned)
     .reduce((sum, item) => sum + item.total, 0)
-  const [discountType, setDiscountType] = useState("percentage")
-  const [taxType, setTaxType] = useState("percentage")
+  const lineDiscounts = invoiceItems
+    .filter(item => !item.is_returned)
+    .reduce((sum, item) => sum + Number(item.quantity) * Number(item.unit_price), 0) - subtotal
   const discountAmount = discountType === "percentage" ? (subtotal * discount) / 100 : discount
   const taxAmount = taxType === "percentage" ? (subtotal * tax) / 100 : tax
-  const totalAmount = subtotal - discountAmount + taxAmount
+
+  // After the tax and outside the subtotal, matching SalesInvoice.adjust_totals.
+  const extraCharges = watch("extra_charges") || []
+  const chargesTotal = extraCharges.reduce(
+    (sum, charge) => sum + (parseFloat(String(charge?.amount)) || 0), 0)
+
+  const totalAmount = subtotal - discountAmount + taxAmount + chargesTotal
+
+  // Paid, as it will stand after Update: the saved figure, less the cleared
+  // payments held for deletion, plus the cleared ones held to add. A cheque
+  // pays nothing until it clears, here as on the server.
+  const clearedOf = (rows) => rows
+    .filter((p) => !p.status || p.status === "C")
+    .reduce((sum, p) => sum + Number(p.amount || 0), 0)
+  const livePaid = Number(amountPaid || 0)
+    - clearedOf(heldPayments.deletes)
+    + clearedOf(heldPayments.adds)
   const selectedProduct = products[watch("newItemProduct")]
-  const paymentStatus = derivePaymentStatus(amountPaid, totalAmount)
+  // Read from the form so the badge updates when populateInvoiceFields runs
+  // and after a cancel refetches the record. It is shown, never submitted.
+  const status = watch("status")
+
+  const [statusPending, setStatusPending] = useState(false)
+
+  // Cancelling returns the goods to stock and takes the invoice out of the
+  // customer's ledger; reinstating does both in reverse. The record is
+  // refetched rather than patched locally, because the server also rewrites
+  // the line-level deduction flags.
+  const changeCancellation = async (action, request, successMessage) => {
+    if (!invoice_id) return
+    setStatusPending(true)
+    try {
+      const success = await request(token, invoice_id)
+      if (success) {
+        toast.success(successMessage)
+        await fetchSalesInvoice()
+      } else {
+        toast.error(`Failed to ${action} the invoice.`)
+      }
+    } catch (error) {
+      console.log(`Error trying to ${action} the invoice:`, error)
+      toast.error(`Failed to ${action} the invoice.`)
+    } finally {
+      setStatusPending(false)
+    }
+  }
+
+  const cancelInvoice = () => changeCancellation(
+    "cancel", cancelSalesInvoice, "Invoice cancelled. Its items are back in stock.")
+
+  const reinstateInvoice = () => changeCancellation(
+    "reinstate", uncancelSalesInvoice, "Invoice reinstated. Its items left stock again.")
 
   const onSubmit = async (data) => {
 
-    const { newItemPrice, newItemProduct, newItemQuantity, ...rest } = data
-
-    const tax = {
-      "value": parseFloat(data.tax),
-      "type": taxType
+    // Before the payload, so a half-filled row is named on screen rather than
+    // coming back as a bare failure toast.
+    const { charges, error } = normaliseExtraCharges(data.extra_charges)
+    if (error) {
+      toast.error(error)
+      return
     }
 
-    const discount = {
-      "value": parseFloat(data.discount),
-      "type": discountType
+    // Named field by field rather than spread from the form. The form now
+    // holds everything about the invoice, including the toggles and the paid
+    // figure, and a spread would post all of it - so listing the payload is
+    // what keeps a new form field from silently becoming a new API field.
+    const payload = {
+      invoice_number: data.invoice_number,
+      customer: data.customer,
+      notes: data.notes,
+      // date_issued is a DateTimeField, so a bare date would be stored as
+      // midnight and read back a day early; date_due is nullable, and an
+      // empty input posts "" which the API rejects outright.
+      date_issued: dateInputToDateTime(data.date_issued),
+      date_due: nullIfBlank(data.date_due),
+      // status is deliberately absent. It is derived on the server from the
+      // invoice's lines and what is still owed, and posting a value would be
+      // ignored - sending one was how this field used to be overwritten.
+      project: data.project,
+      // The type is never defaulted here. It comes from the record through
+      // the form, and an absent one would be dropped by JSON.stringify and
+      // then raise KeyError('type') in adjust_totals on the server.
+      discount: {
+        "value": parseFloat(String(data.discount)) || 0,
+        "type": data.discount_type
+      },
+      tax: {
+        "value": parseFloat(String(data.tax)) || 0,
+        "type": data.tax_type
+      },
+      extra_charges: charges,
+      items: (data.items || []).map(item => ({
+        id: item.id,
+        product_id: item.product.id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        extra_fields: item.extra_fields || {},
+        discount: item.discount || { type: "percentage", value: 0 },
+      })),
     }
-
-    const items = invoiceItems.map(item => ({
-      id: item.id,
-      product_id: item.product.id,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-    }))
 
     try {
-      const success = await updateSalesInvoiceAndItems(token, invoice_id, {
-        ...rest,
-        tax: tax,
-        discount: discount,
-        items: items
-      })
+      // The dialog's held deletions go first and its new payments last, with
+      // the invoice update between - the order the server's refund rule needs.
+      const { updated, failures } = await applyHeldPayments(
+        token, invoice_id, true, heldPayments,
+        () => updateSalesInvoiceAndItems(token, invoice_id, payload))
 
-      if (success) {
-        toast.success("Sales invoice updated successfully!")
-        navigate(-1);
-      } else {
+      if (!updated) {
         toast.error("Failed to update sales invoice.")
+        // A held deletion may already have gone through; show what is saved.
+        if (heldPayments.deletes.length || heldPayments.refundDeletes.length) {
+          setHeldPayments(EMPTY_PENDING_PAYMENTS)
+          fetchSalesInvoice()
+        }
+        return
       }
+
+      setHeldPayments(EMPTY_PENDING_PAYMENTS)
+      if (failures) {
+        // The invoice is saved; say exactly what was not, and stay here so it
+        // can be done again.
+        toast.warning(`Invoice updated, but ${failures} payment change${failures > 1 ? "s" : ""} could not be saved. Check the payments and try again.`)
+        fetchSalesInvoice()
+        return
+      }
+
+      toast.success("Sales invoice updated successfully!")
+      navigate(-1);
     } catch (error) {
-      console.log("Error creating sales invoice:", error)
+      console.log("Error updating sales invoice:", error)
     }
   }
 
   const addItem = (product, quantity, unit_price) => {
     if (product && quantity > 0) {
       const selectedProduct = products[product]
+      const variant = selectedProduct.product
+      const missing = missingRequiredField(variant, "sale", lineAnswers)
+      if (missing) {
+        toast.error(`Enter the ${missing.label.toLowerCase()}.`)
+        document.getElementById(`line-field-${missing.id}`)?.focus()
+        return
+      }
       const newInvoiceItem = {
-        id: invoiceItems.length + 1,
-        product: selectedProduct.product,
+        // Negative, so it can never equal a saved line's id (the update
+        // treats a matching id as that line) or repeat after a delete,
+        // which length + 1 did - and deleting one then removed both.
+        id: -(Date.now() + Math.random()),
+        product: variant,
         quantity,
         unit_price,
-        total: quantity * unit_price,
+        extra_fields: answersForSave(variant, "sale", lineAnswers),
+        discount: discountForSave(lineDiscount),
+        total: 0,
       };
-      setInvoiceItems([...invoiceItems, newInvoiceItem]);
-      reset({ newItemProduct: "", newItemQuantity: 0 }, { keepValues: true });
+      newInvoiceItem.total = lineTotal(newInvoiceItem);
+      // Same product at a different price is its own line; at the same
+      // price it joins the line already there (addOrMergeInvoiceItem).
+      const merged = addOrMergeInvoiceItem(invoiceItems, newInvoiceItem);
+      if (merged.length === invoiceItems.length) {
+        toast.success(`Added ${quantity} to the existing line for this product at this price.`);
+      }
+      setValue("items", merged);
+      // The row is cleared for the next item: product, quantity, price, its
+      // extra fields and discount.
+      setValue("newItemProduct", "");
+      setValue("newItemQuantity", 0);
+      setValue("newItemPrice", 0);
+      setLineAnswers({})
+      setLineDiscount(EMPTY_LINE_DISCOUNT)
     }
   }
 
+  // The whole record in, the whole form out, in one write.
+  //
+  // Every key of defaultValues appears below. That is the point: the form is
+  // the only store, so anything missing here would be left over from the
+  // previous invoice rather than quietly defaulted, and reset() replaces the
+  // lot atomically. There is deliberately no setX() beside it - a second
+  // write to the same value is what caused discount_type to arrive undefined.
   const populateInvoiceFields = (data) => {
+    const {
+      invoice_number,
+      customer,
+      notes,
+      date_issued,
+      date_due,
+      discount,
+      tax,
+      extra_charges,
+      status,
+      projects,
+      amount_paid,
+      invoice_items,
+    } = data
+
     reset({
-      invoice_number: data.invoice_number || "",
-      customer: data.customer?.id || "",
-      notes: data.notes || "",
-      date_issued: data.date_issued?.split("T")[0] || "",
-      date_due: data.date_due || "",
-      discount: data.discount?.value ?? "0.0",
-      tax: data.tax?.value ?? "0.0",
-      status: data.status || "",
-      project: data.projects?.length > 0 ? String(data.projects[0].project) : null,
+      invoice_number: invoice_number || "",
+      customer: customer?.id || "",
+      notes: notes || "",
+      // A DateTimeField, and an <Input type="date"> rejects a full ISO datetime.
+      date_issued: date_issued?.split("T")[0] || "",
+      date_due: date_due || "",
+      // 0 when the invoice has none, as on Create.
+      discount: discount?.value ?? "0",
+      // Falling back rather than taking the stored value as-is: an undefined
+      // type is dropped by JSON.stringify, and the API rejects a
+      // tax/discount with no type at all. Taking "percentage" for an amount
+      // would also reinterpret it - a 6000 discount as 6000% of the subtotal.
+      discount_type: discount?.type || "percentage",
+      tax: tax?.value ?? "0.0",
+      tax_type: tax?.type || "percentage",
+      extra_charges: extra_charges || [],
+      status: status || "",
+      project: projects?.length > 0 ? String(projects[0].project) : null,
+      items: (invoice_items || []).map((item) => ({
+        id: item.id,
+        product: item.product,
+        quantity: item.net_quantity,
+        unit_price: item.unit_price,
+        // After the line's discount, as the server worked it out.
+        total: item.line_total ?? ((item.net_quantity * item.unit_price) || 0),
+        is_returned: item.is_returned,
+        extra_fields: item.extra_fields || {},
+        extra_fields_display: item.extra_fields_display || [],
+        discount: item.discount || { type: "percentage", value: 0 },
+        returned_quantity: item.returned_quantity || 0,
+      })),
+      amount_paid: amount_paid || 0,
       newItemProduct: "",
       newItemQuantity: 0,
       newItemPrice: 0,
     })
-
-    setAmountPaid(data.amount_paid || 0)
-
-    // build your items array for state
-    const items = (data.invoice_items || []).map((item) => ({
-      id: item.id,
-      product: item.product,
-      quantity: item.net_quantity,
-      unit_price: item.unit_price,
-      total: (item.net_quantity * item.unit_price) || 0,
-      is_returned: item.is_returned
-    }))
-    setInvoiceItems(items)
-
-    setDiscountType(data.discount?.type)
-    setTaxType(data.tax?.type)
   }
 
   // Returns are one item at a time, so the row being returned is held here
   // rather than derived from a selection.
-  const handleReturnClick = (e, item) => {
-    e.preventDefault();
+  const handleReturnClick = (item) => {
     setReturningItem(item);
     setReturnItemWindowOpen(true);
   }
 
-  const handleDeleteItem = (e, id) => {
-    e.preventDefault();
-    setInvoiceItems(invoiceItems.filter(item => item.id !== id));
+  const handleDeleteItem = (id) => {
+    setValue("items", invoiceItems.filter(item => item.id !== id));
   }
 
   const customerOptions = useMemo(
@@ -225,10 +467,23 @@ const UpdateSalesInvoice = () => {
   const productOptions = useMemo(
     () => Object.entries(products).map(([value, item]) => ({
       value,
-      label: `${item.product.base.name} (${item.product.name}) (available: ${item.available_quantity})`,
+      label: item.available_quantity > 0
+        ? `${item.product.base.name} (${item.product.name}) (available: ${item.available_quantity})`
+        : `${item.product.base.name} (${item.product.name}) - out of stock`,
       keywords: [item.product.base.name, item.product.name],
+      // Listed but not pickable: a product that has run out is still there,
+      // so it is not taken for missing - restocked on Inventory, not here.
+      disabled: !(item.available_quantity > 0),
     })),
     [products])
+
+  // A customer typed here that MarketPro does not have: the Create button
+  // in the picker opens its dialog with the name filled in. Products are
+  // not created from an invoice - they and their stock come from the
+  // Products and Inventory screens (docs/INVOICE-WORKFLOWS.md).
+  const [creating, setCreating] = useState<{ kind: "customer"; text: string } | null>(null)
+  const partyCreate = useCreateAction(customerOptions, "customer",
+    (text) => setCreating({ kind: "customer", text }))
 
   const projectOptions = useMemo(
     () => Object.entries(projects).map(([value, project]) => ({
@@ -243,6 +498,7 @@ const UpdateSalesInvoice = () => {
       const salesInvoice = await getSalesInvoiceDetail(token, invoice_id)
       if (salesInvoice) {
         populateInvoiceFields(salesInvoice)
+        setImageCount(salesInvoice.images?.length || 0)
       } else {
         toast.error("Failed to fetch sales invoice")
       }
@@ -254,43 +510,46 @@ const UpdateSalesInvoice = () => {
     }
   }
 
-  useEffect(() => {
+  // Outside the effect so a customer or product created from the pickers
+  // can reload its list and be picked straight away.
+  const fetchProducts = async () => {
+    if (!token) return;
 
-    const fetchProducts = async () => {
-      if (!token) return;
-
-      try {
-        const products = await getAvailableProductsList(token, businessId)
-        if (products) {
-          const productMap = createNestedIdMap(products, "product.id")
-          setProducts(productMap)
-        } else {
-          toast.error("Failed to fetch products")
-        }
-      } catch (error) {
-        console.log("Error fetching products:", error)
+    try {
+      // Every product, in stock or not - the ones run out show disabled.
+      const products = await getAvailableProductsList(token, businessId, true)
+      if (products) {
+        const productMap = createNestedIdMap(products, "product.id")
+        setProducts(productMap)
+      } else {
         toast.error("Failed to fetch products")
-      } finally {
-        setProductsLoading(false)
       }
+    } catch (error) {
+      console.log("Error fetching products:", error)
+      toast.error("Failed to fetch products")
+    } finally {
+      setProductsLoading(false)
     }
+  }
 
-    const fetchCustomers = async () => {
-      try {
-        const customers = await getCustomersList(token)
-        if (customers) {
-          const customerMap = createIdMap(customers)
-          setCustomers(customerMap)
-        } else {
-          toast.error("Failed to fetch customers")
-        }
-      } catch (error) {
-        console.log("Error fetching customers:", error)
+  const fetchCustomers = async () => {
+    try {
+      const customers = await getCustomersList(token)
+      if (customers) {
+        const customerMap = createIdMap(customers)
+        setCustomers(customerMap)
+      } else {
         toast.error("Failed to fetch customers")
-      } finally {
-        setCustomersLoading(false)
       }
+    } catch (error) {
+      console.log("Error fetching customers:", error)
+      toast.error("Failed to fetch customers")
+    } finally {
+      setCustomersLoading(false)
     }
+  }
+
+  useEffect(() => {
 
     const fetchSalesInvoicePDFData = async () => {
       try {
@@ -336,6 +595,8 @@ const UpdateSalesInvoice = () => {
     if (selectedProduct) {
       setValue("newItemPrice", selectedProduct.unit_price, { shouldDirty: false });
     }
+    // Another product asks other fields: its answers start empty.
+    setLineAnswers({})
   }, [selectedProduct])
 
   useEffect(() => {
@@ -344,323 +605,223 @@ const UpdateSalesInvoice = () => {
     setReturningItem(null)
   }, [itemReturned == true])
 
-  {
-    console.log(watch("project"))
-  }
+  // The Disc. column only shows once some line has a discount.
+  const anyLineDiscount = invoiceItems.some((item) => !!formatLineDiscount(item.discount))
+
+  const summaryLines = [
+    ...(lineDiscounts > 0.005 ? [{ label: "Line discounts", value: lineDiscounts, sign: "−" as const }] : []),
+    { label: "Subtotal", value: subtotal },
+    ...(discountAmount ? [{ label: "Discount", value: discountAmount, sign: "−" as const }] : []),
+    ...(taxAmount ? [{
+      label: taxType === "percentage" ? `Tax (${tax}%)` : "Tax",
+      value: taxAmount,
+      sign: "+" as const,
+    }] : []),
+    // One line for all of them; each charge is already listed under Extra
+    // Charges, so repeating them here only made the card longer.
+    ...(chargesTotal ? [{ label: "Extra charges", value: chargesTotal, sign: "+" as const }] : []),
+  ]
+
+  const unitCount = invoiceItems
+    .filter((item) => !item.is_returned)
+    .reduce((sum, item) => sum + Number(item.quantity || 0), 0)
 
   return (
-    <div className="min-h-screen bg-background">
-      <Sidebar onCollapseChange={setSidebarCollapsed} />
-      <div className={`${sidebarCollapsed ? "ml-16" : "ml-64"} transition-all duration-300 flex flex-col`}>
-        <Header />
-
-        <main className="flex-1 p-6 space-y-6">
-          {/* Breadcrumb */}
-          <DynamicBreadCrumb />
-
-          <form onSubmit={handleSubmit(run(onSubmit))} className="flex flex-row gap-12">
-            {/* First Column */}
-            <div className="flex flex-col flex-wrap flex-1">
-              <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Invoice Details{detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="invoice_number">Invoice no. (optional)</Label>
-                  <Input id="invoice_number" {...register("invoice_number")} placeholder="Enter invoice number" />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="customer">Customer</Label>
-                  <Controller
-                    name="customer"
-                    control={control}
-                    render={({ field }) => (
-                      <Combobox
-                        id="customer"
-                        options={customerOptions}
-                        value={field.value}
-                        onChange={field.onChange}
-                        loading={customersLoading}
-                        placeholder="Select customer"
-                        emptyText="No customers yet. Add one first."
-                        notFoundText="No customer matches that."
-                      />
-                    )}
-                  />
-                </div>
-              </div>
-
-              <div className="mb-6 space-y-1">
-                <Label htmlFor="notes">Notes</Label>
-                <Textarea id="notes" {...register("notes")} placeholder="Add any additional notes here..." rows={4} />
-              </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="date_issued">Date Issued</Label>
-                  <Input id="date_issued" type="date" {...register("date_issued")} />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="date_due">Date Due</Label>
-                  <Input id="date_due" type="date" {...register("date_due")} />
-                </div>
-              </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="discount">Discount</Label>
-                  <div className="relative">
-                    <Input id="discount" {...register("discount")} placeholder="0.0" />
-                    <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {discountType === "percentage" ? <Button type="button" variant="outline" onClick={() => setDiscountType("amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setDiscountType("percentage")}>PKR</Button>}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="tax">Tax</Label>
-                  <div className="relative">
-                    <Input id="tax" {...register("tax")} placeholder="0.0" />
-                    <span className="absolute right-0 top-1/2 -translate-y-1/2 text-muted-foreground">
-                      {taxType === "percentage" ? <Button type="button" variant="outline" onClick={() => setTaxType("amount")}>%</Button> : <Button type="button" variant="outline" onClick={() => setTaxType("percentage")}>PKR</Button>}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="status">Status</Label>
-                  <Controller
-                    name="status"
-                    control={control}
-                    render={({ field }) => (
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(SalesInvoiceStatusMap).map(([key, value]) => (
-                            <SelectItem value={key} key={key}>
-                              {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
-                </div>
-              </div>
+    <InvoiceScreen
+      title="Sales Invoice"
+      status={<SalesStatusPill status={status} />}
+      loading={detailLoading}
+      onSubmit={handleSubmit(run(onSubmit))}
+      titleActions={
+        <>
+          {/* Shown once the PDF data has loaded; both need it. */}
+          {pdfData && (
+            <>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => sendOnWhatsApp(invoice_id, pdfData)}
+                disabled={isBusy}
+              >
+                <Send className="w-4 h-4 mr-2" />
+                {isSending ? "Preparing…" : "Send on WhatsApp"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => downloadInvoice(invoice_id, pdfData)}
+                disabled={isBusy}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                {isDownloading ? "Preparing…" : "Download PDF"}
+              </Button>
+            </>
+          )}
+          <Button type="button" variant="outline" onClick={() => setImagesOpen(true)}>
+            <ImageIcon className="h-4 w-4 mr-2" />
+            Images
+            {imageCount > 0 && (
+              <span className="ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 text-xs font-semibold text-primary">
+                {imageCount}
+              </span>
+            )}
+          </Button>
+        </>
+      }
+      fields={
+        <div className="grid grid-cols-4 gap-6">
+          <div className="space-y-1">
+            <Label htmlFor="customer">Customer</Label>
+            <Controller
+              name="customer"
+              control={control}
+              render={({ field }) => (
+                <Combobox
+                  id="customer"
+                  options={customerOptions}
+                  value={field.value}
+                  onChange={field.onChange}
+                  onInputChange={partyCreate.onInputChange}
+                  createAction={partyCreate.createAction}
+                  loading={customersLoading}
+                  placeholder="Select customer"
+                  emptyText="No customers yet. Add one first."
+                  notFoundText="No customer matches that."
+                />
+              )}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="invoice_number">Invoice no.</Label>
+            <Input id="invoice_number" {...register("invoice_number")} placeholder="Enter invoice number" />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="date_issued">Date Issued</Label>
+            <Input id="date_issued" type="date" {...register("date_issued")} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="date_due">Date Due</Label>
+            <Input id="date_due" type="date" {...register("date_due")} />
+          </div>
+        </div>
+      }
+      rail={
+        <>
+          <InvoiceSummaryCard lines={summaryLines} total={totalAmount} />
+          {/* Typed adjustments sit with the figures they change, between
+              the summary and the payment. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="discount">Discount</Label>
+              <AmountToggleInput
+                id="discount"
+                type={discountType}
+                onToggle={() => setValue("discount_type", discountType === "percentage" ? "amount" : "percentage")}
+                inputProps={register("discount")}
+              />
             </div>
-
-            {/* Second Column */}
-            <div className="flex flex-col flex-wrap flex-1">
-              <h2 className="text-lg font-semibold mb-6">Add Invoice Item</h2>
-
-              <div className="flex gap-6 mb-6">
-                <div className="w-[60%] space-y-1">
-                  <Label htmlFor="newItemProduct">Select Product</Label>
-                  <Controller
-                    name="newItemProduct"
-                    control={control}
-                    render={({ field }) => (
-                      <Combobox
-                        id="newItemProduct"
-                        options={productOptions}
-                        value={field.value}
-                        onChange={field.onChange}
-                        loading={productsLoading}
-                        placeholder="Select product"
-                        emptyText="No stocked products yet."
-                        notFoundText="No product matches that."
-                      />
-                    )}
-                  />
-                </div>
-                <div className="w-[20%] space-y-1">
-                  <Label htmlFor="newItemQuantity">Quantity</Label>
-                  <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
-                </div>
-                <div className="w-[20%] space-y-1">
-                  <Label htmlFor="newItemPrice">Unit Price</Label>
-                  <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
-                </div>
-                <div className="w-[20%] flex items-end">
-                  <Button
-                    type="button"
-                    onClick={() =>
-                      addItem(watch("newItemProduct"), parseInt(watch("newItemQuantity") || 0), parseFloat(watch("newItemPrice") || 0.0))
-                    }
-                    className="w-full"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Item
-                  </Button>
-                </div>
-              </div>
-
-              {/* Invoice Items Header */}
-              <div className="flex justify-between items-center mb-0.5">
-                <h3 className="text-lg font-semibold">Invoice Items</h3>
-              </div>
-
-              {/* Invoice Items */}
-              {/* Measured in-browser: 188px puts this row exactly level with Discount/Tax
-                  in the left column. */}
-              <div className="mb-6">
-                <div className="space-y-[10px] h-[188px] overflow-y-auto">
-                  {/* Sticky rather than lifted out of the scroll box, so the
-                      header can never drift out of step with the rows when a
-                      scrollbar appears. */}
-                  <div className="sticky top-0 z-10 bg-background flex items-center gap-2">
-                    <div className="bg-card rounded-lg border h-[35px] flex flex-1 items-center px-4">
-                      <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm font-medium text-muted-foreground">
-                        <div>id</div>
-                        <div>product</div>
-                        <div>quantity</div>
-                        <div>unit price</div>
-                        <div>total</div>
-                      </div>
-                    </div>
-                    {/* Keeps the header aligned with rows, which carry two
-                        16px action buttons outside the card. */}
-                    <div className="w-4" />
-                    <div className="w-4" />
-                  </div>
-
-                  {invoiceItems && invoiceItems.map((item, idx) => {
-                    const isReturned = item.is_returned;
-                    return (
-                      <div key={item.id} className="flex items-center gap-2">
-                        <div
-                          className={`bg-card rounded-lg h-[35px] flex flex-1 items-center px-4 border border-border ${isReturned ? "opacity-50" : ""}`}
-                        >
-                          <div className="grid grid-cols-[48px_2fr_1fr_1fr_1fr] gap-4 w-full text-sm">
-                            <div>{idx + 1}</div>
-                            <div className="font-medium">
-                              {item.product.base.name} ({item.product.name})
-                            </div>
-                            <div>{item.quantity}</div>
-                            <div>{item.unit_price}</div>
-                            <div className="font-semibold">{item.total}</div>
-                          </div>
-                        </div>
-                        <div className="flex items-center h-7">
-                          <Button
-                            type="button"
-                            variant="unstyled"
-                            className="p-0 hover:text-primary"
-                            title="Return item"
-                            disabled={isReturned}
-                            onClick={(e) => handleReturnClick(e, item)}
-                          >
-                            <Undo2 cursor={'pointer'} />
-                          </Button>
-                        </div>
-                        <div className="flex items-center h-7">
-                          <Button
-                            type="button"
-                            variant="unstyled"
-                            className="p-0 hover:text-red-500"
-                            title="Delete item"
-                            disabled={isReturned}
-                            onClick={(e) => handleDeleteItem(e, item.id)}
-                          >
-                            <Trash2 cursor={'pointer'} />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="flex gap-6 mb-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="subtotal">Subtotal</Label>
-                  <Input id="subtotal" value={subtotal.toLocaleString()} readOnly />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="totalAmount">Total</Label>
-                  <Input id="totalAmount" value={totalAmount.toLocaleString()} readOnly className="font-semibold" />
-                </div>
-              </div>
-
-              <div className="flex gap-6">
-                <div className="flex-1 space-y-1">
-                  <Label htmlFor="amount_paid">Amount Paid</Label>
-                  {/* Driven by the payments dialog, never typed into, so it is
-                      disabled rather than readOnly - readOnly still takes focus
-                      and reads as an editable field. */}
-                  <Input
-                    id="amount_paid"
-                    className="disabled:opacity-100 disabled:cursor-default"
-                    value={`PKR ${Number(amountPaid).toLocaleString()}`}
-                    disabled
-                  />
-                </div>
-                <div className="flex-1 space-y-1">
-                  <Label>Payment Status</Label>
-                  <div className="flex h-10 items-center">
-                    <span
-                      className={`px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap ${getPaymentStatusColor(paymentStatus)}`}
-                    >
-                      {PaymentStatusMap[paymentStatus]}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3 mt-6">
-                <div className="flex justify-end gap-3">
-                  <Controller
-                    name="project"
-                    control={control}
-                    render={({ field }) => (
-                      <Combobox
-                        id="project"
-                        className="w-36"
-                        options={projectOptions}
-                        value={field.value ?? ""}
-                        onChange={(val) => field.onChange(val || null)}
-                        loading={projectsLoading}
-                        placeholder="Add to project"
-                        emptyText="No projects yet."
-                        notFoundText="No project matches that."
-                        clearable
-                      />
-                    )}
-                  />
-                  <Button type="button" variant="outline" className="w-36" onClick={() => setPaymentsOpen(true)}>Add Payment</Button>
-                </div>
-                <div className="flex justify-end gap-3">
-                  {
-                    pdfData &&
-                    <>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="w-44"
-                        onClick={() => sendOnWhatsApp(invoice_id, pdfData)}
-                        disabled={isBusy}
-                      >
-                        <Send className="w-4 h-4 mr-2" />
-                        {isSending ? "Preparing…" : "Send on WhatsApp"}
-                      </Button>
-                      <Button
-                        type="button"
-                        className="w-36"
-                        onClick={() => downloadInvoice(invoice_id, pdfData)}
-                        disabled={isBusy}
-                      >
-                        {isDownloading ? "Preparing…" : "Download PDF"}
-                      </Button>
-                    </>
-                  }
-                  <SubmitButton type="submit" className="w-36" pending={pending} pendingLabel="Updating…">Update Invoice</SubmitButton>
-                </div>
-              </div>
+            <div className="space-y-1">
+              <Label htmlFor="tax">Tax</Label>
+              <AmountToggleInput
+                id="tax"
+                type={taxType}
+                onToggle={() => setValue("tax_type", taxType === "percentage" ? "amount" : "percentage")}
+                inputProps={register("tax")}
+              />
             </div>
-          </form>
-
-          <Payments invoiceId={invoice_id} invoiceTotal={totalAmount} isSalesPayment={true} open={paymentsOpen} setOpen={setPaymentsOpen} onPaymentsChanged={fetchSalesInvoice} />
-
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              {...register("notes")}
+              placeholder="Add any additional notes here..."
+              rows={2}
+              className="[@media(max-height:820px)]:min-h-[60px]"
+            />
+          </div>
+          <PaymentButton total={totalAmount} paid={livePaid} onClick={() => setPaymentsOpen(true)} />
+          <Controller
+            name="project"
+            control={control}
+            render={({ field }) => (
+              <Combobox
+                id="project"
+                className="w-full"
+                options={projectOptions}
+                value={field.value ?? ""}
+                onChange={(val) => field.onChange(val || null)}
+                loading={projectsLoading}
+                placeholder="Add to project"
+                emptyText="No projects yet."
+                notFoundText="No project matches that."
+                clearable
+              />
+            )}
+          />
+          <SubmitButton type="submit" className="w-full" pending={pending} pendingLabel="Updating…">Update Invoice</SubmitButton>
+          {/* Cancelling is the one status a person sets; everything else is
+              derived from the invoice. It returns the goods to stock. */}
+          {status === "X" ? (
+            <Button type="button" variant="outline" className="w-full" disabled={statusPending} onClick={reinstateInvoice}>
+              <Undo2 className="w-4 h-4 mr-2" />
+              Reinstate Invoice
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full text-destructive hover:bg-destructive hover:text-destructive-foreground hover:border-destructive"
+              disabled={statusPending || detailLoading}
+              onClick={cancelInvoice}
+            >
+              <Ban className="w-4 h-4 mr-2" />
+              Cancel Invoice
+            </Button>
+          )}
+        </>
+      }
+      side={
+        <Controller
+          name="extra_charges"
+          control={control}
+          render={({ field }) => (
+            <ExtraChargesEditor charges={field.value} onChange={field.onChange} />
+          )}
+        />
+      }
+      dialogs={
+        <>
+          <Payments
+            invoiceId={invoice_id}
+            invoiceTotal={totalAmount}
+            isSalesPayment={true}
+            open={paymentsOpen}
+            setOpen={setPaymentsOpen}
+            pending={heldPayments}
+            onPendingChange={setHeldPayments}
+            // A sale with no lines is a draft, and a draft bills nothing.
+            billsTotal={invoiceItems.length > 0}
+          />
+          <NewPartyDialog
+            open={creating?.kind === "customer"}
+            setOpen={(open) => { if (!open) setCreating(null) }}
+            kind="customer"
+            initialName={creating?.text || ""}
+            create={(data) => createCustomerWithBalance(token, data)}
+            asOf={watch("date_issued")}
+            onCreated={async (item) => {
+              await fetchCustomers()
+              setValue("customer", String(item.id))
+            }}
+          />
+          <InvoiceImages
+            invoiceId={invoice_id}
+            isSalesInvoice={true}
+            open={imagesOpen}
+            setOpen={setImagesOpen}
+            onCountChange={setImageCount}
+          />
           {returningItem && <ReturnItem
             invoiceId={invoice_id}
             invoiceItem={returningItem}
@@ -671,12 +832,101 @@ const UpdateSalesInvoice = () => {
             }}
             setItemReturned={setItemReturned}
           />}
-
           <WalkInCustomer {...walkInDialogProps} />
-
-        </main>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <InvoiceSection
+        title="Invoice Items"
+        first
+        pinned={
+          <>
+            {/* Row 1: product (two parts), quantity, price, discount. Row 2: the
+                product's extra fields, one part each. Add Item has a column of its own
+                and comes last in the page, so Tab goes discount -> extra fields -> Add Item. */}
+            <div className="grid grid-cols-[repeat(5,minmax(0,1fr))_auto] gap-x-4 gap-y-3 items-end">
+              <div className="col-span-2 min-w-0 space-y-1">
+                <Label htmlFor="newItemProduct">Product</Label>
+                <Controller
+                  name="newItemProduct"
+                  control={control}
+                  render={({ field }) => (
+                    <Combobox
+                      id="newItemProduct"
+                      options={productOptions}
+                      value={field.value}
+                      onChange={field.onChange}
+                      loading={productsLoading}
+                      placeholder="Select product"
+                      emptyText="No stocked products yet."
+                      notFoundText="No product matches that."
+                    />
+                  )}
+                />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <Label htmlFor="newItemQuantity">Quantity</Label>
+                <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
+              </div>
+              <div className="min-w-0 space-y-1">
+                <Label htmlFor="newItemPrice">Unit Price</Label>
+                <Input id="newItemPrice" type="number" {...register("newItemPrice")} />
+              </div>
+              <LineDiscountInput value={lineDiscount} onChange={setLineDiscount} />
+              <ExtraFieldInputs
+                variant={selectedProduct?.product}
+                side="sale"
+                answers={lineAnswers}
+                onChange={setLineAnswers}
+                onEnter={() => addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemPrice") || 0.0)))}
+              />
+              {/* Placed in row 1, column 6, but last in the page: Tab reaches it after the extra fields. */}
+              <div className="col-start-6 row-start-1">
+                <Button
+                  type="button"
+                  onClick={() =>
+                    addItem(watch("newItemProduct"), parseInt(String(watch("newItemQuantity") || 0)), parseFloat(String(watch("newItemPrice") || 0.0)))
+                  }
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Item
+                </Button>
+              </div>
+            </div>
+            <InvoiceItemsTable showDiscount={anyLineDiscount} columns={["Product", "Quantity", "Unit Price", "Disc.", "Total"]} actionCount={2} rows={[]} headerOnly />
+          </>
+        }
+        aside={invoiceItems.length > 0 ? `${invoiceItems.length} items · ${unitCount} units` : undefined}
+      >
+        <InvoiceItemsTable showDiscount={anyLineDiscount}
+          rowsOnly
+          columns={["Product", "Quantity", "Unit Price", "Disc.", "Total"]}
+          actionCount={2}
+          emptyText="No items on this invoice."
+          rows={invoiceItems.map((item, idx) => ({
+            key: `${item.id}-${idx}`,
+            dimmed: item.is_returned,
+            cells: [
+              <span title={lineProductLabel(item)}>{lineProductLabel(item)}</span>,
+              item.quantity,
+              Number(item.unit_price).toLocaleString(),
+              formatLineDiscount(item.discount),
+              Number(item.total).toLocaleString(),
+            ],
+            actions: (
+              <>
+                <RowAction label="Return item" tone="primary" disabled={item.is_returned} onClick={() => handleReturnClick(item)}>
+                  <Undo2 className="h-5 w-5" />
+                </RowAction>
+                <RowAction label="Delete item" disabled={item.is_returned} onClick={() => handleDeleteItem(item.id)}>
+                  <Trash2 className="h-5 w-5" />
+                </RowAction>
+              </>
+            ),
+          }))}
+        />
+      </InvoiceSection>
+    </InvoiceScreen>
   );
 }
 

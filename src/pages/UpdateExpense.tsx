@@ -18,7 +18,8 @@ import { useForm, Controller } from "react-hook-form";
 import { expensesAPIPackage, moneyAccountsAPIPackage } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider"
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
-import { formatAccountOption, ExpenseCategoryMap } from "../../services/utils";
+import { formatAccountOption, ExpenseCategoryMap, ExpenseCategoryLabels } from "../../services/utils";
+import { InfoBox } from "@/components/ui/info-box";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
 import { Spinner } from "@/components/ui/spinner";
@@ -35,6 +36,10 @@ const UpdateExpense = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const expense_id = location.state?.expense_id || null
+    // Set when the expense is an extra charge on a sales invoice. The invoice
+    // owns it and rebuilds it from its charges and payments, so it is shown
+    // here but cannot be changed; the API refuses an edit as well.
+    const [invoiceCharge, setInvoiceCharge] = useState(null)
 
     // react-hook-form setup
     const { register, handleSubmit, control, watch, reset, setValue } = useForm({
@@ -78,6 +83,7 @@ const UpdateExpense = () => {
     };
 
     const populateExpenseFields = (data) => {
+        setInvoiceCharge(data.is_invoice_charge ? data.sales_invoice : null);
         reset({
             name: data.name,
             category: data.category || "",
@@ -158,6 +164,17 @@ const UpdateExpense = () => {
                             <div className="flex flex-col flex-wrap flex-1">
                                 <h2 className="flex items-center gap-3 text-lg font-semibold mb-6">Update Expense{detailLoading && <Spinner size={18} label="Loading" color="hsl(var(--spinner))" />}</h2>
 
+                                {invoiceCharge && (
+                                    <InfoBox className="mb-6">
+                                        This is an extra charge on sales invoice #{invoiceCharge}, recorded
+                                        when the invoice was paid. Change or remove the charge on the invoice.
+                                    </InfoBox>
+                                )}
+
+                                {/* display: contents keeps the layout as it was; disabled
+                                    locks every field inside for an invoice's charge. */}
+                                <fieldset disabled={!!invoiceCharge} className="contents">
+
                                 <div className="flex gap-6 mb-6">
                                     <div className="flex-1 space-y-1">
                                         <Label htmlFor="name">Name</Label>
@@ -176,7 +193,9 @@ const UpdateExpense = () => {
                                                     <SelectValue placeholder="Select category" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {Object.entries(ExpenseCategoryMap).map(([key, label]) => (
+                                                    {/* The charge category only appears for a charge
+                                                        expense, so its value has a label to match. */}
+                                                    {Object.entries(invoiceCharge ? ExpenseCategoryLabels : ExpenseCategoryMap).map(([key, label]) => (
                                                         <SelectItem value={key} key={key}>
                                                             {label}
                                                         </SelectItem>
@@ -234,9 +253,13 @@ const UpdateExpense = () => {
                                     </div>
                                 )}
 
-                                <div className="flex justify-end gap-3 mt-auto">
-                                    <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Expense</SubmitButton>
-                                </div>
+                                </fieldset>
+
+                                {!invoiceCharge && (
+                                    <div className="flex justify-end gap-3 mt-auto">
+                                        <SubmitButton type="submit" pending={pending} pendingLabel="Updating…">Update Expense</SubmitButton>
+                                    </div>
+                                )}
                             </div>
                         </form>
                     </div>
