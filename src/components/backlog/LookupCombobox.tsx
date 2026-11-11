@@ -15,9 +15,8 @@ interface LookupComboboxProps {
   /** The picked record's id, "" for none. */
   value: string | number | null;
   /**
-   * The picked record's name. The options are only the latest search's
-   * matches, so a record loaded with the page, or picked before the user typed
-   * something else, would otherwise show its placeholder.
+   * The picked record's name. Shown until the list arrives, and for a record
+   * the list does not have yet - one created from this page a moment ago.
    */
   selectedLabel?: string;
   onChange: (item: LookupItem | null) => void;
@@ -51,10 +50,17 @@ interface LookupComboboxProps {
 }
 
 /**
- * A picker for the entry screens. It searches on the server as the user types
- * (/backlog-work/lookup/<kind>/), which answers with names only - never a
- * stock figure, a price or a balance - and at most 25 of them, so a shop with
- * thousands of products still opens instantly.
+ * A picker for the entry screens - the invoice screens' picker. The whole
+ * list is loaded once (/backlog-work/lookup/<kind>/?all=1, names only, never
+ * a stock figure, a price or a balance) and filtered on the page as the user
+ * types, so typing sends nothing to the server.
+ *
+ * It used to search the server on every change of the text. The field is
+ * also set by the picker itself - to the picked name, whenever the picked
+ * option changes - and a saved page names a customer "Wajid Ali" while the
+ * search names them "Wajid Ali · 0331...": each search relabelled the pick,
+ * which set the field, which searched again, four times a second for as
+ * long as the page was open.
  */
 export function LookupCombobox({
   kind,
@@ -76,44 +82,36 @@ export function LookupCombobox({
   const { token } = useAuth();
   const [items, setItems] = useState<LookupItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // What is typed, for the Create button only: the list filters itself.
   const [query, setQuery] = useState("");
-  // The query the list in hand answers. Until the reply for what is typed now
-  // arrives, the list is the previous query's - and offering to create a name
-  // that may well be in the next reply would invite a duplicate.
-  const [answered, setAnswered] = useState<string | null>(null);
-  // The answer to the latest query only: a slow reply to an earlier keystroke
-  // must not replace the list for what is typed now.
-  const latest = useRef(0);
 
+  // Once per picker, as the invoice screens load theirs.
   useEffect(() => {
     if (!token) return;
-    const ticket = ++latest.current;
-    const delay = setTimeout(async () => {
+    let current = true;
+    const fetchItems = async () => {
       try {
-        const found = await workLookup(token, kind, query, markOutOfStock);
-        if (ticket === latest.current) {
-          setItems(found || []);
-          setAnswered(query);
-        }
+        const found = await workLookup(token, kind, "", markOutOfStock, true);
+        if (current) setItems(found || []);
       } catch (error) {
-        console.log(`Error looking up ${kind}:`, error);
+        console.log(`Error loading ${kind}:`, error);
       } finally {
-        if (ticket === latest.current) setLoading(false);
+        if (current) setLoading(false);
       }
-    }, 250);
-    return () => clearTimeout(delay);
-  }, [token, kind, query, markOutOfStock]);
+    };
+    fetchItems();
+    return () => { current = false; };
+  }, [token, kind, markOutOfStock]);
 
   // One object per option for the life of the picker. Base UI resets the
   // input to the picked item's label whenever the picked value changes
-  // identity, and every search reply used to rebuild the options - so each
-  // keystroke's reply put the full name back, and backspace never stuck.
+  // identity, so a rebuilt option would put the full name back mid-edit.
   const optionCache = useRef(new Map<string, ComboboxOption>());
-  const optionFor = (id: string, label: string) => {
+  const optionFor = (id: string, label: string, keywords: string[] = []) => {
     const cacheKey = `${id}|${label}`;
     let option = optionCache.current.get(cacheKey);
     if (!option) {
-      option = { value: id, label };
+      option = { value: id, label, keywords };
       optionCache.current.set(cacheKey, option);
     }
     return option;
@@ -121,7 +119,13 @@ export function LookupCombobox({
 
   const options: ComboboxOption[] = useMemo(() => {
     const list = items.map((item) => optionFor(
-      String(item.id), item.in_stock === false ? `${item.label} - out of stock` : item.label));
+      String(item.id),
+      item.in_stock === false ? `${item.label} - out of stock` : item.label,
+      // A SKU or a product code, and a variant's bare names, so a search
+      // finds what the label does not spell out.
+      [...((item.keywords as string[] | undefined) ?? []), item.name, item.product_name]
+        .filter(Boolean).map(String),
+    ));
     const key = value === null || value === undefined ? "" : String(value);
     if (key && selectedLabel && !list.some((option) => option.value === key)) {
       list.unshift(optionFor(key, selectedLabel));
@@ -130,10 +134,8 @@ export function LookupCombobox({
   }, [items, value, selectedLabel]);
 
   const typed = query.trim();
-  // Only once the server has answered for exactly what is typed: until then
-  // the list is the previous query's, and the name may well be in the next.
   const createAction: ComboboxCreateAction | null = useMemo(() => {
-    if (!onCreate || !typed || answered !== query) return null;
+    if (!onCreate || !typed) return null;
     const product = onExtend
       ? items.find((item) => String(item.product_name ?? "").trim().toLowerCase() === typed.toLowerCase())
       : undefined;
@@ -142,7 +144,8 @@ export function LookupCombobox({
       // Enter opens it too, unless a variant is highlighted to pick.
       return { label: `Add variants to "${group.name}"`, buttonText: "Add variants", onCreate: () => onExtend(group), onEnter: true };
     }
-    const exact = items.some((item) => item.label.trim().toLowerCase() === typed.toLowerCase());
+    const exact = options.some((option) => option.label.trim().toLowerCase() === typed.toLowerCase())
+      || items.some((item) => item.label.trim().toLowerCase() === typed.toLowerCase());
     if (exact || typed === String(selectedLabel).trim()) return null;
     return {
       label: `Create ${createNoun ? `${createNoun} ` : ""}"${typed}"`,
@@ -151,7 +154,7 @@ export function LookupCombobox({
       // onto it (BUGS #001).
       onEnter: true,
     };
-  }, [onCreate, onExtend, typed, answered, query, items, selectedLabel, createNoun]);
+  }, [onCreate, onExtend, typed, items, options, selectedLabel, createNoun]);
 
   return (
     <Combobox
@@ -168,14 +171,10 @@ export function LookupCombobox({
           ?? { id: picked, label: selectedLabel };
         onChange(item);
       }}
-      // Typing a name searches; picking one puts its label in the box, which
-      // would search for exactly that - harmless, and it keeps the pick listed.
       onInputChange={setQuery}
-      serverFiltered
-      optionsStale={answered !== query}
       loading={loading}
       placeholder={placeholder}
-      emptyText={createAction ? `Not in MarketPro yet. Press Enter or Create to add it.` : query ? notFoundText : emptyText}
+      emptyText={createAction ? `Not in MarketPro yet. Press Enter or Create to add it.` : emptyText}
       notFoundText={notFoundText}
       clearable={clearable}
       disabled={disabled}
