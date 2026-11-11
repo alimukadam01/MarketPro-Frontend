@@ -2695,9 +2695,13 @@ export const createSupplierWithBalance = (token, data) =>
 // attributes, projects - never a figure. Rate limited on the server.
 // withStock (variants): each row also says whether it is in stock - yes or
 // no, never how many - for a sales page to label what has run out.
-export const workLookup = async (token, kind, query = "", withStock = false) => {
+// all: every record rather than the first 25, for a picker that loads its
+// list once and filters it on the page (LookupCombobox).
+export const workLookup = async (token, kind, query = "", withStock = false, all = false) => {
   const res = await backlogCall(
-    "get", `/backlog-work/lookup/${kind}/?q=${encodeURIComponent(query)}${withStock ? "&stock=1" : ""}`, token);
+    "get",
+    `/backlog-work/lookup/${kind}/?q=${encodeURIComponent(query)}${withStock ? "&stock=1" : ""}${all ? "&all=1" : ""}`,
+    token);
   return res.ok ? res.data : [];
 };
 
