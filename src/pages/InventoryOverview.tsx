@@ -42,9 +42,9 @@ const formatItems = (count) =>
 const cols = [
   { key: "id", label: "ID" },
   { key: "product", label: "Product" },
+  // On hand and reserved are not shown: the server keeps on hand equal to
+  // the quantity, and nothing reserves stock yet.
   { key: "quantity", label: "Quantity" },
-  { key: "quantity_on_hand", label: "On Hand" },
-  { key: "quantity_reserved", label: "Reserved" },
   { key: "unit_cost", label: "Unit Cost" },
   { key: "unit_price", label: "Unit Price" },
   { key: "reorder_level", label: "Reorder Level" },
@@ -405,7 +405,7 @@ const InventoryOverview = () => {
             {loading || (inventoryData && inventoryData.length > 0) ? (
               <DataTable
                 columns={cols}
-                colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"}
+                colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr]"}
                 headerOnly
               />
             ) : null}
@@ -418,7 +418,7 @@ const InventoryOverview = () => {
               data={permissions["view"] ? inventoryData : null}
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
-              colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr_1fr_1fr]"}
+              colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr]"}
               rowsOnly
               loading={loading}
             />

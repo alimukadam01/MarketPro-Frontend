@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
-import { createIdMap } from "../../services/utils"
+import { createIdMap, todayForInput } from "../../services/utils"
 import { useAuth } from "../../services/AuthProvider"
 import { Plus, RotateCcwIcon, X } from "lucide-react";
 import {
@@ -23,7 +23,7 @@ import {
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { set } from "date-fns";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
 import { Combobox } from "@/components/ui/combobox";
 
 const CreateInventoryItem = () => {
@@ -53,11 +53,12 @@ const CreateInventoryItem = () => {
             track_code: "",
             notes: "",
             location_id: "",
-            quantity_on_hand: "0",
-            quantity_reserved: "0",
             unit_cost: "0.0",
             unit_price: "0.0",
             reorder_level: "0",
+            // A new stock row's quantity is a count; this says when it was
+            // taken. Today unless the user picks an earlier day, never later.
+            stock_counted_at: todayForInput(),
             newItemProduct: "",
             newItemProductVariant: "",
             newItemQuantity: 0,
@@ -93,6 +94,11 @@ const CreateInventoryItem = () => {
 
     const onInventoryItemCreate = async (data) => {
 
+        if (data.stock_counted_at && data.stock_counted_at > todayForInput()) {
+            toast.error("A stock count cannot be dated in the future.")
+            return
+        }
+
         const ReqData = {
             product: parseInt(data.newItemProduct),
             product_var: parseInt(data.newItemProductVariant),
@@ -101,8 +107,11 @@ const CreateInventoryItem = () => {
             unit_cost: parseFloat(data.unit_cost),
             unit_price: parseFloat(data.unit_price),
             reorder_level: parseInt(data.reorder_level),
-            quantity_on_hand: parseInt(data.quantity_on_hand),
-            quantity_reserved: parseInt(data.quantity_reserved)
+            notes: data.notes,
+            // On hand and reserved are not sent: the server sets on hand to
+            // the quantity, and nothing is reserved.
+            // Left out when cleared: the server then dates the count today.
+            stock_counted_at: data.stock_counted_at || undefined
         }
 
         console.log("Inventory Item Data:", ReqData)
@@ -464,8 +473,11 @@ const CreateInventoryItem = () => {
                             <div className="flex flex-col flex-wrap flex-1">
                                 <h2 className="text-lg font-semibold mb-6">Add Inventory Item</h2>
 
-                                <div className="flex gap-6 mb-6">
-                                    <div className="w-[50%] space-y-1">
+                                {/* One 4-column grid for every row, so the fields line up: product and
+                                    location take two columns each, the numbers one each, the count
+                                    date two. */}
+                                <div className="grid grid-cols-4 gap-6 mb-6">
+                                    <div className="col-span-2 space-y-1">
                                         <Label htmlFor="newItemProduct">Select Product</Label>
                                         <Controller
                                             name="newItemProduct"
@@ -494,7 +506,7 @@ const CreateInventoryItem = () => {
                                             )}
                                         />
                                     </div>
-                                    <div className="w-[50%] space-y-1">
+                                    <div className="col-span-2 space-y-1">
                                         <Label htmlFor="newItemLocation">Location</Label>
                                         <Controller
                                             name="newItemLocation"
@@ -516,7 +528,7 @@ const CreateInventoryItem = () => {
 
                                 </div>
 
-                                <div className="flex gap-6 mb-6">
+                                <div className="grid grid-cols-4 gap-6 mb-6">
                                     <div className="space-y-1">
                                         <Label htmlFor="newItemQuantity">Quantity</Label>
                                         <Input id="newItemQuantity" type="number" {...register("newItemQuantity")} />
@@ -535,14 +547,21 @@ const CreateInventoryItem = () => {
                                     </div>
                                 </div>
 
-                                <div className="flex gap-6 mb-6">
-                                    <div className="w-[50%] space-y-1">
-                                        <Label htmlFor="quantity_on_hand">On Hand Quantity</Label>
-                                        <Input id="quantity_on_hand" type="number" {...register("quantity_on_hand")} />
+                                <div className="grid grid-cols-4 gap-6 mb-6">
+                                    <div className="col-span-2 space-y-1">
+                                        <Label htmlFor="stock_counted_at">Stock counted at</Label>
+                                        <Input id="stock_counted_at" type="date" max={todayForInput()}
+                                            {...register("stock_counted_at")} />
+                                        <p className="text-xs text-muted-foreground">
+                                            The day you counted this stock. Sales and purchases dated on or before it do not move this stock.
+                                        </p>
                                     </div>
-                                    <div className="w-[50%] space-y-1">
-                                        <Label htmlFor="quantity_reserved">Reserved Quantity</Label>
-                                        <Input id="quantity_reserved" type="number" {...register("quantity_reserved")} />
+                                </div>
+
+                                <div className="grid grid-cols-4 gap-6 mb-6">
+                                    <div className="col-span-4 space-y-1">
+                                        <Label htmlFor="notes">Notes</Label>
+                                        <Textarea id="notes" {...register("notes")} placeholder="Add notes here." rows={6} />
                                     </div>
                                 </div>
 

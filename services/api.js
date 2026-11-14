@@ -1242,6 +1242,33 @@ export const getInventoryItemDetail = async (token, businessId, itemId) => {
   }
 };
 
+/**
+ * What has already moved this stock and is dated after `date` (YYYY-MM-DD):
+ * { date, sold, received, returned, net } or null. A preview for the count
+ * date's "carry forward" choice; the save recomputes it.
+ */
+export const getInventoryMovementsAfter = async (token, businessId, itemId, date) => {
+  try {
+    const res = await apiClient.get(
+      `/inventory/${businessId}/items/${itemId}/movements-after/`,
+      {
+        headers: {
+          Authorization: token,
+        },
+        params: { date },
+      },
+    );
+    if (res.status === 200) {
+      return res.data;
+    }
+    console.log("Error fetching stock movements.");
+    return null;
+  } catch (error) {
+    console.log("Error fetching stock movements: ", error);
+    return null;
+  }
+};
+
 export const postInventoryItem = async (token, businessId, itemData) => {
   try {
     const res = await apiClient.post(
