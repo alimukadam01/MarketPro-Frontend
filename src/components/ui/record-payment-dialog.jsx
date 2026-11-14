@@ -29,12 +29,14 @@ import {
 } from "../../../services/utils";
 
 /**
- * Record one payment against several of a party's open items.
+ * Record one payment from the party screen.
  *
- * Amount first, then tick what it settles. There is no payment-type dropdown:
- * the ticked items decide it, because each type settles exactly one kind of
- * thing. The outstanding (opening) balance mints a Customer/Supplier Payment;
- * each invoice mints a Sale/Purchase Payment that names it.
+ * Amount first; ticking invoices is optional. Each ticked invoice is filled
+ * up to its room by a Sale/Purchase Payment that names it. Whatever is left -
+ * all of it when nothing is ticked - goes on account as one Customer/Supplier
+ * Payment, which the khaata settles opening balance first, then oldest
+ * invoices; anything beyond what is owed stays as credit. Mirrors
+ * accounts/payments.py::record_party_payment.
  *
  * `room` always comes from the server. Recomputing it here would disagree with
  * the backend whenever a pending cheque is involved, and the write would 400.
@@ -44,6 +46,9 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
   const isSupplier = party === "supplier";
 
   const [items, setItems] = useState([]);
+  // What on-account money can still reach on the opening balance, pending
+  // cheques held back. Only used to tell dues from credit in the preview.
+  const [openingRoom, setOpeningRoom] = useState(0);
   const [picked, setPicked] = useState({});
   const [order, setOrder] = useState("oldest");
   const [amount, setAmount] = useState("");
@@ -82,6 +87,7 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
         });
         if (res) {
           setItems(res.items || []);
+          setOpeningRoom(Number(res.opening_balance?.room) || 0);
         } else {
           toast.error("Failed to fetch what this payment can settle.");
         }
@@ -163,7 +169,6 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
     return { rows, entered, left, allocated: entered - left };
   }, [items, picked, amount, order]);
 
-  const anyPicked = allocation.rows.some((row) => row.checked);
   const unreached = allocation.rows.some((row) => row.checked && row.applied === 0);
 
   // Decided: an item the money cannot reach is not a valid selection, so an
@@ -171,17 +176,19 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
   // stays clickable - unticking is how the user frees money up again.
   const exhausted = allocation.entered > 0 && allocation.left === 0;
 
+  // The on-account part settles the opening balance and then whatever the
+  // ticked invoices left open, oldest first; past that it is credit. Only a
+  // preview - the khaata works it out on every read.
+  const onAccount = allocation.left;
+  const duesLeft =
+    openingRoom +
+    allocation.rows.reduce((sum, row) => sum + (row.item.room - row.applied), 0);
+  const advance = Math.max(onAccount - duesLeft, 0);
+
   const records = allocation.rows
     .filter((row) => row.applied > 0)
     .map((row) => {
       const full = row.applied >= row.item.room;
-      if (row.item.kind === "opening_balance") {
-        return {
-          type: isSupplier ? "Supplier Payment" : "Customer Payment",
-          target: "Against outstanding balance",
-          amount: row.applied,
-        };
-      }
       return {
         type: isSupplier ? "Purchase Payment" : "Sale Payment",
         target: `${row.item.label} · ${full ? settleWord(isCheque, chequeDueDate, true) : "partial"}`,
@@ -189,22 +196,24 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
       };
     });
 
+  if (onAccount > 0) {
+    records.push({
+      type: isSupplier ? "Supplier Payment" : "Customer Payment",
+      target: onAccountWord(onAccount, advance, isCheque),
+      amount: onAccount,
+    });
+  }
+
   const chequeMissing = isCheque && chequeNumber.trim() === "";
   const cannotRecord =
     saving ||
     allocation.entered <= 0 ||
-    !anyPicked ||
-    allocation.left > 0 ||
     unreached ||
     chequeMissing ||
     !account;
 
   let hint = "";
-  if (allocation.entered > 0 && !anyPicked) {
-    hint = "Tick at least one item to apply this payment to.";
-  } else if (allocation.left > 0 && anyPicked) {
-    hint = `PKR ${allocation.left.toLocaleString()} is not applied to anything. Tick another item or lower the amount.`;
-  } else if (unreached) {
+  if (unreached) {
     hint = "The amount ran out before every ticked item was reached. Untick the ones it cannot cover.";
   } else if (chequeMissing) {
     hint = "A cheque payment needs a cheque number.";
@@ -275,9 +284,11 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
           <DialogUI.DialogTitle>Record Payment</DialogUI.DialogTitle>
           <DialogUI.DialogDescription>
             {isSupplier
-              ? `Enter what you paid ${partyName}, then tick what it settles.`
-              : `Enter what ${partyName} paid, then tick what it settles.`}{" "}
-            The amount is applied to the ticked items in the order you choose.
+              ? `Enter what you paid ${partyName}.`
+              : `Enter what ${partyName} paid.`}{" "}
+            Tick invoices to settle them directly, or leave them unticked. Whatever
+            is not applied to a ticked invoice goes on account and settles the
+            opening balance first, then the oldest invoices.
           </DialogUI.DialogDescription>
         </DialogUI.DialogHeader>
 
@@ -317,26 +328,25 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
                 </div>
               </div>
               <div className="space-y-0.5">
-                <div className="text-xs text-muted-foreground">Allocated</div>
+                <div className="text-xs text-muted-foreground">To invoices</div>
                 <div className="text-sm font-semibold">
                   {formatCurrency(allocation.allocated)}
                 </div>
               </div>
               <div className="space-y-0.5">
-                <div className="text-xs text-muted-foreground">Unallocated</div>
-                <div
-                  className={`text-sm font-semibold ${
-                    allocation.left > 0 ? "text-red-700" : ""
-                  }`}
-                >
-                  {formatCurrency(allocation.left)}
+                <div className="text-xs text-muted-foreground">On account</div>
+                <div className="text-sm font-semibold">
+                  {formatCurrency(onAccount)}
                 </div>
               </div>
             </div>
 
             <div className="flex flex-1 min-h-0 flex-col gap-2">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Apply to</span>
+                <span className="text-sm font-medium">
+                  Settle invoices{" "}
+                  <span className="font-normal text-muted-foreground">(optional)</span>
+                </span>
                 <div
                   role="group"
                   aria-label="Allocation order"
@@ -350,7 +360,8 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
               <div className="flex max-h-[220px] min-h-[184px] flex-col gap-2 overflow-y-auto">
                 {allocation.rows.length === 0 && (
                   <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                    Nothing is outstanding for {partyName}.
+                    No open invoices for {partyName}. The whole amount goes on
+                    account.
                   </p>
                 )}
 
@@ -520,7 +531,7 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
               </div>
               {records.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Enter an amount and tick at least one item.
+                  Enter an amount.
                 </p>
               ) : (
                 records.map((record, index) => (
@@ -583,6 +594,18 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
       </DialogUI.DialogContent>
     </DialogUI.Dialog>
   );
+}
+
+/**
+ * Where the on-account part goes. `advance` is the share beyond everything
+ * the party still owes, which stays on the khaata as credit.
+ */
+function onAccountWord(onAccount, advance, isCheque) {
+  const when = isCheque ? " when the cheque clears" : "";
+  if (advance <= 0) return `On account · settles the oldest dues${when}`;
+  if (advance >= onAccount) return `On account · kept as credit${when}`;
+  const dues = onAccount - advance;
+  return `On account · ${dues.toLocaleString()} settles dues, ${advance.toLocaleString()} kept as credit${when}`;
 }
 
 /**

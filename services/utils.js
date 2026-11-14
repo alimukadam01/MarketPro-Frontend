@@ -837,8 +837,6 @@ export function transformInventoryItem(data) {
     id: data.id,
     product: data.product && `${data.product.base.name} (${data.product.name})`,
     quantity: data.quantity,
-    quantity_on_hand: data.quantity_on_hand,
-    quantity_reserved: data.quantity_reserved,
     unit_cost: formatCurrency(data.unit_cost),
     unit_price: formatCurrency(data.unit_price),
     reorder_level: data.reorder_level,
