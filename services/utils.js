@@ -412,13 +412,24 @@ export const TransactionTypeGroups = {
   "Notes": NoteTransactionTypes,
 };
 
+// The khaata rules, mirroring Transaction.PARTY_EFFECTS on the backend: the
+// types that sit on a party's khaata without naming an invoice, which party
+// each names, and which way it moves their balance ("settles" takes debt
+// off, "adds" puts it back on). The lists below are read from this.
+export const PartyTypeEffects = {
+  customer_receipt: { party: "customer", effect: "settles", kind: "payment" },
+  customer_credit_note: { party: "customer", effect: "settles", kind: "credit_note" },
+  sales_return_refund: { party: "customer", effect: "adds", kind: "refund" },
+  customer_debit_note: { party: "customer", effect: "adds", kind: "debit_note" },
+  supplier_payment: { party: "supplier", effect: "settles", kind: "payment" },
+  supplier_credit_note: { party: "supplier", effect: "settles", kind: "credit_note" },
+  purchase_return_refund: { party: "supplier", effect: "adds", kind: "refund" },
+  supplier_debit_note: { party: "supplier", effect: "adds", kind: "debit_note" },
+};
+
 // Types that name a customer or supplier when recorded on account. Notes
 // always name one: it is the only thing they settle against.
-export const PartyTransactionTypes = [
-  "customer_receipt", "supplier_payment",
-  "sales_return_refund", "purchase_return_refund",
-  ...NoteTransactionTypes,
-];
+export const PartyTransactionTypes = Object.keys(PartyTypeEffects);
 
 export const TransactionStatusMap = {
   C: "Cleared",
@@ -614,18 +625,14 @@ export const formatPartyLabel = (party) =>
  * Type. Types absent from this map refer to nothing, so Type spans the row.
  */
 export const ReferenceForType = {
-  customer_receipt: "customer",
-  sales_return_refund: "customer",
-  supplier_payment: "supplier",
-  purchase_return_refund: "supplier",
+  // Every khaata type refers to the party it names.
+  ...Object.fromEntries(
+    Object.entries(PartyTypeEffects).map(([type, { party }]) => [type, party])
+  ),
   sale_payment: "sales_invoice",
   purchase_payment: "purchase_invoice",
   expense: "expense",
   transfer: "transfer_account",
-  customer_credit_note: "customer",
-  customer_debit_note: "customer",
-  supplier_credit_note: "supplier",
-  supplier_debit_note: "supplier",
 };
 
 /**
