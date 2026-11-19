@@ -19,7 +19,7 @@ const quickActions = [
   { label: "Create New Expense", icon: Wallet2, actionLink: '/expenses/create-expense' },
   { label: "Create New Product", icon: PackageOpen, actionLink: '/products/create-product' },
   { label: "Create New Inventory Item", icon: Archive, actionLink: '/inventory/create-item' },
-  { label: "Create New Customer", icon: UserPlus, actionLink: '/customers/create-customer' },
+  { label: "Create New Person", icon: UserPlus, actionLink: '/people/create-person' },
 ];
 
 export function QuickActions() {

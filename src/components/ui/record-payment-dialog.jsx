@@ -286,9 +286,9 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
             {isSupplier
               ? `Enter what you paid ${partyName}.`
               : `Enter what ${partyName} paid.`}{" "}
-            Tick invoices to settle them directly, or leave them unticked. Whatever
-            is not applied to a ticked invoice goes on account and settles the
-            opening balance first, then the oldest invoices.
+            Tick invoices or loans to settle them directly, or leave them unticked.
+            Whatever is not applied to a ticked item goes on account and settles the
+            opening balance first, then the oldest items.
           </DialogUI.DialogDescription>
         </DialogUI.DialogHeader>
 
@@ -328,7 +328,7 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
                 </div>
               </div>
               <div className="space-y-0.5">
-                <div className="text-xs text-muted-foreground">To invoices</div>
+                <div className="text-xs text-muted-foreground">To ticked items</div>
                 <div className="text-sm font-semibold">
                   {formatCurrency(allocation.allocated)}
                 </div>
@@ -344,7 +344,7 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
             <div className="flex flex-1 min-h-0 flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">
-                  Settle invoices{" "}
+                  Settle invoices and loans{" "}
                   <span className="font-normal text-muted-foreground">(optional)</span>
                 </span>
                 <div
@@ -360,7 +360,7 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
               <div className="flex max-h-[220px] min-h-[184px] flex-col gap-2 overflow-y-auto">
                 {allocation.rows.length === 0 && (
                   <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                    No open invoices for {partyName}. The whole amount goes on
+                    No open invoices or loans for {partyName}. The whole amount goes on
                     account.
                   </p>
                 )}

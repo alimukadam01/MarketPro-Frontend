@@ -12,8 +12,8 @@ export const sidebarItems = [
   { name: "Projects",            icon: MODULE_ICONS.projects,        href: "/projects",            module: "projects" },
   { name: "Purchase Quotations", icon: MODULE_ICONS.quotations,      href: "/purchase-quotations", module: "quotations" },
   { name: "Products",            icon: MODULE_ICONS.products,        href: "/products",            module: "products" },
-  { name: "Customers",           icon: MODULE_ICONS.customers,       href: "/customers",           module: "customers" },
-  { name: "Suppliers",           icon: MODULE_ICONS.suppliers,       href: "/suppliers",           module: "suppliers" },
+  // Customers and suppliers are roles of a person now (register S2).
+  { name: "People",              icon: MODULE_ICONS.people,          href: "/people",              module: "people" },
   { name: "Locations",           icon: MODULE_ICONS.locations,       href: "/locations",           module: "locations" },
   { name: "Returned Items",      icon: MODULE_ICONS.returned_items,  href: "/returned-items",      module: "returned_items" },
   { name: "Backlog",             icon: MODULE_ICONS.backlog,         href: "/backlog",             module: "backlog" },

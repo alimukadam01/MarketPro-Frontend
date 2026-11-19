@@ -289,10 +289,18 @@ const BookOfBusiness = () => {
                                             </span>
                                         </div>
                                         <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Loans received and recovered</span>
+                                            <span>{formatCurrency(summary?.money_in?.loans)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
                                             <span className="text-muted-foreground">Other income</span>
                                             <span>
                                                 {formatCurrency(summary?.money_in?.other_income)}
                                             </span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Other</span>
+                                            <span>{formatCurrency(summary?.money_in?.other)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm font-bold border-t pt-2">
                                             <span>Total</span>
@@ -323,6 +331,14 @@ const BookOfBusiness = () => {
                                                 Owner drawings
                                             </span>
                                             <span>{formatCurrency(summary?.money_out?.drawings)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Loans repaid and given</span>
+                                            <span>{formatCurrency(summary?.money_out?.loans)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Other</span>
+                                            <span>{formatCurrency(summary?.money_out?.other)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm font-bold border-t pt-2">
                                             <span>Total</span>

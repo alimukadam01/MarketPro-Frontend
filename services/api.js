@@ -3339,3 +3339,73 @@ export const getBookSummary = async (token, period) => {
   const data = await getSummary(token, "accounting-kpis/daily-summary/", withPeriod("", period));
   return data ? data.daily_summary : null;
 };
+
+// ── People (one record per person; customer and supplier are roles) ────────────
+
+export const peopleAPIPackage = new APIPackage("people");
+
+const peopleRequest = async (token, method, url, data, fallback) => {
+  try {
+    const res = await apiClient.request({
+      method, url, data, headers: { Authorization: token },
+    });
+    return { ok: res.status >= 200 && res.status < 300, data: res.data, error: null };
+  } catch (error) {
+    console.log(`Error on ${method.toUpperCase()} ${url}:`, error);
+    return {
+      ok: false,
+      data: error?.response?.data || null,
+      error: firstFieldError(error, fallback),
+    };
+  }
+};
+
+/** ?role=customer|supplier|none, ?active=true|false, ?side=receivable|payable|both, ?search= */
+export const getPeopleList = async (token, params = {}) => {
+  const query = new URLSearchParams(
+    Object.entries(params).filter(([, value]) => value !== null && value !== undefined && value !== "")
+  ).toString();
+  return peopleAPIPackage.list(token, query ? `?${query}` : null);
+};
+
+export const getPerson = async (token, id) => peopleAPIPackage.detail(token, id);
+
+/** { name, phone, email, city, address, business_name, notes, roles, opening_balances } */
+export const createPerson = async (token, data) =>
+  peopleRequest(token, "post", "/people/", data, "Failed to create the person.");
+
+/** role: customer | supplier; action: add | activate | deactivate */
+export const changePersonRole = async (token, id, role, action) =>
+  peopleRequest(token, "post", `/people/${id}/roles/`, { role, action }, "Failed to change the role.");
+
+export const getPersonDeletePreview = async (token, id) => {
+  const res = await peopleRequest(token, "get", `/people/${id}/delete-preview/`, undefined, "Failed to load what would be deleted.");
+  return res.ok ? res.data : null;
+};
+
+export const deletePerson = async (token, id, confirmName) =>
+  peopleRequest(token, "delete", `/people/${id}/`, { confirm_name: confirmName }, "Failed to delete the person.");
+
+/** Only for people with no records; the answer names anyone refused. */
+export const bulkDeletePeople = async (token, ids) =>
+  peopleRequest(token, "post", "/people/bulk-delete/", { person_ids: ids }, "Failed to delete.");
+
+export const getPeopleDuplicates = async (token) => {
+  const res = await peopleRequest(token, "get", "/people/duplicates/", undefined, "Failed to load likely duplicates.");
+  return res.ok ? res.data : null;
+};
+
+export const mergePeople = async (token, keptId, otherId, { name, phone } = {}) =>
+  peopleRequest(token, "post", `/people/${keptId}/merge/`, { other_id: otherId, name, phone },
+      "Failed to merge.");
+
+/** A set-off: the same amount off both sides of one person; no money moves. */
+export const recordSetOff = async (token, { personId, amount, date, notes }) =>
+  peopleRequest(token, "post", "/transactions/set-off/", { person_id: personId, amount, date, notes },
+      "Failed to record the set-off.");
+
+export const updateSetOff = async (token, group, changes) =>
+  peopleRequest(token, "patch", `/transactions/set-off/${group}/`, changes, "Failed to change the set-off.");
+
+export const deleteSetOff = async (token, group) =>
+  peopleRequest(token, "delete", `/transactions/set-off/${group}/`, undefined, "Failed to delete the set-off.");
