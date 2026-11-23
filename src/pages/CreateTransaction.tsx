@@ -24,6 +24,8 @@ import {
     getCustomersList,
     getReceivables,
     getPayables,
+    getPeopleList,
+    transactionsAPIPackage,
 } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
@@ -43,9 +45,21 @@ import {
   pendingInvoicesOnly,
   todayForInput,
   formatCustomerLabel,
+  formatCurrency,
+  formatDate,
+  loanRepaidByType,
+  personRolesLabel,
 } from "../../services/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
+
+// A loan as the repayment picker shows it, and a person in the person picker.
+type LoanOption = { type: string; date: string; amount: number; reference?: string | null };
+type PersonOption = {
+    name: string;
+    phone?: string | null;
+    roles?: Record<string, { id: number; is_active: boolean } | null>;
+};
 import { Combobox } from "@/components/ui/combobox";
 
 // Dropdown rows keyed by id, as createIdMap returns them. Typed loosely
@@ -70,6 +84,12 @@ const CreateTransaction = () => {
     const [allSuppliers, setAllSuppliers] = useState({});
     const [khaataPositions, setKhaataPositions] = useState({});
     const [notePartiesLoading, setNotePartiesLoading] = useState(true);
+    // Loans name a person, whatever their roles (register #28), and a
+    // repayment may name the loan it repays (R18).
+    const [allPeople, setAllPeople] = useState({});
+    const [peopleLoading, setPeopleLoading] = useState(true);
+    const [personLoans, setPersonLoans] = useState({});
+    const [personLoansLoading, setPersonLoansLoading] = useState(false);
     const [imageFile, setImageFile] = useState(null);
     const { token } = useAuth();
     const navigate = useNavigate();
@@ -88,6 +108,8 @@ const CreateTransaction = () => {
             cheque_due_date: "",
             customer: "",
             supplier: "",
+            person: "",
+            loan: "",
             sales_invoice: "",
             purchase_invoice: "",
             expense_name: "",
@@ -103,6 +125,9 @@ const CreateTransaction = () => {
     // Types absent from the map refer to nothing, and Type spans the row.
     const referenceKind = ReferenceForType[selectedType] || null;
     const isTransfer = referenceKind === "transfer_account";
+    const selectedPerson = watch("person");
+    // A repayment or recovery may name the loan it pays back.
+    const repaysLoanType = loanRepaidByType(selectedType);
     // A note moves no money, so it has no account, method or cheque.
     const isNote = isNoteType(selectedType);
     const isCheque = !isNote && selectedMethod === "cheque";
@@ -136,6 +161,12 @@ const CreateTransaction = () => {
             toast.error(`Please select the ${referenceKind} this note is for.`);
             return;
         }
+        // Required here for every new loan; old loans recorded without one
+        // are left as they were (register R16).
+        if (referenceKind === "person" && !data.person) {
+            toast.error("Please select the person this loan is with.");
+            return;
+        }
 
         try {
             const formData = new FormData();
@@ -158,6 +189,10 @@ const CreateTransaction = () => {
             }
             if (referenceKind === "supplier" && data.supplier) {
                 formData.append("supplier", data.supplier);
+            }
+            if (referenceKind === "person" && data.person) {
+                formData.append("person", data.person);
+                if (repaysLoanType && data.loan) formData.append("loan", data.loan);
             }
             if (referenceKind === "sales_invoice" && data.sales_invoice) {
                 formData.append("sales_invoice", data.sales_invoice);
@@ -259,11 +294,44 @@ const CreateTransaction = () => {
             }
         };
 
+        const fetchPeople = async () => {
+            try {
+                const res = await getPeopleList(token);
+                if (res) setAllPeople(createIdMap(res));
+            } catch (error) {
+                console.log("Error fetching people:", error);
+            } finally {
+                setPeopleLoading(false);
+            }
+        };
+
         fetchAccounts();
         fetchSalesInvoices();
         fetchPurchaseInvoices();
         fetchNoteParties();
+        fetchPeople();
     }, [token]);
+
+    // A repayment's loan picker: that person's loans of the matching kind.
+    useEffect(() => {
+        // A different person or type: the loan picked before no longer applies.
+        (setValue as (name: string, value: string) => void)("loan", "");
+        setPersonLoans({});
+        if (!token || !repaysLoanType || !selectedPerson) return;
+        const fetchLoans = async () => {
+            setPersonLoansLoading(true);
+            try {
+                const res = await transactionsAPIPackage.list(
+                    token, `?person=${selectedPerson}&type=${repaysLoanType}`);
+                if (res) setPersonLoans(createIdMap(res));
+            } catch (error) {
+                console.log("Error fetching loans:", error);
+            } finally {
+                setPersonLoansLoading(false);
+            }
+        };
+        fetchLoans();
+    }, [token, repaysLoanType, selectedPerson]);
 
     /**
      * The cell beside Type. One place decides it, so the create and update
@@ -359,6 +427,18 @@ const CreateTransaction = () => {
                 loading: purchaseInvoicesLoading,
                 render: formatInvoiceOption,
             },
+            person: {
+                name: "person" as const,
+                label: "Person",
+                placeholder: "Select person",
+                empty: "No people on this business yet",
+                options: allPeople as PickerOptions,
+                loading: peopleLoading,
+                // Anyone can lend or borrow: customer, supplier or neither.
+                render: (person) =>
+                    [person.name, person.phone, personRolesLabel(person.roles)]
+                        .filter((part) => part && part !== "-").join(" · "),
+            },
             transfer_account: {
                 name: "transfer_account" as const,
                 label: "Transfer To",
@@ -405,6 +485,29 @@ const CreateTransaction = () => {
                         />
                     )}
                 />
+                {referenceKind === "person" && repaysLoanType && selectedPerson && (
+                    <div className="pt-2 space-y-1">
+                        <Label htmlFor="loan">Repays (optional)</Label>
+                        <Controller
+                            name="loan"
+                            control={control}
+                            render={({ field }) => (
+                                <Combobox
+                                    options={Object.entries(personLoans).map(([key, loan]: [string, LoanOption]) => ({
+                                        value: String(key),
+                                        label: `${TransactionTypeMap[loan.type]} · ${formatDate(loan.date)} · ${formatCurrency(loan.amount)}${loan.reference ? ` · ${loan.reference}` : ""}`,
+                                    }))}
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    loading={personLoansLoading}
+                                    placeholder="Oldest first if none is picked"
+                                    emptyText="No loans with this person"
+                                    notFoundText="No match."
+                                />
+                            )}
+                        />
+                    </div>
+                )}
             </div>
         );
     };

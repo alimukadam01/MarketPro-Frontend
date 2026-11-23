@@ -27,13 +27,10 @@ import InventoryOverview from "./pages/InventoryOverview";
 import CreateInventoryItem from "./pages/CreateInventoryItem";
 import UpdateInventoryItem from "./pages/UpdateInventoryItem";
 
-import Customers from "./pages/Customers"
-import CreateCustomer from "./pages/CreateCustomer"
-import ViewCustomer from "./pages/ViewCustomer"
-
-import Suppliers from "./pages/Suppliers";
-import CreateSupplier from "./pages/CreateSupplier"
-import ViewSupplier from "./pages/ViewSupplier"
+// People replaced the separate Customers and Suppliers screens (register S2).
+import People from "./pages/People";
+import Person from "./pages/Person";
+import CreatePerson from "./pages/CreatePerson";
 
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -108,15 +105,12 @@ const App = () => {
           <Route path="/products/create-product" element={<ProtectedRoute module="products" action="create"><CreateProduct /></ProtectedRoute>} />
           <Route path="/products/update-product" element={<ProtectedRoute module="products" action="edit"><UpdateProduct /></ProtectedRoute>} />
 
-          {/* Customers */}
-          <Route path="/customers" element={<ProtectedRoute module="customers"><Customers /></ProtectedRoute>} />
-          <Route path="/customers/create-customer" element={<ProtectedRoute module="customers" action="create"><CreateCustomer /></ProtectedRoute>} />
-          <Route path="/customers/view-customer" element={<ProtectedRoute module="customers"><ViewCustomer /></ProtectedRoute>} />
-
-          {/* Suppliers */}
-          <Route path="/suppliers" element={<ProtectedRoute module="suppliers"><Suppliers /></ProtectedRoute>} />
-          <Route path="/suppliers/create-supplier" element={<ProtectedRoute module="suppliers" action="create"><CreateSupplier /></ProtectedRoute>} />
-          <Route path="/suppliers/view-supplier" element={<ProtectedRoute module="suppliers"><ViewSupplier /></ProtectedRoute>} />
+          {/* People: one record per person; customer and supplier are roles.
+              The old /customers and /suppliers routes are gone, with no
+              redirects (register Q3). */}
+          <Route path="/people" element={<ProtectedRoute module="people"><People /></ProtectedRoute>} />
+          <Route path="/people/create-person" element={<ProtectedRoute module="people" action="create"><CreatePerson /></ProtectedRoute>} />
+          <Route path="/people/view-person" element={<ProtectedRoute module="people"><Person /></ProtectedRoute>} />
 
           {/* Locations */}
           <Route path="/locations" element={<ProtectedRoute module="locations"><Locations /></ProtectedRoute>} />
@@ -163,12 +157,11 @@ const App = () => {
           {/* The Daily Book became the Book of Business; old links still land. */}
           <Route path="/accounting/daily-book" element={<Navigate to="/accounting/book-of-business" replace />} />
           <Route path="/accounting/ledgers" element={<ProtectedRoute module="accounting"><Ledgers /></ProtectedRoute>} />
-          {/* The same screen as /customers/view-customer, addressed from the
+          {/* The same screen as /people/view-person, addressed from the
               accounting side. Two routes rather than one plus remembered state:
               the URL is what the breadcrumb reads, what Back follows and what
               survives a refresh, so the way in has to be in the path. */}
-          <Route path="/accounting/ledgers/view-customer" element={<ProtectedRoute module="accounting"><ViewCustomer /></ProtectedRoute>} />
-          <Route path="/accounting/ledgers/view-supplier" element={<ProtectedRoute module="accounting"><ViewSupplier /></ProtectedRoute>} />
+          <Route path="/accounting/ledgers/view-person" element={<ProtectedRoute module="accounting"><Person /></ProtectedRoute>} />
           <Route path="/accounting/accounts" element={<ProtectedRoute module="accounting"><MoneyAccounts /></ProtectedRoute>} />
           <Route path="/accounting/cheques" element={<ProtectedRoute module="accounting"><Cheques /></ProtectedRoute>} />
 

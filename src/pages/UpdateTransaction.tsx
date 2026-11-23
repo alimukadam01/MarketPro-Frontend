@@ -23,6 +23,7 @@ import {
     salesInvoicesAPIPackage,
     purchaseInvoicesAPIPackage,
     getCustomersList,
+    getPeopleList,
 } from "../../services/api";
 import { useAuth } from "../../services/AuthProvider";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
@@ -42,11 +43,22 @@ import {
   formatDate,
   isNoteType,
   formatCustomerLabel,
+  formatCurrency,
+  loanRepaidByType,
+  personRolesLabel,
 } from "../../services/utils";
 import { Combobox } from "@/components/ui/combobox";
 import { Spinner } from "@/components/ui/spinner";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
+
+// A loan as the repayment picker shows it, and a person in the person picker.
+type LoanOption = { type: string; date: string; amount: number; reference?: string | null };
+type PersonOption = {
+    name: string;
+    phone?: string | null;
+    roles?: Record<string, { id: number; is_active: boolean } | null>;
+};
 
 const UpdateTransaction = () => {
     const { pending, run } = usePending();
@@ -61,6 +73,11 @@ const UpdateTransaction = () => {
     // transaction type calls for.
     const [customersLoading, setCustomersLoading] = useState(true);
     const [suppliersLoading, setSuppliersLoading] = useState(true);
+    // Loans name a person (register #28); a repayment may name its loan.
+    const [people, setPeople] = useState({});
+    const [peopleLoading, setPeopleLoading] = useState(true);
+    const [personLoans, setPersonLoans] = useState({});
+    const [personLoansLoading, setPersonLoansLoading] = useState(false);
     const [imageFile, setImageFile] = useState(null);
     const [existingImageUrl, setExistingImageUrl] = useState(null);
     const [isSourceLinked, setIsSourceLinked] = useState(false);
@@ -93,10 +110,15 @@ const UpdateTransaction = () => {
             cheque_due_date: "",
             customer: "",
             supplier: "",
+            person: "",
+            loan: "",
         },
     });
 
     const selectedType = watch("type");
+    const selectedPerson = watch("person");
+    // A repayment or recovery may name the loan it pays back.
+    const repaysLoanType = loanRepaidByType(selectedType);
     const selectedMethod = watch("payment_method");
     const selectedAccountId = watch("account");
     // A note moves no money: no account, method, status or cheque to edit.
@@ -125,6 +147,12 @@ const UpdateTransaction = () => {
 
     const onTransactionUpdate = async (data) => {
         if (isSourceLinked) return;
+        // Editing a loan asks for its person, even an old one saved without
+        // (register S9); the server still accepts one that nobody edits.
+        if (referenceKind === "person" && !data.person) {
+            toast.error("Please select the person this loan is with.");
+            return;
+        }
 
         try {
             const formData = new FormData();
@@ -148,6 +176,10 @@ const UpdateTransaction = () => {
             }
             if (referenceKind === "supplier" && data.supplier) {
                 formData.append("supplier", data.supplier);
+            }
+            if (referenceKind === "person" && data.person) {
+                formData.append("person", data.person);
+                if (repaysLoanType && data.loan) formData.append("loan", data.loan);
             }
             if (isCheque) {
                 if (data.cheque_number) formData.append("cheque_number", data.cheque_number);
@@ -216,6 +248,8 @@ const UpdateTransaction = () => {
                         cheque_due_date: transaction.cheque_due_date || "",
                         customer: party.customer ? String(party.customer.id) : "",
                         supplier: party.supplier ? String(party.supplier.id) : "",
+                        person: party.person ? String(party.person.id) : "",
+                        loan: party.loan ? String(party.loan) : "",
                     });
                 } else {
                     toast.error("Failed to fetch transaction.");
@@ -230,7 +264,7 @@ const UpdateTransaction = () => {
 
         const fetchCustomers = async () => {
             try {
-                const res = await getCustomersList(token);
+                const res = await getCustomersList(token, "?include_inactive=true");
                 if (res) setCustomers(createIdMap(res));
             } catch (error) {
                 console.log("Error fetching customers:", error);
@@ -241,12 +275,23 @@ const UpdateTransaction = () => {
 
         const fetchSuppliers = async () => {
             try {
-                const res = await suppliersAPIPackage.list(token);
+                const res = await suppliersAPIPackage.list(token, "?include_inactive=true");
                 if (res) setSuppliers(createIdMap(res));
             } catch (error) {
                 console.log("Error fetching suppliers:", error);
             } finally {
                 setSuppliersLoading(false);
+            }
+        };
+
+        const fetchPeople = async () => {
+            try {
+                const res = await getPeopleList(token);
+                if (res) setPeople(createIdMap(res));
+            } catch (error) {
+                console.log("Error fetching people:", error);
+            } finally {
+                setPeopleLoading(false);
             }
         };
 
@@ -256,11 +301,30 @@ const UpdateTransaction = () => {
             // arrived; with no matching SelectItem, Radix showed the
             // placeholder and the account looked empty. Same pattern
             // UpdateProduct.tsx already uses.
-            await Promise.all([fetchAccounts(), fetchCustomers(), fetchSuppliers()]);
+            await Promise.all([fetchAccounts(), fetchCustomers(), fetchSuppliers(), fetchPeople()]);
             fetchTransaction().finally(() => setDetailLoading(false));
         };
         init();
     }, [token, transaction_id]);
+
+    // A repayment's loan picker: that person's loans of the matching kind.
+    useEffect(() => {
+        setPersonLoans({});
+        if (!token || !repaysLoanType || !selectedPerson) return;
+        const fetchLoans = async () => {
+            setPersonLoansLoading(true);
+            try {
+                const res = await transactionsAPIPackage.list(
+                    token, `?person=${selectedPerson}&type=${repaysLoanType}`);
+                if (res) setPersonLoans(createIdMap(res));
+            } catch (error) {
+                console.log("Error fetching loans:", error);
+            } finally {
+                setPersonLoansLoading(false);
+            }
+        };
+        fetchLoans();
+    }, [token, repaysLoanType, selectedPerson]);
 
     useEffect(() => {
         const invoicesAPI = {
@@ -377,6 +441,14 @@ const UpdateTransaction = () => {
                 options: suppliers,
                 loading: suppliersLoading,
             },
+            person: {
+                name: "person" as const,
+                label: "Person",
+                placeholder: "Select person",
+                empty: "No people on this business yet",
+                options: people,
+                loading: peopleLoading,
+            },
         }[referenceKind];
 
         if (!config) return null;
@@ -390,7 +462,11 @@ const UpdateTransaction = () => {
             // A customer with the phone beside the name; a supplier with its business.
             label: referenceKind === "customer"
                 ? formatCustomerLabel(party as Record<string, unknown>)
-                : formatPartyLabel(party as Record<string, unknown>),
+                : referenceKind === "person"
+                    ? [(party as PersonOption).name, (party as PersonOption).phone,
+                        personRolesLabel((party as PersonOption).roles)]
+                        .filter((part) => part && part !== "-").join(" · ")
+                    : formatPartyLabel(party as Record<string, unknown>),
         }));
 
         return (
@@ -425,6 +501,30 @@ const UpdateTransaction = () => {
                         </>
                     )}
                 />
+                {referenceKind === "person" && repaysLoanType && selectedPerson && (
+                    <div className="pt-2 space-y-1">
+                        <Label htmlFor="loan">Repays (optional)</Label>
+                        <Controller
+                            name="loan"
+                            control={control}
+                            render={({ field }) => (
+                                <Combobox
+                                    options={Object.entries(personLoans).map(([key, loan]: [string, LoanOption]) => ({
+                                        value: String(key),
+                                        label: `${TransactionTypeMap[loan.type]} · ${formatDate(loan.date)} · ${formatCurrency(loan.amount)}${loan.reference ? ` · ${loan.reference}` : ""}`,
+                                    }))}
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    disabled={isSourceLinked}
+                                    loading={personLoansLoading}
+                                    placeholder="Oldest first if none is picked"
+                                    emptyText="No loans with this person"
+                                    notFoundText="No match."
+                                />
+                            )}
+                        />
+                    </div>
+                )}
             </div>
         );
     };

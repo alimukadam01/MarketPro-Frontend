@@ -535,7 +535,9 @@ const UpdateSalesInvoice = () => {
 
   const fetchCustomers = async () => {
     try {
-      const customers = await getCustomersList(token)
+      // Inactive customers too: the invoice keeps its own after the role is
+      // deactivated (People, register R4).
+      const customers = await getCustomersList(token, "?include_inactive=true")
       if (customers) {
         const customerMap = createIdMap(customers)
         setCustomers(customerMap)

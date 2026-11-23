@@ -85,10 +85,12 @@ const Ledgers = () => {
     const permissions = getPermissions("accounting");
     const navigate = useNavigate();
 
-    // A customer and a supplier can share an id, so a row's id carries its
-    // kind too; openLedger splits it back apart.
+    // A row is one side of one person. The id carries the side as well as
+    // the person, who can be on a list twice (a customer who owes and a
+    // supplier holding your money); openLedger splits it back apart. By
+    // person, so someone with loans only - no role, no role id - opens too.
     const customerRows = (receivables?.parties || []).map((party) => ({
-        id: `${party.party_kind}-${party.id}`,
+        id: `${party.party_kind}-${party.person_id}`,
         tag: party.party_kind === "supplier" ? "Supplier" : null,
         name: party.name,
         phone: party.phone || "-",
@@ -99,7 +101,7 @@ const Ledgers = () => {
     }));
 
     const supplierRows = (payables?.parties || []).map((party) => ({
-        id: `${party.party_kind}-${party.id}`,
+        id: `${party.party_kind}-${party.person_id}`,
         tag: party.party_kind === "customer" ? "Customer" : null,
         name: party.name,
         business_name: party.business_name || "-",
@@ -112,17 +114,10 @@ const Ledgers = () => {
     // this path rather than /customers, so the URL and the breadcrumb both say
     // the user came through accounting.
     const openLedger = (rowId) => {
-        const [kind, id] = String(rowId).split("-");
-        const partyId = Number(id);
-        if (kind === "supplier") {
-            navigate("/accounting/ledgers/view-supplier", {
-                state: { supplier_id: partyId },
-            });
-        } else {
-            navigate("/accounting/ledgers/view-customer", {
-                state: { customer_id: partyId },
-            });
-        }
+        const [, id] = String(rowId).split("-");
+        navigate("/accounting/ledgers/view-person", {
+            state: { person_id: Number(id) },
+        });
     };
 
     useEffect(() => {

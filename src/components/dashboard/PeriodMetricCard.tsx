@@ -18,6 +18,8 @@ interface PeriodMetricCardProps {
   /** Picks this card's figure out of the response, formatted. */
   pick: (data: Summary) => string | number;
   errorMessage: string;
+  /** Passed to the card, e.g. a column span. */
+  className?: string;
   /** The periods offered. Cards leave out All time unless they ask for it
    *  (Total Business on a customer or supplier does). */
   periodOptions?: { key: string; label: string }[];
@@ -28,7 +30,7 @@ interface PeriodMetricCardProps {
  * about one figure and keeps its own period, so it fetches for itself.
  */
 export function PeriodMetricCard({
-  title, storageKey, defaultPeriod, fetcher, pick, errorMessage, periodOptions = CARD_PERIODS,
+  title, storageKey, defaultPeriod, fetcher, pick, errorMessage, periodOptions = CARD_PERIODS, className,
 }: PeriodMetricCardProps) {
   const [period, setPeriod] = usePersistentPeriod(storageKey, defaultPeriod);
   const { data, loading, refreshing, error } = usePeriodFetch(fetcher, period, errorMessage);
@@ -36,8 +38,11 @@ export function PeriodMetricCard({
   return (
     <MetricCard
       title={title}
+      className={className}
       value={data ? pick(data) : null}
-      hint={periodHint(data?.period)}
+      // The period in words under the figure. A fetcher that combines
+      // several figures may hand back `period_label` instead of a period.
+      hint={data && !data.period && data.period_label ? data.period_label : periodHint(data?.period)}
       loading={loading}
       valueLoading={refreshing}
       error={error}

@@ -425,7 +425,9 @@ const UpdatePurchaseInvoice = () => {
 
   const fetchSuppliers = async () => {
     try {
-      const suppliers = await suppliersAPIPackage.list(token)
+      // Inactive suppliers too: the invoice keeps its own after the role is
+      // deactivated (People, register R4).
+      const suppliers = await suppliersAPIPackage.list(token, "?include_inactive=true")
       if (suppliers) {
         const supplierMap = createIdMap(suppliers)
         setSuppliers(supplierMap)
