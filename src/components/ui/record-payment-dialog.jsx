@@ -40,10 +40,24 @@ import {
  *
  * `room` always comes from the server. Recomputing it here would disagree with
  * the backend whenever a pending cheque is involved, and the write would 400.
+ *
+ * The direction is a toggle inside the dialog: "<name> pays you" settles
+ * Receivable, "You pay <name>" Payable. The sides are the person's: money
+ * first pays back the other khaata's advance (a customer's advance when you
+ * pay them, what a supplier holds when they pay you), then goes to the
+ * role on that side. A direction with neither is shown but disabled.
  */
-function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecorded }) {
+function RecordPaymentDialog({ personId, customer, supplier, partyName, open, setOpen, onRecorded }) {
   const { token } = useAuth();
+  // A role's balance below zero is the other side's advance.
+  const canReceive = !!customer || (supplier?.balance || 0) < 0;
+  const canPay = !!supplier || (customer?.balance || 0) < 0;
+  const defaultParty = customer && canReceive ? "customer" : canPay ? "supplier" : "customer";
+  const [party, setParty] = useState(defaultParty);
   const isSupplier = party === "supplier";
+  const hasRole = isSupplier ? !!supplier : !!customer;
+  // The other side's advance this payment pays back first, from the server.
+  const [advanceRoom, setAdvanceRoom] = useState(0);
 
   const [items, setItems] = useState([]);
   // What on-account money can still reach on the opening balance, pending
@@ -76,26 +90,13 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
     setOrder("oldest");
   };
 
+  // Each opening starts on the person's default side, with a clean form.
   useEffect(() => {
-    if (!open || !token || !partyId) return;
-
-    const fetchItems = async () => {
-      try {
-        const res = await getSettleableItems(token, {
-          customerId: isSupplier ? null : partyId,
-          supplierId: isSupplier ? partyId : null,
-        });
-        if (res) {
-          setItems(res.items || []);
-          setOpeningRoom(Number(res.opening_balance?.room) || 0);
-        } else {
-          toast.error("Failed to fetch what this payment can settle.");
-        }
-      } catch (error) {
-        console.log("Error fetching settleable items:", error);
-        toast.error("Failed to fetch what this payment can settle.");
-      }
-    };
+    if (!open || !token) return;
+    setParty(defaultParty);
+    resetForm();
+    setDate(todayForInput());
+    setPaymentMethod("cash");
 
     const fetchAccounts = async () => {
       try {
@@ -120,10 +121,45 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
       }
     };
 
-    resetForm();
-    fetchItems();
     fetchAccounts();
-  }, [open, token, partyId, isSupplier]);
+  }, [open, token]);
+
+  // What this payment can settle, for the side the toggle is on. Switching
+  // sides keeps the amount and the details but drops the ticks.
+  useEffect(() => {
+    if (!open || !token || !personId) return;
+    setItems([]);
+    setOpeningRoom(0);
+    setAdvanceRoom(0);
+    setPicked({});
+    // A reply for the side just left must not land on the new one.
+    let stale = false;
+
+    const fetchItems = async () => {
+      try {
+        const res = await getSettleableItems(token, {
+          personId,
+          direction: isSupplier ? "out" : "in",
+        });
+        if (stale) return;
+        if (res) {
+          setItems(res.items || []);
+          setOpeningRoom(Number(res.opening_balance?.room) || 0);
+          setAdvanceRoom(Number(res.advance?.room) || 0);
+        } else {
+          toast.error("Failed to fetch what this payment can settle.");
+        }
+      } catch (error) {
+        console.log("Error fetching settleable items:", error);
+        toast.error("Failed to fetch what this payment can settle.");
+      }
+    };
+
+    fetchItems();
+    return () => {
+      stale = true;
+    };
+  }, [open, token, personId, isSupplier]);
 
   const selectedAccount = accounts.find(
     (item) => String(item.id) === String(account),
@@ -179,7 +215,12 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
   // The on-account part settles the opening balance and then whatever the
   // ticked invoices left open, oldest first; past that it is credit. Only a
   // preview - the khaata works it out on every read.
-  const onAccount = allocation.left;
+  // What the ticked items leave pays back the other side's advance first;
+  // only the rest goes on account.
+  const refund = Math.min(allocation.left, advanceRoom);
+  const onAccount = allocation.left - refund;
+  // Without the role on this side, only the advance can be paid.
+  const beyondAdvance = !hasRole && onAccount > 0;
   const duesLeft =
     openingRoom +
     allocation.rows.reduce((sum, row) => sum + (row.item.room - row.applied), 0);
@@ -196,7 +237,17 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
       };
     });
 
-  if (onAccount > 0) {
+  if (refund > 0) {
+    records.push({
+      type: isSupplier ? "Sales Return Refund" : "Purchase Return Refund",
+      target: isSupplier
+        ? "Pays back their advance as a customer"
+        : "Collects what they hold as a supplier",
+      amount: refund,
+    });
+  }
+
+  if (onAccount > 0 && hasRole) {
     records.push({
       type: isSupplier ? "Supplier Payment" : "Customer Payment",
       target: onAccountWord(onAccount, advance, isCheque),
@@ -209,11 +260,14 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
     saving ||
     allocation.entered <= 0 ||
     unreached ||
+    beyondAdvance ||
     chequeMissing ||
     !account;
 
   let hint = "";
-  if (unreached) {
+  if (beyondAdvance) {
+    hint = `Only ${formatCurrency(advanceRoom)} can be paid here, the advance on the other side. Add the ${party} role to record more.`;
+  } else if (unreached) {
     hint = "The amount ran out before every ticked item was reached. Untick the ones it cannot cover.";
   } else if (chequeMissing) {
     hint = "A cheque payment needs a cheque number.";
@@ -225,7 +279,8 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
       .map((row) => ({ kind: row.item.kind, id: row.item.id }));
 
     const formData = new FormData();
-    formData.append(isSupplier ? "supplier" : "customer", partyId);
+    formData.append("person", personId);
+    formData.append("direction", isSupplier ? "out" : "in");
     formData.append("amount", String(allocation.entered));
     formData.append("items", JSON.stringify(chosen));
     formData.append("order", order);
@@ -277,6 +332,24 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
     </button>
   );
 
+  // One half of the direction toggle; a side without its role stays visible
+  // but cannot be picked.
+  const direction = (value, label, enabled) => (
+    <button
+      type="button"
+      aria-pressed={party === value}
+      disabled={!enabled}
+      onClick={() => setParty(value)}
+      className={`h-9 truncate rounded-md px-3 text-sm font-medium transition-colors ${
+        party === value
+          ? "bg-background text-foreground shadow-sm"
+          : "text-muted-foreground"
+      } ${!enabled ? "cursor-not-allowed opacity-50" : ""}`}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <DialogUI.Dialog open={open} onOpenChange={setOpen}>
       <DialogUI.DialogContent className="sm:max-w-[880px]">
@@ -291,6 +364,31 @@ function RecordPaymentDialog({ party, partyId, partyName, open, setOpen, onRecor
             opening balance first, then the oldest items.
           </DialogUI.DialogDescription>
         </DialogUI.DialogHeader>
+
+        <div className="space-y-1">
+          <div
+            role="group"
+            aria-label="Direction"
+            className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
+          >
+            {direction("customer", `${partyName || "They"} pays you`, canReceive)}
+            {direction("supplier", `You pay ${partyName || "them"}`, canPay)}
+          </div>
+          {(!canReceive || !canPay) && (
+            <p className="text-xs text-muted-foreground">
+              {!canReceive
+                ? `${partyName || "They"} pays you needs the customer role.`
+                : `You pay ${partyName || "them"} needs the supplier role.`}
+            </p>
+          )}
+          {advanceRoom > 0 && (
+            <p className="text-xs text-muted-foreground">
+              {isSupplier
+                ? `Pays back their ${formatCurrency(advanceRoom)} advance as a customer first.`
+                : `Collects the ${formatCurrency(advanceRoom)} they hold as a supplier first.`}
+            </p>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-6">
           {/* LEFT: the amount and what it is applied to */}

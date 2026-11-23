@@ -2924,38 +2924,41 @@ export const getOpeningBalances = async (token, party = "supplier") => {
  * cheques, so it would offer money the server then refuses.
  */
 /**
- * Set or replace a party's opening balance. PartyOpeningBalance is OneToOne
- * per party, so the party page always upserts: look for an existing row, PUT
- * it if there is one, POST if there is not.
+ * Set, replace or clear one side of a person's opening balance (one per
+ * side, whatever roles they hold). An amount of 0 clears it. The server
+ * decides which khaata it counts on when it is first saved.
  */
-export const saveOpeningBalance = async (token, { customerId, supplierId, amount, asOfDate }) => {
-  const filter = customerId ? `?customer=${customerId}` : `?supplier=${supplierId}`;
-  const payload = {
-    amount,
-    as_of_date: asOfDate,
-    ...(customerId ? { customer: customerId } : { supplier: supplierId }),
-  };
-
+export const saveOpeningBalance = async (token, { personId, side, amount, asOfDate }) => {
   try {
-    const existing = await partyOpeningBalancesAPIPackage.list(token, filter);
+    const existing = await partyOpeningBalancesAPIPackage.list(
+      token, `?person=${personId}&side=${side}`);
     const row = Array.isArray(existing) ? existing[0] : null;
-
-    const ok = row
+    if (!amount) {
+      return row ? await partyOpeningBalancesAPIPackage.delete(token, row.id) : true;
+    }
+    const payload = { person: personId, side, amount, as_of_date: asOfDate };
+    return row
       ? await partyOpeningBalancesAPIPackage.update(token, row.id, payload)
       : await partyOpeningBalancesAPIPackage.create(token, payload);
-
-    return ok;
   } catch (error) {
     console.log("Error saving opening balance:", error);
     return false;
   }
 };
 
-export const getSettleableItems = async (token, { customerId, supplierId }) => {
+/**
+ * What a payment can settle. Pass { personId, direction: "in" | "out" } for
+ * the person page (works without the role on that side), or a customerId /
+ * supplierId. The answer carries `advance`: the other side's advance the
+ * payment pays back first, and `has_role`.
+ */
+export const getSettleableItems = async (token, { customerId, supplierId, personId, direction }) => {
   try {
-    const query = customerId
-      ? `customer_id=${customerId}`
-      : `supplier_id=${supplierId}`;
+    const query = personId
+      ? `person_id=${personId}&direction=${direction}`
+      : customerId
+        ? `customer_id=${customerId}`
+        : `supplier_id=${supplierId}`;
     const res = await apiClient.get(
       `accounting-kpis/settleable-items/?${query}`,
       { headers: { Authorization: token } },

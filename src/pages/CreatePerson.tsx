@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { toast } from "sonner";
+import { Check } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
@@ -85,9 +86,10 @@ const CreatePerson = () => {
       address: data.address || null,
       notes: data.notes || null,
       roles: [data.customer && "customer", data.supplier && "supplier"].filter(Boolean),
+      // The person's, one per side, whatever roles they hold.
       opening_balances: {
-        ...(data.customer ? { receivable: opening(data.receivable_amount, data.receivable_date) } : {}),
-        ...(data.supplier ? { payable: opening(data.payable_amount, data.payable_date) } : {}),
+        receivable: opening(data.receivable_amount, data.receivable_date),
+        payable: opening(data.payable_amount, data.payable_date),
       },
     };
     try {
@@ -105,9 +107,9 @@ const CreatePerson = () => {
   };
 
   const openingFields = (side, label) => (
-    <div className="flex gap-6">
+    <div className="flex gap-6 mb-6">
       <div className="flex-1 space-y-1">
-        <Label htmlFor={`${side}_amount`}>{label} opening balance (PKR)</Label>
+        <Label htmlFor={`${side}_amount`}>{label} (PKR)</Label>
         <Input id={`${side}_amount`} type="number" min="0" step="1" {...register(`${side}_amount` as const)} />
       </div>
       <div className="flex-1 space-y-1">
@@ -117,6 +119,30 @@ const CreatePerson = () => {
     </div>
   );
 
+  // A role is a button that stays pressed while selected; both can be on.
+  const roleButton = (name, label, hint) => (
+    <Controller
+      name={name}
+      control={control}
+      render={({ field }) => (
+        <button
+          type="button"
+          title={hint}
+          aria-pressed={!!field.value}
+          onClick={() => field.onChange(!field.value)}
+          className={`flex h-10 items-center justify-center gap-2 truncate rounded-md border px-3 text-sm font-medium transition-colors ${
+            field.value
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-input bg-background text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          }`}
+        >
+          {field.value && <Check className="h-4 w-4 shrink-0" />}
+          {label}
+        </button>
+      )}
+    />
+  );
+
   return (
     <div className="min-h-screen bg-background">
       <Sidebar onCollapseChange={setSidebarCollapsed} />
@@ -124,80 +150,89 @@ const CreatePerson = () => {
         <Header />
         <main className="flex-1 p-6 space-y-6">
           <DynamicBreadCrumb />
-          <form onSubmit={handleSubmit(run(onCreate))} className="flex w-full max-w-3xl flex-col gap-6">
-            <h2 className="text-lg font-semibold">Add New Person</h2>
+          <form onSubmit={handleSubmit(run(onCreate))} className="flex flex-col flex-1 gap-4">
+            {/* Details and roles on the left; opening balances on the right. */}
+            <div className="flex flex-col gap-12 md:flex-row">
+              <div className="flex flex-col flex-1">
+                <h2 className="text-lg font-semibold mb-6">Add New Person</h2>
 
-            <div className="flex gap-6">
-              <div className="flex-1 space-y-1">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" {...register("name")} />
-              </div>
-              <div className="flex-1 space-y-1">
-                <Label htmlFor="phone">Phone Number</Label>
-                <Input id="phone" {...register("phone")} />
-              </div>
-            </div>
+                <div className="flex gap-6 mb-6">
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="name">Name</Label>
+                    <Input id="name" {...register("name")} />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input id="phone" {...register("phone")} />
+                  </div>
+                </div>
 
-            <div className="flex gap-6">
-              <div className="flex-1 space-y-1">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" {...register("email")} />
-              </div>
-              <div className="flex-1 space-y-1">
-                <Label htmlFor="city">City{isCustomer || isSupplier ? "" : " (optional)"}</Label>
-                <Controller
-                  name="city"
-                  control={control}
-                  render={({ field }) => (
-                    <Combobox
-                      id="city"
-                      options={cityOptions}
-                      value={field.value}
-                      onChange={field.onChange}
-                      loading={citiesLoading}
-                      placeholder="City"
-                      emptyText="No cities yet."
-                      notFoundText="No city matches that."
+                <div className="flex gap-6 mb-6">
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" type="email" {...register("email")} />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="city">City{isCustomer || isSupplier ? "" : " (optional)"}</Label>
+                    <Controller
+                      name="city"
+                      control={control}
+                      render={({ field }) => (
+                        <Combobox
+                          id="city"
+                          options={cityOptions}
+                          value={field.value}
+                          onChange={field.onChange}
+                          loading={citiesLoading}
+                          placeholder="City"
+                          emptyText="No cities yet."
+                          notFoundText="No city matches that."
+                        />
+                      )}
                     />
-                  )}
-                />
+                  </div>
+                </div>
+
+                <div className="flex gap-6 mb-6">
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="business_name">Business name (optional)</Label>
+                    <Input id="business_name" {...register("business_name")} />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="address">Address (optional)</Label>
+                    <Input id="address" {...register("address")} />
+                  </div>
+                </div>
+
+                <div className="mb-6 space-y-1">
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea id="notes" rows={2} {...register("notes")} />
+                </div>
+
+                {/* The two buttons together span one field's width, the same as
+                    a field in the right column. */}
+                <div className="flex gap-6 mb-6">
+                  <div className="flex-1 space-y-1">
+                    <Label>Roles</Label>
+                    <div className="grid grid-cols-2 gap-2" role="group" aria-label="Roles">
+                      {roleButton("customer", "Customer", "Sales invoices and projects (Receivable)")}
+                      {roleButton("supplier", "Supplier", "Purchase invoices and quotations (Payable)")}
+                    </div>
+                  </div>
+                  <div className="flex-1" />
+                </div>
+              </div>
+
+              {/* Opening balances: what stood between you before MarketPro, one
+                  per side, whatever roles the person holds. */}
+              <div className="flex flex-col flex-1">
+                <h2 className="text-lg font-semibold mb-6">Opening Balances (Optional)</h2>
+                {openingFields("receivable", "Receivables")}
+                {openingFields("payable", "Payables")}
               </div>
             </div>
 
-            <div className="flex gap-6">
-              <div className="flex-1 space-y-1">
-                <Label htmlFor="business_name">Business name (optional)</Label>
-                <Input id="business_name" {...register("business_name")} />
-              </div>
-              <div className="flex-1 space-y-1">
-                <Label htmlFor="address">Address (optional)</Label>
-                <Input id="address" {...register("address")} />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea id="notes" rows={2} {...register("notes")} />
-            </div>
-
-            <fieldset className="space-y-3 rounded-lg border p-4">
-              <legend className="px-1 text-sm font-medium">Roles</legend>
-              <p className="text-sm text-muted-foreground">
-                Which screens list this person. Loans need no role: anyone can lend or borrow.
-              </p>
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" {...register("customer")} />
-                Customer · sales invoices and projects (Receivable)
-              </label>
-              {isCustomer && openingFields("receivable", "Receivable")}
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" {...register("supplier")} />
-                Supplier · purchase invoices and quotations (Payable)
-              </label>
-              {isSupplier && openingFields("payable", "Payable")}
-            </fieldset>
-
-            <div className="flex justify-end">
+            <div className="flex justify-end mt-auto">
               <SubmitButton type="submit" pending={pending} pendingLabel="Creating…">
                 Create Person
               </SubmitButton>

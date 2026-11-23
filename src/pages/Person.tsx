@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useForm, Controller } from "react-hook-form";
 import { toast } from "sonner";
-import { ArrowLeft, ChevronDown, MessageSquare, Plus, Scale, Send, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowLeftRight, MessageSquare, Plus, Send, Trash2 } from "lucide-react";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { Header } from "@/components/layout/Header";
 import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { MetricCard } from "@/components/dashboard/MetricCard";
 import { PeriodMetricCard } from "@/components/dashboard/PeriodMetricCard";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,22 +19,6 @@ import PartyLedgerSection from "@/components/ui/party-ledger";
 import RecordPaymentDialog from "@/components/ui/record-payment-dialog";
 import SetOffDialog from "@/components/ui/set-off-dialog";
 import PersonDeleteDialog from "@/components/ui/person-delete-dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useFieldPatch } from "@/hooks/use-field-patch";
 import { ALL_TIME, PAGE_PERIODS } from "../../services/periods";
@@ -98,10 +83,9 @@ const Person = () => {
   const [range, setRange] = useState({ from: "", to: "" });
   const [ledger, setLedger] = useState(null);
   const [ledgerLoading, setLedgerLoading] = useState(true);
-  const [payParty, setPayParty] = useState(null);
+  const [payOpen, setPayOpen] = useState(false);
   const [setOffOpen, setSetOffOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [confirmRole, setConfirmRole] = useState(null);
   const [roleBusy, setRoleBusy] = useState(false);
   const [openings, setOpenings] = useState({
     receivable: { amount: "", date: todayForInput() },
@@ -271,17 +255,18 @@ const Person = () => {
       toast.error("Failed to change the role.");
     } finally {
       setRoleBusy(false);
-      setConfirmRole(null);
     }
   };
 
+  // Opening balances are the person's, one per side, whatever roles they
+  // hold; 0 clears one.
   const onSaveOpening = async (sideKey) => {
-    const role = sideKey === "receivable" ? customer : supplier;
-    if (!role) return;
+    if (!personId) return;
     setSavingOpening(sideKey);
     try {
       const ok = await saveOpeningBalance(token, {
-        ...(sideKey === "receivable" ? { customerId: role.id } : { supplierId: role.id }),
+        personId,
+        side: sideKey,
         amount: Math.floor(Number(openings[sideKey].amount) || 0),
         asOfDate: openings[sideKey].date,
       });
@@ -321,7 +306,14 @@ const Person = () => {
       supplier ? getSupplierSummary(token, supplier.id, period) : { total_business: 0 },
     ]);
     if (parts.some((part) => part == null)) return null;
-    return { total_business: parts.reduce((sum, part) => sum + (part.total_business || 0), 0) };
+    return {
+      total_business: parts.reduce((sum, part) => sum + (part.total_business || 0), 0),
+      // The period the server worked the figure out for, so the line under
+      // it says which ("This month · 1 Nov - 30 Nov"). Someone with no role
+      // has no summary to ask, so the period's own name stands in.
+      period: parts.find((part) => part.period)?.period ?? null,
+      period_label: PAGE_PERIODS.find((option) => option.key === period?.key)?.label || "All time",
+    };
   };
 
   const openWhatsApp = (text) => window.open(`https://wa.me/${whatsapp}?text=${text}`, "_blank");
@@ -375,7 +367,10 @@ const Person = () => {
   const roleRow = (kind) => {
     const info = ROLE_INFO[kind];
     const role = kind === "customer" ? customer : supplier;
-    const sideBalance = kind === "customer" ? receivable : payable;
+    // The role's own khaata, which can sit on either side: a customer's
+    // advance is Payable. Any balance at all keeps the role active.
+    const roleBalance = role?.balance || 0;
+    const balanceSide = (roleBalance > 0) === (kind === "customer") ? "Receivable" : "Payable";
     let status = "Not held";
     let hint = `${info.listed} Add the role to use ${kind === "customer" ? "sales" : "purchase"} documents.`;
     let action = "add";
@@ -386,9 +381,9 @@ const Person = () => {
       if (kind === "customer" && isWalkIn) {
         locked = true;
         hint = "The counter-sale customer. It stays active for walk-in invoices.";
-      } else if (sideBalance) {
+      } else if (roleBalance) {
         locked = true;
-        hint = `${info.listed} Can be deactivated once ${info.side} ${formatCurrency(sideBalance)} is settled.`;
+        hint = `${info.listed} Can be deactivated once ${balanceSide} ${formatCurrency(Math.abs(roleBalance))} is settled.`;
       } else {
         hint = `${info.listed} Deactivating keeps every record.`;
       }
@@ -397,70 +392,63 @@ const Person = () => {
       action = "activate";
       hint = `Kept with its history, but not offered in ${kind === "customer" ? "sales" : "purchase"} documents.`;
     }
-    const label = { add: "Add", activate: "Activate", deactivate: "Deactivate" }[action];
+    // Ticked = an active role. Ticking adds a role the person does not hold
+    // or reactivates one; unticking deactivates it (never deletes it).
+    const id = `role-${kind}`;
     return (
-      <div key={kind} className="flex items-center justify-between gap-3 border-t py-3 first:border-t-0">
-        <div className="min-w-0 flex-1">
+      <div key={kind} className="flex items-start gap-3 border-t py-3 first:border-t-0">
+        <Checkbox
+          id={id}
+          className="mt-0.5"
+          checked={!!role?.is_active}
+          disabled={locked || roleBusy || !permissions?.["edit"]}
+          onCheckedChange={() => onRole(kind, action)}
+        />
+        <label htmlFor={id} className="min-w-0 flex-1 cursor-pointer">
           <div className="text-sm font-medium">
             {info.label}
             <span className="font-normal text-muted-foreground"> · {info.side} · {status}</span>
           </div>
           <div className="text-xs text-muted-foreground">{hint}</div>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          disabled={locked || roleBusy || !permissions?.["edit"]}
-          onClick={() => (action === "deactivate" ? setConfirmRole(kind) : onRole(kind, action))}
-        >
-          {label}
-        </Button>
+        </label>
       </div>
     );
   };
 
   const openingRow = (sideKey) => {
-    const role = sideKey === "receivable" ? customer : supplier;
-    const label = sideKey === "receivable" ? "Receivable" : "Payable";
-    const needs = sideKey === "receivable" ? "customer" : "supplier";
+    const label = sideKey === "receivable" ? "Receivables" : "Payables";
     return (
-      <div key={sideKey} className="space-y-2 border-t pt-4 first:border-t-0 first:pt-0">
+      <div key={sideKey} className="space-y-3">
         <div className="text-sm font-medium">{label}</div>
-        {role ? (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor={`ob-${sideKey}`}>Amount (PKR)</Label>
-              <Input
-                id={`ob-${sideKey}`}
-                type="number"
-                min="0"
-                step="1"
-                value={openings[sideKey].amount}
-                onChange={(e) => setOpenings({ ...openings, [sideKey]: { ...openings[sideKey], amount: e.target.value } })}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor={`ob-${sideKey}-date`}>Accurate as of</Label>
-              <Input
-                id={`ob-${sideKey}-date`}
-                type="date"
-                value={openings[sideKey].date}
-                onChange={(e) => setOpenings({ ...openings, [sideKey]: { ...openings[sideKey], date: e.target.value } })}
-              />
-            </div>
-            <Button
-              variant="outline"
-              className="col-span-2"
-              disabled={savingOpening === sideKey || !canEditAccounting}
-              onClick={() => onSaveOpening(sideKey)}
-            >
-              {savingOpening === sideKey ? "Saving…" : `Save ${label.toLowerCase()} opening balance`}
-            </Button>
+        <div className="flex flex-col gap-3">
+          <div className="space-y-1">
+            <Label htmlFor={`ob-${sideKey}`}>Opening balance (PKR)</Label>
+            <Input
+              id={`ob-${sideKey}`}
+              type="number"
+              min="0"
+              step="1"
+              value={openings[sideKey].amount}
+              onChange={(e) => setOpenings({ ...openings, [sideKey]: { ...openings[sideKey], amount: e.target.value } })}
+            />
           </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">Needs the {needs} role.</p>
-        )}
+          <div className="space-y-1">
+            <Label htmlFor={`ob-${sideKey}-date`}>Accurate as of</Label>
+            <Input
+              id={`ob-${sideKey}-date`}
+              type="date"
+              value={openings[sideKey].date}
+              onChange={(e) => setOpenings({ ...openings, [sideKey]: { ...openings[sideKey], date: e.target.value } })}
+            />
+          </div>
+          <Button
+            variant="outline"
+            disabled={savingOpening === sideKey || !canEditAccounting}
+            onClick={() => onSaveOpening(sideKey)}
+          >
+            {savingOpening === sideKey ? "Saving…" : "Save"}
+          </Button>
+        </div>
       </div>
     );
   };
@@ -489,23 +477,10 @@ const Person = () => {
 
             <div className="flex items-center gap-3 shrink-0">
               {canSeeAccounting && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button>
-                      <Plus className="w-4 h-4 mr-2" />
-                      Record Payment
-                      <ChevronDown className="w-4 h-4 ml-2" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem disabled={!customer} onSelect={() => setPayParty("customer")}>
-                      {name || "They"} pays you{!customer ? " (needs the customer role)" : ""}
-                    </DropdownMenuItem>
-                    <DropdownMenuItem disabled={!supplier} onSelect={() => setPayParty("supplier")}>
-                      You pay {name || "them"}{!supplier ? " (needs the supplier role)" : ""}
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Button disabled={!customer && !supplier} onClick={() => setPayOpen(true)}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Record Payment
+                </Button>
               )}
               {canSeeAccounting && (
                 <Button
@@ -513,7 +488,7 @@ const Person = () => {
                   disabled={!receivable || !payable || !canEditAccounting}
                   onClick={() => setSetOffOpen(true)}
                 >
-                  <Scale className="w-4 h-4 mr-2" />
+                  <ArrowLeftRight className="w-4 h-4 mr-2" />
                   Set-off
                 </Button>
               )}
@@ -528,21 +503,25 @@ const Person = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {/* Nine columns: three cards of two, and Total Business at one and a half cards (three). */}
+          <div className="grid grid-cols-1 md:grid-cols-9 gap-6">
             <MetricCard
               title="Receivable"
+              className="md:col-span-2"
               value={formatCurrency(receivable)}
               hint="What they owe you: sales, loans you gave"
               loading={!person}
             />
             <MetricCard
               title="Payable"
+              className="md:col-span-2"
               value={formatCurrency(payable)}
               hint="What you owe them: purchases, loans you took"
               loading={!person}
             />
             <MetricCard
               title="Net"
+              className="md:col-span-2"
               value={person ? personNetLabel(person) : ""}
               hint="For reference only; a set-off clears both sides"
               loading={!person}
@@ -550,6 +529,7 @@ const Person = () => {
             {person && (
               <PeriodMetricCard
                 title="Total Business"
+                className="md:col-span-3"
                 storageKey="person-total-business"
                 defaultPeriod={ALL_TIME}
                 periodOptions={PAGE_PERIODS}
@@ -560,8 +540,9 @@ const Person = () => {
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
-            <div className="md:col-span-2 rounded-lg border bg-card p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* A column, so Notes can take whatever height the row leaves. */}
+            <div className="md:col-span-2 flex flex-col rounded-lg border bg-card p-6">
               <div className="mb-4 flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-base font-semibold leading-5">Person details</h2>
@@ -569,7 +550,7 @@ const Person = () => {
                 </div>
                 <SaveStatus status={status} onRetry={retry} />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid flex-1 grid-cols-2 grid-rows-[auto_auto_auto_1fr] gap-4">
                 <div className="space-y-1">
                   <Label htmlFor="name">Name</Label>
                   <Input
@@ -642,11 +623,13 @@ const Person = () => {
                     {...register("address", { onChange: (e) => patchField(endpoint, "address", e.target.value) })}
                   />
                 </div>
-                <div className="col-span-2 space-y-1">
+                <div className="col-span-2 flex flex-col gap-1">
                   <Label htmlFor="notes">Notes</Label>
+                  {/* Stretches to the bottom of the card, inside its padding. */}
                   <Textarea
                     id="notes"
                     rows={2}
+                    className="flex-1 resize-none"
                     placeholder="Anything worth remembering"
                     disabled={!permissions?.["edit"]}
                     {...register("notes", { onChange: (e) => patchField(endpoint, "notes", e.target.value) })}
@@ -657,11 +640,7 @@ const Person = () => {
 
             <div className="flex flex-col gap-6">
               <section className="rounded-lg border bg-card p-6">
-                <h2 className="text-base font-semibold leading-5">Roles</h2>
-                <p className="mb-3 mt-1 text-sm text-muted-foreground">
-                  Decide which screens list {name || "this person"}. Deactivating keeps every record; a role
-                  with a balance stays active until that side is settled.
-                </p>
+                <h2 className="mb-3 text-base font-semibold leading-5">Roles</h2>
                 {roleRow("customer")}
                 {roleRow("supplier")}
                 <p className="mt-3 border-t pt-3 text-xs text-muted-foreground">
@@ -670,16 +649,15 @@ const Person = () => {
                 </p>
               </section>
 
+              {/* Opening balances: what stood between you before MarketPro, one
+                  per side. Grows so the column ends level with the details card. */}
               {canSeeAccounting && (
-                <section className="rounded-lg border bg-card p-6 space-y-4">
-                  <div>
-                    <h2 className="text-base font-semibold leading-5">Opening balances</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      What stood between you before MarketPro, one per side.
-                    </p>
-                  </div>
-                  {openingRow("receivable")}
-                  {openingRow("payable")}
+                <section
+                  aria-label="Opening balances"
+                  className="grid flex-1 grid-cols-2 divide-x rounded-lg border bg-card p-6"
+                >
+                  <div className="pr-4">{openingRow("receivable")}</div>
+                  <div className="pl-4">{openingRow("payable")}</div>
                 </section>
               )}
             </div>
@@ -701,13 +679,14 @@ const Person = () => {
             />
           )}
 
-          {canSeeAccounting && payParty && (
+          {canSeeAccounting && (customer || supplier) && (
             <RecordPaymentDialog
-              party={payParty}
-              partyId={payParty === "customer" ? customer?.id : supplier?.id}
+              personId={person?.id ?? null}
+              customer={customer}
+              supplier={supplier}
               partyName={name}
-              open={!!payParty}
-              setOpen={(open) => !open && setPayParty(null)}
+              open={payOpen}
+              setOpen={setPayOpen}
               onRecorded={refreshAll}
             />
           )}
@@ -731,27 +710,6 @@ const Person = () => {
             onDeleted={() => navigate(backTo)}
           />
 
-          <AlertDialog open={!!confirmRole} onOpenChange={(open) => !open && setConfirmRole(null)}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>
-                  Deactivate the {confirmRole ? ROLE_INFO[confirmRole].label.toLowerCase() : ""} role?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  {name} stays in People and keeps all their{" "}
-                  {confirmRole === "customer" ? "sales" : "purchase"} history, but won't appear in{" "}
-                  {confirmRole === "customer" ? "sales" : "purchase"} dropdowns. You can activate it again
-                  later.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction disabled={roleBusy} onClick={() => onRole(confirmRole, "deactivate")}>
-                  Deactivate
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
 
           {person?.last_activity && (
             <p className="text-xs text-muted-foreground">Last activity {formatDate(person.last_activity)}</p>

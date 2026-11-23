@@ -287,11 +287,23 @@ const People = () => {
 
           <div>
             <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
-              <div className="flex flex-wrap items-center gap-4">
-                <h2 className="text-xl font-semibold">
-                  People Listing ({listCountLabel(people, selectedRows)})
-                </h2>
-                <div role="group" aria-label="Role" className="inline-flex gap-1 rounded-lg bg-muted p-1">
+              <h2 className="text-xl font-semibold">
+                People Listing ({listCountLabel(people, selectedRows)})
+              </h2>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <SearchField
+                    placeholder="Search People"
+                    value={searchTerm}
+                    onChange={setSearchTerm}
+                    pending={searching}
+                  />
+                  <Button variant="outline" onClick={() => setFilterOpen(true)}>
+                    <Filter className="w-4 h-4 mr-2" />
+                    <span>Filter{activeFilters ? ` · ${activeFilters}` : ""}</span>
+                  </Button>
+                  <div role="group" aria-label="Role" className="inline-flex gap-1 rounded-lg bg-muted p-1">
                   {ROLE_TABS.map((tab) => (
                     <button
                       key={tab.key}
@@ -309,21 +321,7 @@ const People = () => {
                       {tab.label} <span className="tabular-nums opacity-80">{tabCount(tab.key)}</span>
                     </button>
                   ))}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <SearchField
-                    placeholder="Search People"
-                    value={searchTerm}
-                    onChange={setSearchTerm}
-                    pending={searching}
-                  />
-                  <Button variant="outline" onClick={() => setFilterOpen(true)}>
-                    <Filter className="w-4 h-4 mr-2" />
-                    <span>Filter{activeFilters ? ` · ${activeFilters}` : ""}</span>
-                  </Button>
+                  </div>
                 </div>
 
                 <div className="flex items-center space-x-3">

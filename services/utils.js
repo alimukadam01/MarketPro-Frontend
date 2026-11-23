@@ -903,6 +903,9 @@ export function transformInventoryItem(data) {
     // The day the quantity was last counted: sales and purchases dated on or
     // before it no longer move this stock (sales/stock_rule.py).
     counted_at: data.stock_counted_at ? formatDate(data.stock_counted_at) : "-",
+    // At or below its reorder level (the server's restock_needed): listed
+    // first and outlined in red on the Inventory page.
+    restock_needed: data.restock_needed === true,
   };
 }
 

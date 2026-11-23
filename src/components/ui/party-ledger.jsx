@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ChevronDown } from "lucide-react";
 import { formatDate, listCountLabel } from "../../../services/utils";
 
 const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
@@ -54,8 +55,8 @@ const bothCols = [
     },
 ];
 
-// The Type filter: which khaata descriptions each choice keeps.
-const ALL_TYPES = "all";
+// The Type filter: which khaata descriptions each choice keeps. Several can
+// be ticked at once; none ticked means all types.
 const TYPE_GROUPS = {
     invoices: { label: "Invoices", match: ["Sales invoice", "Purchase invoice"] },
     payments: {
@@ -95,7 +96,15 @@ const PartyLedgerSection = ({
 }) => {
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
-    const [type, setType] = useState(ALL_TYPES);
+    const [types, setTypes] = useState([]);
+    const toggleType = (key) =>
+        setTypes((prev) => (prev.includes(key) ? prev.filter((t) => t !== key) : [...prev, key]));
+    const typeLabel =
+        types.length === 0
+            ? "All types"
+            : types.length === 1
+                ? TYPE_GROUPS[types[0]].label
+                : `${types.length} types`;
 
     // Everything before the chosen range arrives as a single opening line, so
     // the running balance starts from where the party actually stood. Both
@@ -119,8 +128,11 @@ const PartyLedgerSection = ({
         carriedRows = [carried(ledger.brought_forward, { balance: ledger.brought_forward })];
     }
 
+    // A row split across sides reads "<description> · advance": filter on
+    // the description before the suffix.
+    const keptDescriptions = new Set(types.flatMap((key) => TYPE_GROUPS[key]?.match || []));
     const keep = (row) =>
-        type === ALL_TYPES || (TYPE_GROUPS[type]?.match || []).includes(row.description);
+        types.length === 0 || keptDescriptions.has(String(row.description || "").split(" · ")[0]);
 
     const rows = [
         ...carriedRows,
@@ -156,17 +168,39 @@ const PartyLedgerSection = ({
                     {typeFilter && (
                         <div className="space-y-1">
                             <Label htmlFor="ledger_type">Type</Label>
-                            <Select value={type} onValueChange={setType}>
-                                <SelectTrigger id="ledger_type" className="w-44">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={ALL_TYPES}>All types</SelectItem>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button
+                                        id="ledger_type"
+                                        type="button"
+                                        className="flex h-10 w-44 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                    >
+                                        <span className="truncate">{typeLabel}</span>
+                                        <ChevronDown className="h-4 w-4 shrink-0 opacity-50" />
+                                    </button>
+                                </DropdownMenuTrigger>
+                                {/* Ticking keeps the menu open, so several types can be picked in one go. */}
+                                <DropdownMenuContent align="start" className="w-44">
+                                    <DropdownMenuCheckboxItem
+                                        checked={types.length === 0}
+                                        onCheckedChange={() => setTypes([])}
+                                        onSelect={(e) => e.preventDefault()}
+                                    >
+                                        All types
+                                    </DropdownMenuCheckboxItem>
+                                    <DropdownMenuSeparator />
                                     {Object.entries(TYPE_GROUPS).map(([key, group]) => (
-                                        <SelectItem key={key} value={key}>{group.label}</SelectItem>
+                                        <DropdownMenuCheckboxItem
+                                            key={key}
+                                            checked={types.includes(key)}
+                                            onCheckedChange={() => toggleType(key)}
+                                            onSelect={(e) => e.preventDefault()}
+                                        >
+                                            {group.label}
+                                        </DropdownMenuCheckboxItem>
                                     ))}
-                                </SelectContent>
-                            </Select>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                     )}
                     <div className="space-y-1">
