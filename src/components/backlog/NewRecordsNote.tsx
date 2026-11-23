@@ -3,8 +3,9 @@ import { Package, Truck, UserPlus } from "lucide-react";
 import type { NewRecord, OwnerEntry } from "./meta";
 
 const KINDS = {
-  customer: { label: "Customer", icon: UserPlus, path: "/customers/view-customer", stateKey: "customer_id" },
-  supplier: { label: "Supplier", icon: Truck, path: "/suppliers/view-supplier", stateKey: "supplier_id" },
+  // The person page finds the person from the role's id.
+  customer: { label: "Customer", icon: UserPlus, path: "/people/view-person", stateKey: "customer_id" },
+  supplier: { label: "Supplier", icon: Truck, path: "/people/view-person", stateKey: "supplier_id" },
   product: { label: "Product", icon: Package, path: "/products/update-product", stateKey: "product_id" },
   // A variant opens its product.
   variant: { label: "Variant", icon: Package, path: "/products/update-product", stateKey: "product_id" },

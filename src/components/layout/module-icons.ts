@@ -19,6 +19,7 @@ export const MODULE_ICONS: Record<string, LucideIcon> = {
   quotations: FileText,
   products: PackageOpen,
   customers: Users,
+  people: Users,
   suppliers: Truck,
   locations: MapPin,
   returned_items: Undo2,

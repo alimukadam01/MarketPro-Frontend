@@ -158,7 +158,8 @@ const UpdatePurchaseQuotation = () => {
 
         const fetchSuppliers = async () => {
             try {
-                const suppliers = await suppliersAPIPackage.list(token)
+                // Inactive suppliers too, so the quotation keeps its own.
+                const suppliers = await suppliersAPIPackage.list(token, "?include_inactive=true")
                 if (suppliers) {
                     const supplierMap = createIdMap(suppliers)
                     setSuppliers(supplierMap)

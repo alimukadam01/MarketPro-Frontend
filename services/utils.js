@@ -374,7 +374,20 @@ export const TransactionTypeMap = {
   customer_debit_note: "Customer Debit Note",
   supplier_credit_note: "Supplier Credit Note",
   supplier_debit_note: "Supplier Debit Note",
+  loan_given: "Loan Given",
+  loan_recovered: "Loan Recovered",
+  set_off_receivable: "Set-off (Receivable)",
+  set_off_payable: "Set-off (Payable)",
 };
+
+// A loan names the person, whatever their roles (register #28); a repayment
+// may name the loan it repays. Set-offs come from the person page only.
+export const LoanTransactionTypes = ["loan_given", "loan_recovered", "loan_received", "loan_repayment"];
+export const LoanRepaidBy = { loan_given: "loan_recovered", loan_received: "loan_repayment" };
+export const isLoanType = (type) => LoanTransactionTypes.includes(type);
+/** The loan type a repayment type repays, or null. */
+export const loanRepaidByType = (type) =>
+  Object.keys(LoanRepaidBy).find((loanType) => LoanRepaidBy[loanType] === type) || null;
 
 /**
  * Notes move no money: no account, no payment method, no cheque, always
@@ -401,24 +414,43 @@ export const isNoteType = (type) => NoteTransactionTypes.includes(type);
 export const TransactionTypeGroups = {
   "Money In": [
     "sale_payment", "customer_receipt", "purchase_return_refund",
-    "owner_capital", "loan_received", "other_income",
+    "owner_capital", "loan_received", "loan_recovered", "other_income",
   ],
   "Money Out": [
     "purchase_payment", "supplier_payment", "sales_return_refund",
     "expense", "owner_drawings",
-    "loan_repayment", "other_payment",
+    "loan_given", "loan_repayment", "other_payment",
   ],
   "Neither": ["transfer", "cash_adjustment"],
   "Notes": NoteTransactionTypes,
 };
 
+// The khaata rules, mirroring Transaction.PARTY_EFFECTS on the backend: the
+// types that sit on a party's khaata without naming an invoice, which party
+// each names, and which way it moves their balance ("settles" takes debt
+// off, "adds" puts it back on). The lists below are read from this.
+export const PartyTypeEffects = {
+  customer_receipt: { party: "customer", effect: "settles", kind: "payment" },
+  customer_credit_note: { party: "customer", effect: "settles", kind: "credit_note" },
+  sales_return_refund: { party: "customer", effect: "adds", kind: "refund" },
+  customer_debit_note: { party: "customer", effect: "adds", kind: "debit_note" },
+  supplier_payment: { party: "supplier", effect: "settles", kind: "payment" },
+  supplier_credit_note: { party: "supplier", effect: "settles", kind: "credit_note" },
+  purchase_return_refund: { party: "supplier", effect: "adds", kind: "refund" },
+  supplier_debit_note: { party: "supplier", effect: "adds", kind: "debit_note" },
+  // Loans and set-offs name the person; party is the side they sit on
+  // ("customer" = Receivable, "supplier" = Payable).
+  loan_given: { party: "customer", effect: "adds", kind: "loan_given", byPerson: true },
+  loan_recovered: { party: "customer", effect: "settles", kind: "loan_recovered", byPerson: true },
+  set_off_receivable: { party: "customer", effect: "settles", kind: "set_off", byPerson: true },
+  loan_received: { party: "supplier", effect: "adds", kind: "loan_received", byPerson: true },
+  loan_repayment: { party: "supplier", effect: "settles", kind: "loan_repayment", byPerson: true },
+  set_off_payable: { party: "supplier", effect: "settles", kind: "set_off", byPerson: true },
+};
+
 // Types that name a customer or supplier when recorded on account. Notes
 // always name one: it is the only thing they settle against.
-export const PartyTransactionTypes = [
-  "customer_receipt", "supplier_payment",
-  "sales_return_refund", "purchase_return_refund",
-  ...NoteTransactionTypes,
-];
+export const PartyTransactionTypes = Object.keys(PartyTypeEffects);
 
 export const TransactionStatusMap = {
   C: "Cleared",
@@ -489,14 +521,44 @@ export const partyReminderText = (name, balance) =>
  * ever offered to users who can see the ledger.
  */
 export const partyStatementText = (name, ledger) => {
-  const lines = (ledger?.rows || []).map(
-    (row) =>
-      `${formatDate(row.date)}  ${row.description}  ` +
-      `${row.naam ? `Debit ${row.naam}` : `Credit ${row.jama}`}  Balance ${row.balance}`
-  );
+  const pkr = (value) => `PKR ${Number(value || 0).toLocaleString()}`;
+  // The People khaata's both-sides view carries a balance per side (#25):
+  // the statement sends both, and the net for reference (register R31).
+  const closing = ledger?.closing_balance;
+  const bothSides = closing && typeof closing === "object";
+  const lines = (ledger?.rows || []).map((row) => {
+    const amount = row.naam ? `Debit ${row.naam}` : `Credit ${row.jama}`;
+    if (bothSides) {
+      const side = row.side === "payable" ? "Payable" : "Receivable";
+      const balance = row.side === "payable" ? row.payable_balance : row.receivable_balance;
+      return `${formatDate(row.date)}  ${side}  ${row.description}  ${amount}  Balance ${balance}`;
+    }
+    return `${formatDate(row.date)}  ${row.description}  ${amount}  Balance ${row.balance}`;
+  });
+  const receivable = bothSides ? closing.receivable || 0 : 0;
+  const payable = bothSides ? closing.payable || 0 : 0;
+  const totals = bothSides
+    ? `You owe us (Receivable): ${pkr(receivable)}\n` +
+      `We owe you (Payable): ${pkr(payable)}\n` +
+      `Net: ${receivable >= payable ? `you owe us ${pkr(receivable - payable)}` : `we owe you ${pkr(payable - receivable)}`}`
+    : `Outstanding: ${pkr(closing)}`;
   return encodeURIComponent(
-    `Statement - ${name || ""}\n\n${lines.join("\n")}\n\n` +
-    `Outstanding: PKR ${Number(ledger?.closing_balance || 0).toLocaleString()}`
+    `Statement - ${name || ""}\n\n${lines.join("\n")}\n\n${totals}`
+  );
+};
+
+/**
+ * WhatsApp reminder from the person page (register R31): the side being
+ * viewed, or in the both-sides view what each side owes and the net.
+ */
+export const personReminderText = (name, side, receivable, payable) => {
+  const pkr = (value) => `PKR ${Number(value || 0).toLocaleString()}`;
+  if (side !== "both") return partyReminderText(name, receivable);
+  const net = (receivable || 0) - (payable || 0);
+  return encodeURIComponent(
+    `Hello ${name || ""}, you owe us ${pkr(receivable)} and we owe you ${pkr(payable)}. ` +
+    `${net > 0 ? `That leaves ${pkr(net)} for you to pay` : `On balance nothing is due from you`}. ` +
+    `Thank you.`
   );
 };
 
@@ -614,18 +676,15 @@ export const formatPartyLabel = (party) =>
  * Type. Types absent from this map refer to nothing, so Type spans the row.
  */
 export const ReferenceForType = {
-  customer_receipt: "customer",
-  sales_return_refund: "customer",
-  supplier_payment: "supplier",
-  purchase_return_refund: "supplier",
+  // Every khaata type refers to the party it names; loans and set-offs to
+  // the person.
+  ...Object.fromEntries(
+    Object.entries(PartyTypeEffects).map(([type, { party, byPerson }]) => [type, byPerson ? "person" : party])
+  ),
   sale_payment: "sales_invoice",
   purchase_payment: "purchase_invoice",
   expense: "expense",
   transfer: "transfer_account",
-  customer_credit_note: "customer",
-  customer_debit_note: "customer",
-  supplier_credit_note: "supplier",
-  supplier_debit_note: "supplier",
 };
 
 /**
@@ -844,6 +903,9 @@ export function transformInventoryItem(data) {
     // The day the quantity was last counted: sales and purchases dated on or
     // before it no longer move this stock (sales/stock_rule.py).
     counted_at: data.stock_counted_at ? formatDate(data.stock_counted_at) : "-",
+    // At or below its reorder level (the server's restock_needed): listed
+    // first and outlined in red on the Inventory page.
+    restock_needed: data.restock_needed === true,
   };
 }
 
@@ -1151,4 +1213,25 @@ export const listCountLabel = (rows, selectedRows = []) => {
   }
 
   return String(rows ? rows.length : 0);
+};
+
+// ── People ────────────────────────────────────────────────────────────────────
+
+/** "Customer, Supplier (inactive)" from a person's roles; "-" for neither. */
+export const personRolesLabel = (roles) => {
+  const parts = [
+    ["customer", "Customer"],
+    ["supplier", "Supplier"],
+  ]
+    .filter(([key]) => roles?.[key])
+    .map(([key, label]) => (roles[key].is_active ? label : `${label} (inactive)`));
+  return parts.length ? parts.join(", ") : "-";
+};
+
+/** The net figure, for reference only: sides cancel only through a set-off. */
+export const personNetLabel = (person) => {
+  const net = (person?.receivable || 0) - (person?.payable || 0);
+  if (!person?.receivable && !person?.payable) return "Settled";
+  if (net === 0) return "Even";
+  return net > 0 ? `Receivable ${formatCurrency(net)}` : `Payable ${formatCurrency(-net)}`;
 };

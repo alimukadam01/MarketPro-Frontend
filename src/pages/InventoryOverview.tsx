@@ -190,7 +190,10 @@ const InventoryOverview = () => {
     try {
       const res = await getInventoryItemList(token, businessId, listQuery.track(query))
       if (res) {
-        setInventoryData(res)
+        // Items to restock first; otherwise the server's order is kept
+        // (Array.prototype.sort is stable).
+        setInventoryData([...res].sort(
+          (a, b) => Number(!!b.restock_needed) - Number(!!a.restock_needed)))
       } else {
         toast.error("Failed to fetch Inventory items.")
       }
@@ -419,6 +422,7 @@ const InventoryOverview = () => {
               selectedRows={selectedRows}
               onRowClick={toggleRowSelection}
               colsConfig={"[48px_512px_1fr_1fr_1fr_1fr_1fr_1fr]"}
+              rowClassName={(row) => (row.restock_needed ? "border border-red-500" : null)}
               rowsOnly
               loading={loading}
             />

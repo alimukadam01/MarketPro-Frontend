@@ -99,7 +99,9 @@ const writeRemembered = (key, count) => {
   }
 };
 
-function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = null, headerOnly = false, rowsOnly = false, loading = false, skeletonRows = null }) {
+// rowClassName(row), optional: the border for an unselected row that needs
+// attention (e.g. stock to reorder). A selected row keeps the selection border.
+function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = null, headerOnly = false, rowsOnly = false, loading = false, skeletonRows = null, rowClassName = null }) {
 
   // How many rows to shimmer. Two sources, because they fix different moments:
   // the ref covers REFETCHES on a mounted page - search, filter, delete - where
@@ -178,7 +180,7 @@ function DataTable({ columns, data, selectedRows = [], onRowClick, colsConfig = 
           className={`bg-card rounded-lg h-[35px] flex items-center px-4 cursor-pointer transition-colors hover:bg-muted/20 ${
             selectedRows.includes(row.id)
               ? "border-2 border-[#4285F4]"
-              : "border border-border"
+              : (rowClassName && rowClassName(row)) || "border border-border"
           }`}
         >
           <div className={`grid ${gridCols} gap-4 w-full text-sm`}>
