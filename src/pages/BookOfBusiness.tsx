@@ -414,10 +414,16 @@ const BookOfBusiness = () => {
                                 </div>
                             </div>
 
-                            {/* One account at a time */}
+                            {/* One account at a time. Sticky from here down, like
+                                every other table: once the account heading reaches
+                                the top of the window it stays there with the column
+                                header, and only the rows scroll underneath. They sit
+                                in one container so the column header needs no top
+                                offset of its own. */}
                             <div className="space-y-4">
                                 {account ? (
-                                    <>
+                                    <div>
+                                        <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center space-x-3">
                                                 <Button
@@ -488,11 +494,17 @@ const BookOfBusiness = () => {
                                         </div>
 
                                         {loading || account.rows?.length > 0 ? (
+                                            <DataTable columns={cols} headerOnly />
+                                        ) : null}
+                                        </div>
+
+                                        {loading || account.rows?.length > 0 ? (
                                             <DataTable
                                                 columns={cols}
                                                 data={accountRows(account)}
                                                 selectedRows={[]}
                                                 onRowClick={() => { }}
+                                                rowsOnly
                                                 loading={loading}
                                             />
                                         ) : (
@@ -502,7 +514,7 @@ const BookOfBusiness = () => {
                                                 </p>
                                             </div>
                                         )}
-                                    </>
+                                    </div>
                                 ) : (
                                     <div className="bg-card rounded-lg p-6 border">
                                         <p className="text-sm text-muted-foreground">
