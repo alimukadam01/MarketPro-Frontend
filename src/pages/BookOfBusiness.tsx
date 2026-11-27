@@ -313,20 +313,6 @@ const BookOfBusiness = () => {
                                   />
                             </div>
 
-                            {dayBook?.total_transfers > 0 && (
-                                <p className="text-xs text-muted-foreground">
-                                    Moved between your own accounts:{" "}
-                                    {formatCurrency(dayBook.total_transfers)}. Not counted in
-                                    Money In or Money Out.
-                                </p>
-                            )}
-
-                            <p className="text-xs text-muted-foreground">
-                                The profit figure is an estimate. It is only as accurate as the
-                                sales, purchase and expense data entered, and depends on product
-                                costs being up to date.
-                            </p>
-
                             {/* Daily Summary */}
                             <div className="space-y-4">
                                 <h2 className="text-xl font-semibold">Summary</h2>
