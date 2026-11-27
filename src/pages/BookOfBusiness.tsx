@@ -343,7 +343,7 @@ const BookOfBusiness = () => {
                                             </span>
                                         </div>
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">Cash count found more</span>
+                                            <span className="text-muted-foreground">Cash adjustment</span>
                                             <span>{formatCurrency(summary?.money_in?.cash_adjustments)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
@@ -385,7 +385,7 @@ const BookOfBusiness = () => {
                                             <span>{formatCurrency(summary?.money_out?.loans)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
-                                            <span className="text-muted-foreground">Cash count found less</span>
+                                            <span className="text-muted-foreground">Cash adjustment</span>
                                             <span>{formatCurrency(summary?.money_out?.cash_adjustments)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
