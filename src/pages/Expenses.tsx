@@ -28,6 +28,15 @@ import {
   Lock,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useNavigate } from "react-router-dom";
 import { Spinner } from "@/components/ui/spinner";
 import { SearchField } from "@/components/ui/search-field";
@@ -115,8 +124,27 @@ const Expenses = () => {
   // could be fired twice.
 
   const [deleting, setDeleting] = useState(false);
+  // Selected expenses recorded from an invoice's extra charges, while the
+  // confirmation is open.
+  const [keptCharges, setKeptCharges] = useState([]);
 
-  const handleDeletion = async () => {
+  // Deleting an invoice's extra-charge expense means the shopkeeper keeps the
+  // charge: it stays on the invoice as revenue and is never paid out again.
+  // That changes profit and the account balance, so ask first.
+  const handleDeletion = () => {
+    if (selectedRows.length <= 0) return;
+    const charges = (expensesData || []).filter(
+      (row) => row.is_invoice_charge && selectedRows.includes(row.id),
+    );
+    if (charges.length) {
+      setKeptCharges(charges);
+      return;
+    }
+    deleteSelected();
+  };
+
+  const deleteSelected = async () => {
+    setKeptCharges([]);
     setDeleting(true);
     try {
       if (selectedRows.length <= 0) return;
@@ -348,6 +376,31 @@ const Expenses = () => {
             setOpen={setFilterWindowOpen}
             onActiveChange={setFilterCount}
           />
+
+          <AlertDialog
+            open={keptCharges.length > 0}
+            onOpenChange={(open) => !open && setKeptCharges([])}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Keep the extra charge as profit?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {keptCharges.length === 1
+                    ? `"${keptCharges[0].name}" is an extra charge on a sales invoice.`
+                    : `${keptCharges.length} of these are extra charges on sales invoices.`}{" "}
+                  Deleting means you keep the charge: it stays on the invoice and counts as
+                  revenue, and no money is paid out of the account for it. The invoice
+                  total doesn't change.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <Button variant="destructive" onClick={deleteSelected}>
+                  Delete
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </main>
       </div>
     </div>

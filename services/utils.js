@@ -349,7 +349,10 @@ export function transformExpense(data) {
     paid_from: data.paid_from_name || "-",
     // The day the money went out - the date its transaction carries, as the
     // transactions list shows it - not the day the row was typed in.
-    expense_date: formatDate(data.expense_date || data.created_at)
+    expense_date: formatDate(data.expense_date || data.created_at),
+    // Recorded from a sales invoice's extra charge: deleting it keeps the
+    // charge as revenue (the Expenses page asks first).
+    is_invoice_charge: !!data.is_invoice_charge,
   }
 }
 
