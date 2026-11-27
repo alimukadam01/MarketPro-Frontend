@@ -51,8 +51,7 @@ import { Combobox } from "@/components/ui/combobox";
 import { Spinner } from "@/components/ui/spinner";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
-import { EarlyPaymentDialog } from "@/components/ui/early-payment-dialog";
-import { ON_ACCOUNT_HINT, invoiceDay, invoicesAfter } from "../../services/utils";
+import { invoiceDay, invoicesAfter } from "../../services/utils";
 
 // A loan as the repayment picker shows it, and a person in the person picker.
 type LoanOption = { type: string; date: string; amount: number; reference?: string | null };
@@ -147,9 +146,9 @@ const UpdateTransaction = () => {
                 account.is_active || String(key) === String(currentValue)
         );
 
-    // A payment dated before the invoice it pays: ask first (fix plan 4,
-    // rule 3). Nothing is blocked; keeping it saves as it was entered.
-    const [earlyPrompt, setEarlyPrompt] = useState(null);
+    // A payment on an invoice can't be dated before the invoice; money paid
+    // ahead is a Customer or Supplier Payment, which the next invoice uses.
+    // The server refuses it too.
     const onUpdate = async (data) => {
         const linked = referenceKind === "sales_invoice" || referenceKind === "purchase_invoice";
         if (linked && sourceInvoice) {
@@ -161,7 +160,10 @@ const UpdateTransaction = () => {
                 data.date,
             );
             if (ahead.length) {
-                setEarlyPrompt({ invoices: ahead, data });
+                toast.error(
+                    `A payment on an invoice can't be dated before the invoice (${formatDate(ahead[0].date)}). ` +
+                    "Record money paid in advance as a Customer or Supplier Payment.",
+                );
                 return;
             }
         }
@@ -574,19 +576,6 @@ const UpdateTransaction = () => {
                             </p>
                         </div>
                     )}
-
-                    <EarlyPaymentDialog
-                        open={!!earlyPrompt}
-                        onOpenChange={(next) => !next && setEarlyPrompt(null)}
-                        paymentDate={earlyPrompt?.data?.date}
-                        invoices={earlyPrompt?.invoices || []}
-                        onKeep={() => {
-                            const data = earlyPrompt.data;
-                            setEarlyPrompt(null);
-                            run(onTransactionUpdate)(data);
-                        }}
-                        hint={ON_ACCOUNT_HINT}
-                    />
 
                     <form
                         onSubmit={handleSubmit(run(onUpdate))}
