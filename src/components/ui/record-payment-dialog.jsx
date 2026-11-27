@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Info, Upload } from "lucide-react";
+import { EarlyPaymentDialog } from "@/components/ui/early-payment-dialog";
 import { toast } from "sonner";
 import { useAuth } from "../../../services/AuthProvider";
 import {
@@ -24,6 +25,7 @@ import {
   PaymentMethodMap,
   formatAccountOption,
   formatCurrency,
+  invoicesAfter,
   methodsForAccount,
   todayForInput,
 } from "../../../services/utils";
@@ -76,6 +78,8 @@ function RecordPaymentDialog({ personId, customer, supplier, partyName, open, se
   const [notes, setNotes] = useState("");
   const [image, setImage] = useState(null);
   const [saving, setSaving] = useState(false);
+  // Ticked invoices dated after the payment, while the prompt is open.
+  const [early, setEarly] = useState([]);
 
   const key = (item) => `${item.kind}:${item.id}`;
 
@@ -273,7 +277,35 @@ function RecordPaymentDialog({ personId, customer, supplier, partyName, open, se
     hint = "A cheque payment needs a cheque number.";
   }
 
-  const onSubmit = async () => {
+  // A payment dated before an invoice it pays: ask first (fix plan 4, rule 3).
+  const onSubmit = () => {
+    const ahead = invoicesAfter(
+      allocation.rows
+        .filter((row) => row.applied > 0 && row.item.kind === "invoice")
+        .map((row) => row.item),
+      date,
+    );
+    if (ahead.length) {
+      setEarly(ahead);
+      return;
+    }
+    save();
+  };
+
+  // Untick them, so the money goes on account; the preview then shows it,
+  // and Record saves it.
+  const recordOnAccount = () => {
+    setPicked((prev) => {
+      const next = { ...prev };
+      early.forEach((item) => {
+        next[key(item)] = false;
+      });
+      return next;
+    });
+    setEarly([]);
+  };
+
+  const save = async () => {
     const chosen = allocation.rows
       .filter((row) => row.checked)
       .map((row) => ({ kind: row.item.kind, id: row.item.id }));
@@ -351,6 +383,18 @@ function RecordPaymentDialog({ personId, customer, supplier, partyName, open, se
   );
 
   return (
+    <>
+    <EarlyPaymentDialog
+      open={early.length > 0}
+      onOpenChange={(next) => !next && setEarly([])}
+      paymentDate={date}
+      invoices={early}
+      onKeep={() => {
+        setEarly([]);
+        save();
+      }}
+      onOnAccount={recordOnAccount}
+    />
     <DialogUI.Dialog open={open} onOpenChange={setOpen}>
       <DialogUI.DialogContent className="sm:max-w-[880px]">
         <DialogUI.DialogHeader>
@@ -691,6 +735,7 @@ function RecordPaymentDialog({ personId, customer, supplier, partyName, open, se
         </div>
       </DialogUI.DialogContent>
     </DialogUI.Dialog>
+    </>
   );
 }
 

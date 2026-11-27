@@ -527,7 +527,9 @@ export const partyStatementText = (name, ledger) => {
   const closing = ledger?.closing_balance;
   const bothSides = closing && typeof closing === "object";
   const lines = (ledger?.rows || []).map((row) => {
-    const amount = row.naam ? `Debit ${row.naam}` : `Credit ${row.jama}`;
+    // Debit and Credit as the server puts them for the row's side (fix plan
+    // 3.1): a loan received reads as a Credit. Oldest first, as statements go.
+    const amount = row.debit ? `Debit ${row.debit}` : `Credit ${row.credit}`;
     if (bothSides) {
       const side = row.side === "payable" ? "Payable" : "Receivable";
       const balance = row.side === "payable" ? row.payable_balance : row.receivable_balance;
@@ -1235,3 +1237,23 @@ export const personNetLabel = (person) => {
   if (net === 0) return "Even";
   return net > 0 ? `Receivable ${formatCurrency(net)}` : `Payable ${formatCurrency(-net)}`;
 };
+
+/**
+ * A payment on an invoice dated before that invoice (fix plan 4, rule 3):
+ * the invoices among `items` dated after `paymentDate`. ISO dates compare as
+ * text.
+ */
+export const invoicesAfter = (items, paymentDate) =>
+  (items || []).filter((item) => item.date && paymentDate && item.date > paymentDate);
+
+/** An invoice's issue date as the shop's calendar day (YYYY-MM-DD). */
+export const invoiceDay = (dateIssued) => {
+  if (!dateIssued) return null;
+  const day = new Date(dateIssued);
+  if (Number.isNaN(day.getTime())) return String(dateIssued).slice(0, 10);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+};
+
+export const ON_ACCOUNT_HINT =
+  "To record it on account, go back and choose Customer Payment or Supplier Payment as the type.";

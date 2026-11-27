@@ -23,7 +23,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Edit, Power, Star, Lock } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Power, Star, Lock, FileText } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../services/AuthProvider";
@@ -262,6 +262,28 @@ const MoneyAccounts = () => {
                     </div>
 
                     <div className="flex items-center justify-end space-x-3">
+                        {/* One account's statement (fix plan 3.4): the Book of
+                            Business on that account, with a balance after
+                            every row, to tick off against the bank statement.
+                            The book lists active accounts only. */}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center space-x-2"
+                            disabled={!selectedAccount || !selectedAccount.is_active || !permissions?.["view"]}
+                            onClick={() =>
+                                navigate("/accounting/book-of-business", {
+                                    state: { account_id: selectedAccount.id },
+                                })
+                            }
+                        >
+                            {permissions?.["view"] ? (
+                                <FileText className="w-4 h-4" />
+                            ) : (
+                                <Lock className="w-4 h-4" />
+                            )}
+                            <span>Statement</span>
+                        </Button>
                         <Button
                             variant="outline"
                             size="sm"
