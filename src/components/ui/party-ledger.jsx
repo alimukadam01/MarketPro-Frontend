@@ -21,8 +21,8 @@ const cols = [
     { key: "date", label: "Date" },
     { key: "description", label: "Description" },
     { key: "reference", label: "Reference" },
-    { key: "naam", label: "Debit", render: money },
-    { key: "jama", label: "Credit", render: money },
+    { key: "debit", label: "Debit", render: money },
+    { key: "credit", label: "Credit", render: money },
     {
         key: "balance",
         label: "Balance",
@@ -41,8 +41,8 @@ const bothCols = [
     { key: "description", label: "Description" },
     { key: "reference", label: "Reference" },
     { key: "side", label: "Side", render: (value) => SIDE_LABEL[value] || "-" },
-    { key: "naam", label: "Debit", render: money },
-    { key: "jama", label: "Credit", render: money },
+    { key: "debit", label: "Debit", render: money },
+    { key: "credit", label: "Credit", render: money },
     {
         key: "receivable_balance",
         label: "Receivable",
@@ -108,24 +108,30 @@ const PartyLedgerSection = ({
 
     // Everything before the chosen range arrives as a single opening line, so
     // the running balance starts from where the party actually stood. Both
-    // sides carry their own.
-    const carried = (amount, extra) => ({
-        date: dateFrom ? formatDate(dateFrom) : "-",
-        description: "Brought forward",
-        reference: "-",
-        naam: amount > 0 ? amount : 0,
-        jama: amount < 0 ? -amount : 0,
-        ...extra,
-    });
+    // sides carry their own. What raises Receivable is a Debit; what raises
+    // Payable is a Credit (fix plan 3.1).
+    const carried = (amount, side, extra) => {
+        const raises = amount > 0 ? amount : 0;
+        const lowers = amount < 0 ? -amount : 0;
+        const payable = side === "payable";
+        return {
+            date: dateFrom ? formatDate(dateFrom) : "-",
+            description: "Brought forward",
+            reference: "-",
+            debit: payable ? lowers : raises,
+            credit: payable ? raises : lowers,
+            ...extra,
+        };
+    };
     let carriedRows = [];
     if (sides) {
         const forward = ledger?.brought_forward || {};
         const both = { receivable_balance: forward.receivable || 0, payable_balance: forward.payable || 0 };
         carriedRows = Object.keys(SIDE_LABEL)
             .filter((side) => forward[side])
-            .map((side) => carried(forward[side], { side, ...both }));
+            .map((side) => carried(forward[side], side, { side, ...both }));
     } else if (ledger?.brought_forward) {
-        carriedRows = [carried(ledger.brought_forward, { balance: ledger.brought_forward })];
+        carriedRows = [carried(ledger.brought_forward, ledger.side, { balance: ledger.brought_forward })];
     }
 
     // A row split across sides reads "<description> · advance": filter on
@@ -134,13 +140,16 @@ const PartyLedgerSection = ({
     const keep = (row) =>
         types.length === 0 || keptDescriptions.has(String(row.description || "").split(" · ")[0]);
 
+    // Newest first (fix plan 3.3): the latest row, carrying the closing
+    // balance, at the top; what was brought forward at the foot. The server
+    // works the balances out oldest-first, so only the order changes here.
     const rows = [
-        ...carriedRows,
         ...(ledger?.rows || []).filter(keep).map((row) => ({
             ...row,
             date: formatDate(row.date),
             reference: row.reference || "-",
-        })),
+        })).reverse(),
+        ...carriedRows,
     ].map((row, index) => ({ ...row, id: index + 1 }));
 
     const columns = sides ? bothCols : cols;

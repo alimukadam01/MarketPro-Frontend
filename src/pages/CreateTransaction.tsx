@@ -52,6 +52,8 @@ import {
 } from "../../services/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
+import { EarlyPaymentDialog } from "@/components/ui/early-payment-dialog";
+import { ON_ACCOUNT_HINT, invoiceDay, invoicesAfter } from "../../services/utils";
 
 // A loan as the repayment picker shows it, and a person in the person picker.
 type LoanOption = { type: string; date: string; amount: number; reference?: string | null };
@@ -147,6 +149,29 @@ const CreateTransaction = () => {
             setValue("payment_method", allowedMethods[0]);
         }
     }, [selectedAccountId, selectedAccount, allowedMethods, selectedMethod, setValue]);
+
+    // A payment dated before the invoice it pays: ask first (fix plan 4,
+    // rule 3). Nothing is blocked; keeping it saves as it was entered.
+    const [earlyPrompt, setEarlyPrompt] = useState(null);
+    const onCreate = async (data) => {
+        const invoice =
+            referenceKind === "sales_invoice"
+                ? salesInvoices[data.sales_invoice]
+                : referenceKind === "purchase_invoice"
+                    ? purchaseInvoices[data.purchase_invoice]
+                    : null;
+        if (invoice) {
+            const ahead = invoicesAfter(
+                [{ label: invoice.invoice_number || `#${invoice.id}`, date: invoiceDay(invoice.date_issued) }],
+                data.date,
+            );
+            if (ahead.length) {
+                setEarlyPrompt({ invoices: ahead, data });
+                return;
+            }
+        }
+        return onTransactionCreate(data);
+    };
 
     const onTransactionCreate = async (data) => {
         if (!data.type) {
@@ -533,8 +558,21 @@ const CreateTransaction = () => {
                         </p>
                     </div>
 
+                    <EarlyPaymentDialog
+                        open={!!earlyPrompt}
+                        onOpenChange={(next) => !next && setEarlyPrompt(null)}
+                        paymentDate={earlyPrompt?.data?.date}
+                        invoices={earlyPrompt?.invoices || []}
+                        onKeep={() => {
+                            const data = earlyPrompt.data;
+                            setEarlyPrompt(null);
+                            run(onTransactionCreate)(data);
+                        }}
+                        hint={ON_ACCOUNT_HINT}
+                    />
+
                     <form
-                        onSubmit={handleSubmit(run(onTransactionCreate))}
+                        onSubmit={handleSubmit(run(onCreate))}
                         className="flex flex-col flex-1 gap-4"
                     >
                         {/* Row One — both columns start together, so Reference lines up
