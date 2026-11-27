@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { PeriodSwitch } from "@/components/ui/period-switch";
 import { toast } from "sonner";
 import { ArrowLeft, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../services/AuthProvider";
 import { getBook, getBookSummary } from "../../services/api";
 import {
@@ -21,6 +21,18 @@ import {
 } from "../../services/utils";
 import { CARD_PERIODS, TODAY, periodHint } from "../../services/periods";
 
+const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
+
+// An uncleared cheque is listed but moves no balance yet, so its figures are
+// greyed (fix plan 3.2).
+const pending = (row) => row.status && row.status !== "C";
+const amountCell = (value, row) =>
+    value ? (
+        <span className={pending(row) ? "text-muted-foreground" : ""}>{formatCurrency(value)}</span>
+    ) : (
+        "-"
+    );
+
 const cols = [
     { key: "id", label: "ID" },
     // A period spans days, so each row says which one.
@@ -28,35 +40,50 @@ const cols = [
     {
         key: "type",
         label: "Type",
-        render: (value) => (
-            <span className="whitespace-nowrap">{TransactionTypeMap[value] || value}</span>
+        render: (value, row) => (
+            <span className={`whitespace-nowrap ${row.edge ? "font-medium" : ""}`}>
+                {TransactionTypeMap[value] || value}
+            </span>
         ),
     },
     { key: "reference", label: "Reference" },
+    { key: "money_in", label: "Money In", render: amountCell },
+    { key: "money_out", label: "Money Out", render: amountCell },
     {
-        key: "money_in",
-        label: "Money In",
-        render: (value) => (value ? `PKR ${Number(value).toLocaleString()}` : "-"),
-    },
-    {
-        key: "money_out",
-        label: "Money Out",
-        render: (value) => (value ? `PKR ${Number(value).toLocaleString()}` : "-"),
+        key: "balance",
+        label: "Balance",
+        render: (value) => <span className="font-medium">{formatCurrency(value)}</span>,
     },
     {
         key: "status",
         label: "Status",
-        render: (value) => (
-            <span
-                className={`px-2 py-0.25 rounded-full text-xs font-medium whitespace-nowrap ${getTransactionStatusColor(value)}`}
-            >
-                {TransactionStatusMap[value] || value}
-            </span>
-        ),
+        render: (value) =>
+            value ? (
+                <span
+                    className={`px-2 py-0.25 rounded-full text-xs font-medium whitespace-nowrap ${getTransactionStatusColor(value)}`}
+                >
+                    {TransactionStatusMap[value] || value}
+                </span>
+            ) : null,
     },
 ];
 
-const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`;
+/**
+ * One account's rows, newest first (fix plan 3.3): the closing balance heads
+ * the table and the opening balance closes it. The server works the balance
+ * after each row out oldest-first, in the order the money moved.
+ */
+const accountRows = (account) => {
+    if (!account) return [];
+    const edge = (id, type, balance) => ({
+        id, edge: true, date: null, type, reference: "", money_in: 0, money_out: 0, status: null, balance,
+    });
+    return [
+        edge("closing", "Closing balance", account.closing_balance),
+        ...[...(account.rows || [])].reverse(),
+        edge("opening", "Opening balance", account.opening_balance),
+    ];
+};
 
 /**
  * The Book of Business: the day book over any period - today by default, a
@@ -66,7 +93,13 @@ const formatCurrency = (amount) => `PKR ${Number(amount || 0).toLocaleString()}`
  */
 const BookOfBusiness = () => {
     const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-    const [period, setPeriod] = useState<{ key: string; from?: string; to?: string }>(TODAY);
+    // Opened from an account's Statement button (fix plan 3.4): that account,
+    // over this month, until the user picks another period.
+    const location = useLocation();
+    const statementFor = location.state?.account_id ?? null;
+    const [period, setPeriod] = useState<{ key: string; from?: string; to?: string }>(
+        statementFor ? { key: "month" } : TODAY,
+    );
     const [dayBook, setDayBook] = useState(null);
     // Every surface fed by fetchDayBook shares this: the two figures above the
     // fold and the per-account tables, which are nested inside dayBook rather
@@ -87,8 +120,24 @@ const BookOfBusiness = () => {
     const permissions = getPermissions("accounting");
     const navigate = useNavigate();
 
-    const accounts = dayBook?.accounts || [];
+    const accounts = useMemo(() => dayBook?.accounts || [], [dayBook]);
     const account = accounts[accountIndex] || null;
+
+    // The account to show once the next book arrives: the one asked for by a
+    // Statement button, or the one on screen when the period changes.
+    const wanted = useRef(statementFor);
+    useEffect(() => {
+        if (!accounts.length) return;
+        if (wanted.current != null) {
+            const index = accounts.findIndex(
+                (item) => String(item.account_id) === String(wanted.current),
+            );
+            setAccountIndex(index >= 0 ? index : 0);
+            wanted.current = null;
+        } else if (accountIndex >= accounts.length) {
+            setAccountIndex(0);
+        }
+    }, [accounts, accountIndex]);
 
     const showPreviousAccount = () =>
         setAccountIndex((prev) => (prev - 1 + accounts.length) % accounts.length);
@@ -137,8 +186,9 @@ const BookOfBusiness = () => {
     // Compared by value: a custom range is a new object on every edit.
     const periodKey = JSON.stringify(period);
     useEffect(() => {
-        // A different period can have a different set of accounts.
-        setAccountIndex(0);
+        // A different period can have a different set of accounts: stay on
+        // the one on screen if it is still there.
+        wanted.current = wanted.current ?? account?.account_id ?? null;
         fetchBook();
     }, [token, periodKey]);
 
@@ -263,12 +313,6 @@ const BookOfBusiness = () => {
                                   />
                             </div>
 
-                            <p className="text-xs text-muted-foreground">
-                                The profit figure is an estimate. It is only as accurate as the
-                                sales, purchase and expense data entered, and depends on product
-                                costs being up to date.
-                            </p>
-
                             {/* Daily Summary */}
                             <div className="space-y-4">
                                 <h2 className="text-xl font-semibold">Summary</h2>
@@ -297,6 +341,10 @@ const BookOfBusiness = () => {
                                             <span>
                                                 {formatCurrency(summary?.money_in?.other_income)}
                                             </span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Cash adjustment</span>
+                                            <span>{formatCurrency(summary?.money_in?.cash_adjustments)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
                                             <span className="text-muted-foreground">Other</span>
@@ -337,6 +385,10 @@ const BookOfBusiness = () => {
                                             <span>{formatCurrency(summary?.money_out?.loans)}</span>
                                         </div>
                                         <div className="flex justify-between text-sm">
+                                            <span className="text-muted-foreground">Cash adjustment</span>
+                                            <span>{formatCurrency(summary?.money_out?.cash_adjustments)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-sm">
                                             <span className="text-muted-foreground">Other</span>
                                             <span>{formatCurrency(summary?.money_out?.other)}</span>
                                         </div>
@@ -348,10 +400,16 @@ const BookOfBusiness = () => {
                                 </div>
                             </div>
 
-                            {/* One account at a time */}
+                            {/* One account at a time. Sticky from here down, like
+                                every other table: once the account heading reaches
+                                the top of the window it stays there with the column
+                                header, and only the rows scroll underneath. They sit
+                                in one container so the column header needs no top
+                                offset of its own. */}
                             <div className="space-y-4">
                                 {account ? (
-                                    <>
+                                    <div>
+                                        <div className="sticky top-0 z-20 bg-background pt-4 pb-[10px] space-y-4">
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center space-x-3">
                                                 <Button
@@ -422,11 +480,17 @@ const BookOfBusiness = () => {
                                         </div>
 
                                         {loading || account.rows?.length > 0 ? (
+                                            <DataTable columns={cols} headerOnly />
+                                        ) : null}
+                                        </div>
+
+                                        {loading || account.rows?.length > 0 ? (
                                             <DataTable
                                                 columns={cols}
-                                                data={account.rows}
+                                                data={accountRows(account)}
                                                 selectedRows={[]}
                                                 onRowClick={() => { }}
+                                                rowsOnly
                                                 loading={loading}
                                             />
                                         ) : (
@@ -436,7 +500,7 @@ const BookOfBusiness = () => {
                                                 </p>
                                             </div>
                                         )}
-                                    </>
+                                    </div>
                                 ) : (
                                     <div className="bg-card rounded-lg p-6 border">
                                         <p className="text-sm text-muted-foreground">

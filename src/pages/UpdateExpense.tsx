@@ -21,7 +21,7 @@ import DynamicBreadCrumb from "@/components/layout/DynamicBreadCrumb";
 import { formatAccountOption, ExpenseCategoryMap, ExpenseCategoryLabels } from "../../services/utils";
 import { InfoBox } from "@/components/ui/info-box";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { usePending } from "@/hooks/use-pending";
+import { usePending } from "@/hooks/use-pending";
 import { Spinner } from "@/components/ui/spinner";
 
 const UpdateExpense = () => {
@@ -168,6 +168,8 @@ const UpdateExpense = () => {
                                     <InfoBox className="mb-6">
                                         This is an extra charge on sales invoice #{invoiceCharge}, recorded
                                         when the invoice was paid. Change or remove the charge on the invoice.
+                                        If you keep the charge yourself, delete this expense from the
+                                        Expenses list: the charge then counts as revenue.
                                     </InfoBox>
                                 )}
 
