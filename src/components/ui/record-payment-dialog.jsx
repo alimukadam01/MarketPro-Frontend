@@ -13,7 +13,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Info, Upload } from "lucide-react";
-import { EarlyPaymentDialog } from "@/components/ui/early-payment-dialog";
 import { toast } from "sonner";
 import { useAuth } from "../../../services/AuthProvider";
 import {
@@ -78,8 +77,6 @@ function RecordPaymentDialog({ personId, customer, supplier, partyName, open, se
   const [notes, setNotes] = useState("");
   const [image, setImage] = useState(null);
   const [saving, setSaving] = useState(false);
-  // Ticked invoices dated after the payment, while the prompt is open.
-  const [early, setEarly] = useState([]);
 
   const key = (item) => `${item.kind}:${item.id}`;
 
@@ -225,9 +222,14 @@ function RecordPaymentDialog({ personId, customer, supplier, partyName, open, se
   const onAccount = allocation.left - refund;
   // Without the role on this side, only the advance can be paid.
   const beyondAdvance = !hasRole && onAccount > 0;
+  // What is still owed once the khaata has settled; an invoice the khaata
+  // covers can still be paid by name, which hands its share back.
   const duesLeft =
     openingRoom +
-    allocation.rows.reduce((sum, row) => sum + (row.item.room - row.applied), 0);
+    allocation.rows.reduce(
+      (sum, row) => sum + Math.max((row.item.owed ?? row.item.room) - row.applied, 0),
+      0,
+    );
   const advance = Math.max(onAccount - duesLeft, 0);
 
   const records = allocation.rows
@@ -260,12 +262,19 @@ function RecordPaymentDialog({ personId, customer, supplier, partyName, open, se
   }
 
   const chequeMissing = isCheque && chequeNumber.trim() === "";
+  // A payment on an invoice can't be dated before the invoice; money paid
+  // ahead goes on account and the next invoice uses it.
+  const tooEarly = invoicesAfter(
+    allocation.rows.filter((row) => row.checked && row.item.kind === "invoice").map((row) => row.item),
+    date,
+  );
   const cannotRecord =
     saving ||
     allocation.entered <= 0 ||
     unreached ||
     beyondAdvance ||
     chequeMissing ||
+    tooEarly.length > 0 ||
     !account;
 
   let hint = "";
@@ -275,37 +284,13 @@ function RecordPaymentDialog({ personId, customer, supplier, partyName, open, se
     hint = "The amount ran out before every ticked item was reached. Untick the ones it cannot cover.";
   } else if (chequeMissing) {
     hint = "A cheque payment needs a cheque number.";
+  } else if (tooEarly.length) {
+    hint = `${tooEarly.map((item) => item.label).join(", ")} ${
+      tooEarly.length === 1 ? "is" : "are"
+    } dated after this payment. Untick to record the money as an advance on account, or change the date.`;
   }
 
-  // A payment dated before an invoice it pays: ask first (fix plan 4, rule 3).
-  const onSubmit = () => {
-    const ahead = invoicesAfter(
-      allocation.rows
-        .filter((row) => row.applied > 0 && row.item.kind === "invoice")
-        .map((row) => row.item),
-      date,
-    );
-    if (ahead.length) {
-      setEarly(ahead);
-      return;
-    }
-    save();
-  };
-
-  // Untick them, so the money goes on account; the preview then shows it,
-  // and Record saves it.
-  const recordOnAccount = () => {
-    setPicked((prev) => {
-      const next = { ...prev };
-      early.forEach((item) => {
-        next[key(item)] = false;
-      });
-      return next;
-    });
-    setEarly([]);
-  };
-
-  const save = async () => {
+  const onSubmit = async () => {
     const chosen = allocation.rows
       .filter((row) => row.checked)
       .map((row) => ({ kind: row.item.kind, id: row.item.id }));
@@ -383,18 +368,6 @@ function RecordPaymentDialog({ personId, customer, supplier, partyName, open, se
   );
 
   return (
-    <>
-    <EarlyPaymentDialog
-      open={early.length > 0}
-      onOpenChange={(next) => !next && setEarly([])}
-      paymentDate={date}
-      invoices={early}
-      onKeep={() => {
-        setEarly([]);
-        save();
-      }}
-      onOnAccount={recordOnAccount}
-    />
     <DialogUI.Dialog open={open} onOpenChange={setOpen}>
       <DialogUI.DialogContent className="sm:max-w-[880px]">
         <DialogUI.DialogHeader>
@@ -735,7 +708,6 @@ function RecordPaymentDialog({ personId, customer, supplier, partyName, open, se
         </div>
       </DialogUI.DialogContent>
     </DialogUI.Dialog>
-    </>
   );
 }
 

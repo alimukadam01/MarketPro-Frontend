@@ -609,6 +609,7 @@ const UpdatePurchaseInvoice = () => {
       dialogs={
         <>
           <Payments
+            invoiceDate={watch("date_issued")}
             invoiceId={invoice_id}
             invoiceTotal={totalAmount}
             isSalesPayment={false}

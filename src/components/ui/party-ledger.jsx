@@ -61,7 +61,12 @@ const TYPE_GROUPS = {
     invoices: { label: "Invoices", match: ["Sales invoice", "Purchase invoice"] },
     payments: {
         label: "Payments",
-        match: ["Payment received", "Payment made", "On-account payment", "Refund"],
+        // An advance moving onto an invoice is money already paid, so it
+        // counts with the payments: "Advance applied · Customer Payment of …".
+        match: [
+            "Payment received", "Payment made", "On-account payment", "Refund",
+            "Advance applied", "Advance used",
+        ],
     },
     set_offs: { label: "Set-offs", match: ["Set-off"] },
     loans: { label: "Loans", match: ["Loan given", "Loan recovered", "Loan received", "Loan repaid"] },

@@ -591,6 +591,7 @@ export default function BacklogInvoiceEntry({
         <>
           {flow.dialogs}
           <Payments
+            invoiceDate={dateIssued}
             invoiceId={recordId}
             invoiceTotal={total}
             isSalesPayment={isSales}

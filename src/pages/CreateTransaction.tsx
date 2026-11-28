@@ -52,8 +52,7 @@ import {
 } from "../../services/utils";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { usePending } from "@/hooks/use-pending";
-import { EarlyPaymentDialog } from "@/components/ui/early-payment-dialog";
-import { ON_ACCOUNT_HINT, invoiceDay, invoicesAfter } from "../../services/utils";
+import { invoiceDay, invoicesAfter } from "../../services/utils";
 
 // A loan as the repayment picker shows it, and a person in the person picker.
 type LoanOption = { type: string; date: string; amount: number; reference?: string | null };
@@ -150,9 +149,9 @@ const CreateTransaction = () => {
         }
     }, [selectedAccountId, selectedAccount, allowedMethods, selectedMethod, setValue]);
 
-    // A payment dated before the invoice it pays: ask first (fix plan 4,
-    // rule 3). Nothing is blocked; keeping it saves as it was entered.
-    const [earlyPrompt, setEarlyPrompt] = useState(null);
+    // A payment on an invoice can't be dated before the invoice; money paid
+    // ahead is a Customer or Supplier Payment, which the next invoice uses.
+    // The server refuses it too.
     const onCreate = async (data) => {
         const invoice =
             referenceKind === "sales_invoice"
@@ -166,7 +165,10 @@ const CreateTransaction = () => {
                 data.date,
             );
             if (ahead.length) {
-                setEarlyPrompt({ invoices: ahead, data });
+                toast.error(
+                    `A payment on an invoice can't be dated before the invoice (${formatDate(ahead[0].date)}). ` +
+                    "Record money paid in advance as a Customer or Supplier Payment.",
+                );
                 return;
             }
         }
@@ -557,19 +559,6 @@ const CreateTransaction = () => {
                                 : "Record this only if the money actually moved. Goods given on credit are recorded as an invoice, not here."}
                         </p>
                     </div>
-
-                    <EarlyPaymentDialog
-                        open={!!earlyPrompt}
-                        onOpenChange={(next) => !next && setEarlyPrompt(null)}
-                        paymentDate={earlyPrompt?.data?.date}
-                        invoices={earlyPrompt?.invoices || []}
-                        onKeep={() => {
-                            const data = earlyPrompt.data;
-                            setEarlyPrompt(null);
-                            run(onTransactionCreate)(data);
-                        }}
-                        hint={ON_ACCOUNT_HINT}
-                    />
 
                     <form
                         onSubmit={handleSubmit(run(onCreate))}

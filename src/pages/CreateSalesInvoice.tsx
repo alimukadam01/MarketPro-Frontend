@@ -542,6 +542,7 @@ const CreateSalesInvoice = () => {
       dialogs={
         <>
           <Payments
+            invoiceDate={watch("date_issued")}
             invoiceId={null}
             invoiceTotal={totalAmount}
             isSalesPayment={true}
