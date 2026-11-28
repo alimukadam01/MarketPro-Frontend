@@ -84,6 +84,9 @@ function Payments({
   // answer { ok, error }, so the server's reason reaches the screen.
   accountsLoader = null,
   liveApi = null,
+  // The invoice's date (YYYY-MM-DD). A payment on an invoice can't be dated
+  // before it; money paid ahead is a Customer or Supplier Payment.
+  invoiceDate = null,
 }) {
   const { token, getPermissions } = useAuth();
   const isStaged = !invoiceId && typeof onStagedChange === "function";
@@ -312,7 +315,9 @@ function Payments({
     const total = Number(invoiceTotal) || 0;
     const pool = Number(settlement?.settled_from_khaata) || 0;
     const paid = totalCleared + pool;
-    const room = Math.max(total - totalRecorded - pool, 0);
+    // An invoice takes all its own payments first; what the khaata settles
+    // on it only covers what they leave unpaid, so it doesn't shrink room.
+    const room = Math.max(total - totalRecorded, 0);
     isPaidInFull = total > 0 && paid >= total - EPSILON;
     isFullyRecorded = total > 0 && room <= EPSILON;
     exceedsRoom = typedAmount > room + EPSILON;
@@ -360,6 +365,11 @@ function Payments({
           }
         : null;
   }
+
+  // Before the invoice's date: refused, here and on the server.
+  const datedTooEarly = !!(invoiceDate && paymentDate && paymentDate < invoiceDate);
+  // What the khaata settles on it now, which a payment here hands back.
+  const fromKhaata = Math.round(Number(settlement?.settled_from_khaata) || 0);
 
   const settledBy = settlement?.settled_by || [];
   const refunds = (settlement?.refunds || []).map((r) => ({
@@ -485,6 +495,7 @@ function Payments({
                   <Input
                     id="payment_date"
                     type="date"
+                    min={invoiceDate || undefined}
                     value={paymentDate}
                     onChange={(e) => setPaymentDate(e.target.value)}
                   />
@@ -559,23 +570,35 @@ function Payments({
             </p>
           </div>
 
+          {datedTooEarly ? (
+            <p className="text-xs text-red-600">
+              A payment on an invoice can't be dated before the invoice (
+              {formatDate(invoiceDate)}). Record money paid in advance as a{" "}
+              {isSalesPayment ? "Customer Payment" : "Supplier Payment"}.
+            </p>
+          ) : fromKhaata > 0 && !isFullyRecorded ? (
+            <p className="text-xs text-muted-foreground">
+              The khaata covers PKR {fromKhaata.toLocaleString()} of this invoice. A payment
+              here pays the invoice itself and returns that much to the khaata.
+            </p>
+          ) : null}
+
           <SubmitButton
             type="button"
             pending={saving}
             pendingLabel="Recording…"
             onClick={handleCreate}
-            className={`w-full ${isPaidInFull ? "bg-green-600 text-white hover:bg-green-600" : ""}`}
+            className={`w-full ${isFullyRecorded && isPaidInFull ? "bg-green-600 text-white hover:bg-green-600" : ""}`}
             disabled={
               isFullyRecorded ||
               chequeIncomplete ||
-              exceedsRoom
+              exceedsRoom ||
+              datedTooEarly
             }
           >
-            {isPaidInFull
-              ? "Paid in full"
-              : isFullyRecorded
-                ? "Awaiting clearance"
-                : isStaged || isDeferred ? "Add Payment" : "Create Payment"}
+            {isFullyRecorded
+              ? isPaidInFull ? "Paid in full" : "Awaiting clearance"
+              : isStaged || isDeferred ? "Add Payment" : "Create Payment"}
           </SubmitButton>
         </div>
 

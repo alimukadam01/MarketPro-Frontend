@@ -1239,9 +1239,8 @@ export const personNetLabel = (person) => {
 };
 
 /**
- * A payment on an invoice dated before that invoice (fix plan 4, rule 3):
- * the invoices among `items` dated after `paymentDate`. ISO dates compare as
- * text.
+ * The invoices among `items` dated after `paymentDate`: a payment can't name
+ * them (owner's rule, 27 Nov 2026). ISO dates compare as text.
  */
 export const invoicesAfter = (items, paymentDate) =>
   (items || []).filter((item) => item.date && paymentDate && item.date > paymentDate);
@@ -1254,6 +1253,3 @@ export const invoiceDay = (dateIssued) => {
   const pad = (n) => String(n).padStart(2, "0");
   return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
 };
-
-export const ON_ACCOUNT_HINT =
-  "To record it on account, go back and choose Customer Payment or Supplier Payment as the type.";
